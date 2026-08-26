@@ -1,0 +1,37 @@
+name: secret-hitman-5-game
+region: nyc
+services:
+  - name: game
+    github:
+      repo: virakngauv/secret-hitman-5
+      branch: main
+      deploy_on_push: true
+    environment_slug: node-js
+    run_command: pnpm start:server
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-2gb
+    http_port: 8080
+    health_check:
+      http_path: /healthz
+    envs:
+      - key: NODE_ENV
+        value: production
+        scope: RUN_TIME
+      - key: HOST
+        value: 0.0.0.0
+        scope: RUN_TIME
+      - key: ALLOWED_ORIGINS
+        value: https://secret-hitman-5.vercel.app
+        scope: RUN_TIME
+      - key: LOG_LEVEL
+        value: info
+        scope: RUN_TIME
+      # Trust the App Platform ingress to forward real client IPs. App Platform
+      # ingress uses private 10.x addressing; confirm the range your server
+      # actually observes before relying on it.
+      - key: TRUSTED_PROXIES
+        value: 10.0.0.0/8
+        scope: RUN_TIME
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED

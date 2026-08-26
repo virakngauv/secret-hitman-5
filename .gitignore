@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.npm-cache/
+.pnpm-store/
+.pnp/
+.pnp.*
+
+# next.js
+.next/
+out/
+
+# hosting provider state
+.vercel/
+
+# testing
+coverage/
+playwright-report/
+test-results/
+
+# local environment files
+.env
+.env.local
+.env.*.local
+
+# misc
+.DS_Store
+*.pem
+*.log
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
