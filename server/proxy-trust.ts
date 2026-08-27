@@ -1,11 +1,31 @@
-import { isIP } from 'node:net'
+import { isIP, isIPv4 } from 'node:net'
 
-export function parseTrustedProxies(value: string | undefined): string[] {
-  return (
+export function parseTrustedProxies(
+  value: string | undefined,
+  onInvalidEntry?: (entry: string) => void,
+): string[] {
+  const entries =
     value
       ?.split(',')
       .map((entry) => entry.trim())
       .filter(Boolean) ?? []
+  return entries.filter((entry) => {
+    if (isSupportedTrustedProxyEntry(entry)) return true
+    onInvalidEntry?.(entry)
+    return false
+  })
+}
+
+/** Supports exact IP addresses and IPv4 CIDR ranges, not IPv6 CIDR ranges. */
+function isSupportedTrustedProxyEntry(entry: string): boolean {
+  if (isIP(entry)) return true
+  const separator = entry.indexOf('/')
+  if (separator === -1) return false
+  const bitsText = entry.slice(separator + 1)
+  return (
+    isIPv4(entry.slice(0, separator)) &&
+    /^\d{1,2}$/.test(bitsText) &&
+    Number(bitsText) <= 32
   )
 }
 

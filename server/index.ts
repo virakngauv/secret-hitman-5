@@ -24,10 +24,12 @@ export function startGameServer(
       process.env.ALLOW_PRIVATE_NETWORK_ORIGINS,
       process.env.NODE_ENV,
     )
+  const logger = createStructuredLogger(process.env.LOG_LEVEL)
   const trustedProxyAddresses =
     options.trustedProxyAddresses ??
-    parseTrustedProxies(process.env.TRUSTED_PROXIES)
-  const logger = createStructuredLogger(process.env.LOG_LEVEL)
+    parseTrustedProxies(process.env.TRUSTED_PROXIES, (entry) => {
+      logger.warn(JSON.stringify({ event: 'invalid_trusted_proxy', entry }))
+    })
 
   const httpServer = createServer((request, response) => {
     let pathname = ''

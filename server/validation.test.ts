@@ -1,6 +1,47 @@
 import { describe, expect, it } from 'vitest'
 
-import { parsePlayerName, parseRemovePlayer } from './validation'
+import {
+  MAX_HINT_LENGTH,
+  parseHint,
+  parsePlayerName,
+  parseRemovePlayer,
+  parseSubmitHint,
+} from './validation'
+
+describe('parseHint', () => {
+  it('normalizes whitespace while removing unsafe formatting controls', () => {
+    expect(parseHint('  Blue\n\u202e  sky\u200b  ')).toBe('Blue sky')
+    expect(parseHint('Blue\nsky')).toBe('Blue sky')
+    expect(parseHint('café 東京')).toBe('café 東京')
+  })
+
+  it.each([undefined, null, 42, {}, '', '  ', '\u0000\u202e\u2066'])(
+    'rejects empty or non-string hints: %s',
+    (value) => {
+      expect(parseHint(value)).toBeNull()
+    },
+  )
+
+  it('applies length bounds to the sanitized hint', () => {
+    const hint = 'a'.repeat(MAX_HINT_LENGTH)
+    expect(parseHint(`\u202e${hint}\u2066`)).toBe(hint)
+    expect(parseHint(`${hint}a`)).toBeNull()
+  })
+
+  it('sanitizes hints in incoming command payloads', () => {
+    expect(
+      parseSubmitHint({
+        roomCode: 'bcdf2',
+        hint: '\u202eBlue sky',
+        targetCardIds: ['p1-card-1'],
+      }),
+    ).toEqual({
+      roomCode: 'bcdf2',
+      hint: 'Blue sky',
+      targetCardIds: ['p1-card-1'],
+    })
+  })
+})
 
 describe('parsePlayerName', () => {
   it('normalizes whitespace and removes unsafe formatting characters', () => {

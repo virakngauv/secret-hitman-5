@@ -19,7 +19,7 @@ export const PLAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 export const CARD_ID_PATTERN = /^p\d{1,2}-card-\d{1,2}$/
 export const MAX_PLAYER_NAME_LENGTH = 50
 export const MAX_HINT_LENGTH = 40
-const UNSAFE_PLAYER_NAME_CHARACTERS =
+const UNSAFE_TEXT_CHARACTERS =
   /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
 
 type UnknownRecord = Record<string, unknown>
@@ -129,7 +129,7 @@ export function parsePlayerName(value: unknown) {
   const normalized = value
     .trim()
     .replace(/\s+/g, ' ')
-    .replace(UNSAFE_PLAYER_NAME_CHARACTERS, '')
+    .replace(UNSAFE_TEXT_CHARACTERS, '')
     .replace(/\s+/g, ' ')
     .trim()
   return normalized.length > 0 && normalized.length <= MAX_PLAYER_NAME_LENGTH
@@ -139,7 +139,12 @@ export function parsePlayerName(value: unknown) {
 
 export function parseHint(value: unknown) {
   if (typeof value !== 'string') return null
-  const normalized = value.trim().replace(/\s+/g, ' ')
+  const normalized = value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(UNSAFE_TEXT_CHARACTERS, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   return normalized.length > 0 && normalized.length <= MAX_HINT_LENGTH
     ? normalized
     : null

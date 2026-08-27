@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   isTrustedProxy,
@@ -18,6 +18,39 @@ describe('parseTrustedProxies', () => {
   it('returns an empty list for missing values', () => {
     expect(parseTrustedProxies(undefined)).toEqual([])
     expect(parseTrustedProxies('  ')).toEqual([])
+  })
+
+  it('preserves supported addresses and boundary IPv4 CIDR ranges', () => {
+    const entries = [
+      '::1',
+      '::ffff:10.1.2.3',
+      '10.1.2.3',
+      '0.0.0.0/0',
+      '10.1.2.3/32',
+    ]
+    const onInvalid = vi.fn()
+    expect(parseTrustedProxies(entries.join(','), onInvalid)).toEqual(entries)
+    expect(onInvalid).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'fe80::/64',
+    'not-an-ip',
+    'localhost',
+    '999.0.0.0',
+    '10.0.0.0/33',
+    '10.0.0.0/-8',
+    '10.0.0.0/',
+    '10.0.0.0/8/24',
+    'not-an-ip/8',
+    '999.0.0.0/8',
+  ])('rejects and reports unsupported entry %s', (entry) => {
+    const onInvalid = vi.fn()
+    expect(parseTrustedProxies(` , ${entry}, 10.0.0.1, `, onInvalid)).toEqual([
+      '10.0.0.1',
+    ])
+    expect(onInvalid).toHaveBeenCalledExactlyOnceWith(entry)
+    expect(parseTrustedProxies(entry)).toEqual([])
   })
 })
 

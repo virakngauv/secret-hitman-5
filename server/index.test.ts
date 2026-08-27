@@ -19,6 +19,7 @@ describe('game server HTTP process', () => {
     server = null
     secondServer = null
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('reports process health without exposing room or player state', async () => {
@@ -72,6 +73,23 @@ describe('game server HTTP process', () => {
     expect(() => startGameServer({ port: Number.NaN })).toThrow(
       'Invalid game-server port: NaN',
     )
+  })
+
+  it('logs rejected trusted-proxy configuration at startup', async () => {
+    vi.stubEnv('TRUSTED_PROXIES', '10.0.0.0/8, fe80::/64, not-an-ip')
+    vi.stubEnv('LOG_LEVEL', 'warn')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    server = startGameServer({ port: 0, host: '127.0.0.1' })
+    await new Promise<void>((resolve) =>
+      server?.httpServer.once('listening', resolve),
+    )
+
+    expect(
+      warnSpy.mock.calls.map(([message]) => JSON.parse(message as string)),
+    ).toEqual([
+      { event: 'invalid_trusted_proxy', entry: 'fe80::/64' },
+      { event: 'invalid_trusted_proxy', entry: 'not-an-ip' },
+    ])
   })
 
   it('uses the default port for blank environment values', () => {
