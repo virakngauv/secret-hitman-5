@@ -58,6 +58,39 @@ function startTwoPlayerGame() {
 }
 
 describe('GameRoom single-round flow', () => {
+  it('retains every removal restriction for the room lifetime', () => {
+    const room = createRoom()
+    const removedTokens = Array.from({ length: 300 }, (_, index) =>
+      index.toString(16).padStart(32, '0'),
+    )
+    for (const token of removedTokens) {
+      expect(room.join(token, 'Guest')).toEqual({ status: 'success' })
+      const snapshot = room.snapshotFor(token)
+      if (snapshot.status !== 'lobby') throw new Error('Expected lobby member.')
+      expect(room.removePlayer(hostToken, snapshot.player.playerId)).toEqual({
+        status: 'success',
+        removedToken: token,
+      })
+    }
+
+    for (const token of removedTokens) {
+      expect(room.join(token, 'Returning guest')).toMatchObject({
+        status: 'removed_from_room',
+      })
+      expect(room.snapshotFor(token)).toMatchObject({
+        status: 'removed_from_room',
+      })
+    }
+    const host = room.snapshotFor(hostToken)
+    if (host.status !== 'lobby') throw new Error('Expected host lobby.')
+    expect(host.members).toHaveLength(1)
+
+    const anotherRoom = createRoom()
+    expect(anotherRoom.join(removedTokens[0], 'Guest')).toEqual({
+      status: 'success',
+    })
+  })
+
   it('requires two players and creates private boards with twelve cards and one frozen assassin', () => {
     const room = createRoom()
     expect(room.start(hostToken, 1_001)).toMatchObject({ status: 'invalid' })

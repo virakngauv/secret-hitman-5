@@ -23,7 +23,6 @@ export const MIN_STARTING_PLAYERS = 2
 export const MAX_STARTING_PLAYERS = 12
 export const MAX_ROOM_MEMBERS = 32
 const MAX_REMEMBERED_COMMANDS_PER_PLAYER = 100
-const MAX_REMEMBERED_REMOVALS = 256
 
 type Member = {
   playerId: string
@@ -181,11 +180,6 @@ export class GameRoom {
     }
 
     this.removedTokenFingerprints.add(fingerprintClientToken(target.token))
-    while (this.removedTokenFingerprints.size > MAX_REMEMBERED_REMOVALS) {
-      const oldest = this.removedTokenFingerprints.values().next().value
-      if (oldest === undefined) break
-      this.removedTokenFingerprints.delete(oldest)
-    }
     this.members.splice(this.members.indexOf(target), 1)
     this.commandResults.delete(target.token)
     this.changed(now)
