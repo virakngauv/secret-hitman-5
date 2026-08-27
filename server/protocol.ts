@@ -418,7 +418,10 @@ export function createGameSocketServer(
   }
 
   function entryKey(socket: GameSocket) {
-    return isLoopbackAddress(socket.data.address)
+    const isDirectLocalClient =
+      isLoopbackAddress(socket.handshake.address) &&
+      socket.handshake.headers['x-forwarded-for'] === undefined
+    return isDirectLocalClient
       ? `${socket.data.address}:${socket.data.token}`
       : socket.data.address
   }

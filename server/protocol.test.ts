@@ -86,6 +86,24 @@ describe('Socket.IO Secret Hitman protocol', () => {
     ).toMatchObject({ status: 'rate_limited' })
   })
 
+  it('does not grant the local token exemption to forwarded loopback clients', async () => {
+    const first = await connect(hostToken, '127.0.0.1')
+    const second = await connect(guestToken, '127.0.0.1')
+    const third = await connect(spectatorToken, '127.0.0.1')
+
+    expect(
+      await first.emitWithAck('room:create', { name: 'Ada' }),
+    ).toMatchObject({
+      status: 'success',
+    })
+    expect(
+      await second.emitWithAck('room:create', { name: 'Grace' }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await third.emitWithAck('room:create', { name: 'Linus' }),
+    ).toMatchObject({ status: 'rate_limited' })
+  })
+
   it('runs room entry, hint readiness, host transition, scoring, and spectator permissions', async () => {
     const host = await connect(hostToken)
     const guest = await connect(guestToken)

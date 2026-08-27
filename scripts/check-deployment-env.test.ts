@@ -27,8 +27,8 @@ describe('deployment environment check', () => {
     expect(result.stdout).not.toContain(gameServerUrl)
   })
 
-  it.each([undefined, '', '   ', 'not-a-url', 'http://game.example.com'])(
-    'rejects an absent or invalid game-server URL: %s',
+  it.each([undefined, '', '   '])(
+    'reports an absent game-server URL as missing: %s',
     (url) => {
       const result = checkEnvironment({ NEXT_PUBLIC_GAME_SERVER_URL: url })
 
@@ -36,6 +36,29 @@ describe('deployment environment check', () => {
       expect(result.stderr).toContain(
         'Missing required deployment variables: NEXT_PUBLIC_GAME_SERVER_URL',
       )
+      expect(result.stderr).not.toContain(
+        'Invalid required deployment variables',
+      )
+    },
+  )
+
+  it.each(['not-a-url', 'http://game.example.com'])(
+    'reports a configured but invalid URL without exposing it: %s',
+    (url) => {
+      const result = checkEnvironment({ NEXT_PUBLIC_GAME_SERVER_URL: url })
+
+      expect(result.status).toBe(1)
+      expect(result.stdout).toContain(
+        '- required NEXT_PUBLIC_GAME_SERVER_URL: invalid',
+      )
+      expect(result.stderr).toContain(
+        'Invalid required deployment variables: NEXT_PUBLIC_GAME_SERVER_URL',
+      )
+      expect(result.stderr).toContain('must be a valid HTTPS URL')
+      expect(result.stderr).not.toContain(
+        'Missing required deployment variables',
+      )
+      expect(result.stdout + result.stderr).not.toContain(url)
     },
   )
 
