@@ -1,0 +1,658 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+:root {
+  --background: oklch(0.965 0.018 92);
+  --foreground: oklch(0.19 0.018 55);
+  --card: oklch(0.99 0.012 92);
+  --card-foreground: oklch(0.19 0.018 55);
+  --primary: oklch(0.235 0.035 150);
+  --primary-foreground: oklch(0.98 0.012 92);
+  --muted: oklch(0.92 0.02 90);
+  --muted-foreground: oklch(0.47 0.025 95);
+  --accent: oklch(0.55 0.19 28);
+  --accent-soft: oklch(0.91 0.055 30);
+  --border: oklch(0.82 0.028 90);
+  --ring: oklch(0.55 0.19 28);
+  --ink-green: oklch(0.235 0.035 150);
+  --target: oklch(0.62 0.13 145);
+  --target-soft: oklch(0.91 0.065 145);
+  --civilian: oklch(0.78 0.025 78);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-sans: 'Avenir Next', 'Segoe UI', helvetica, arial, sans-serif;
+  --font-mono: 'SFMono-Regular', consolas, 'Liberation Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html {
+  min-width: 320px;
+  background: var(--background);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 88% 8%,
+      color-mix(in oklab, var(--accent-soft) 58%, transparent),
+      transparent 25rem
+    ),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-stage {
+  position: relative;
+  display: flex;
+  min-height: 100svh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2rem 1.25rem;
+  background: var(--ink-green);
+  color: var(--primary-foreground);
+}
+
+.home-noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.home-reticle {
+  position: absolute;
+  color: color-mix(in oklab, var(--primary-foreground) 9%, transparent);
+  font-family: Georgia, serif;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.home-reticle-one {
+  top: -8rem;
+  right: -5rem;
+  font-size: 30rem;
+  transform: rotate(12deg);
+}
+
+.home-reticle-two {
+  bottom: -6rem;
+  left: -4rem;
+  font-size: 17rem;
+  transform: rotate(-9deg);
+}
+
+.home-card {
+  display: grid;
+  gap: 3rem;
+  align-items: end;
+  border-top: 1px solid
+    color-mix(in oklab, var(--primary-foreground) 22%, transparent);
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--primary-foreground) 22%, transparent);
+  padding: 3rem 0;
+}
+
+.home-title {
+  margin: 0;
+  font-size: clamp(4rem, 15vw, 8.5rem);
+  font-weight: 950;
+  letter-spacing: -0.075em;
+  line-height: 0.78;
+}
+
+.home-deck {
+  max-width: 38rem;
+  margin-top: 2rem;
+  color: color-mix(in oklab, var(--primary-foreground) 75%, transparent);
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.65;
+}
+
+.home-actions {
+  border-radius: 1.5rem;
+  background: var(--card);
+  padding: 1.5rem;
+  color: var(--foreground);
+  box-shadow: 0 2rem 5rem rgb(0 0 0 / 20%);
+}
+
+.home-action-label,
+.page-eyebrow,
+.clue-label,
+.host-control-label,
+.field-label {
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.home-action-label {
+  margin: 0 0 1rem;
+  color: var(--muted-foreground);
+}
+
+.home-rules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.home-brand-sight {
+  display: inline-block;
+  margin-bottom: 2rem;
+  color: var(--accent);
+  font-size: 3rem;
+}
+
+.game-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--foreground);
+  font-size: 0.8rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+.brand-sight {
+  color: var(--accent);
+  font-family: Georgia, serif;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.room-chip,
+.phase-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  padding: 0.25rem 0.7rem;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.page-eyebrow {
+  margin: 0 0 0.8rem;
+  color: var(--accent);
+}
+
+.home-stage > div > .page-eyebrow {
+  color: color-mix(in oklab, var(--primary-foreground) 65%, transparent);
+}
+
+.page-title {
+  margin: 0;
+  font-size: clamp(2.65rem, 7vw, 5.4rem);
+  font-weight: 950;
+  letter-spacing: -0.065em;
+  line-height: 0.96;
+  text-wrap: balance;
+}
+
+.page-subtitle {
+  margin-top: 1rem;
+  color: var(--muted-foreground);
+  font-size: clamp(0.98rem, 2vw, 1.1rem);
+  line-height: 1.6;
+}
+
+.game-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.game-panel {
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: color-mix(in oklab, var(--card) 94%, transparent);
+  box-shadow: 0 1.2rem 3.5rem rgb(49 41 24 / 8%);
+  padding: clamp(1rem, 3vw, 1.75rem);
+}
+
+.game-sidebar {
+  align-self: start;
+}
+
+.sidebar-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+}
+
+.hint-number {
+  display: flex;
+  min-height: 5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: var(--ink-green);
+  color: var(--primary-foreground);
+}
+
+.hint-number-value {
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.hint-number-label {
+  margin-top: 0.25rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.word-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.word-card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 7.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+  padding: 0.8rem;
+  color: var(--foreground);
+  text-align: left;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+button.word-card:not(:disabled):hover {
+  border-color: var(--foreground);
+  box-shadow: 0 0.45rem 1.1rem rgb(34 31 24 / 10%);
+  transform: translateY(-2px);
+}
+
+button.word-card:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--ring) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.word-card:disabled {
+  cursor: default;
+}
+
+.word-card-index {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+}
+
+.word-card-word {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: clamp(0.9rem, 2vw, 1.16rem);
+  font-weight: 950;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+
+.word-card-claimers {
+  min-height: 1em;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-card-target {
+  border-color: color-mix(in oklab, var(--target) 68%, var(--border));
+  background: var(--target-soft);
+  color: oklch(0.25 0.065 145);
+}
+
+.word-card-target .word-card-index {
+  color: oklch(0.43 0.1 145);
+}
+
+.word-card-civilian {
+  background: color-mix(in oklab, var(--civilian) 50%, var(--card));
+  color: oklch(0.36 0.02 70);
+}
+
+.word-card-assassin {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  background: var(--accent-soft);
+  color: oklch(0.37 0.15 28);
+}
+
+.word-card-assassin .word-card-index {
+  color: var(--accent);
+}
+
+.word-card-guess:disabled:not(.word-card-target):not(.word-card-civilian):not(
+    .word-card-assassin
+  ) {
+  opacity: 0.58;
+}
+
+.form-message {
+  min-height: 1.3rem;
+  margin-top: 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.status-row,
+.score-row,
+.lobby-player {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--card);
+  padding: 0.75rem 0.85rem;
+}
+
+.status-dot-label {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--muted-foreground);
+}
+
+.status-dot-label.is-ready {
+  color: oklch(0.43 0.1 145);
+}
+
+.status-dot-label.is-ready .status-dot {
+  background: var(--target);
+  box-shadow: 0 0 0 0.2rem color-mix(in oklab, var(--target) 18%, transparent);
+}
+
+.host-control,
+.sidebar-note {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+}
+
+.host-control-label {
+  color: var(--accent);
+}
+
+.sidebar-note {
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.waiting-card {
+  display: flex;
+  min-height: 24rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 1.2rem;
+  background: color-mix(in oklab, var(--muted) 35%, transparent);
+  padding: 2rem;
+  text-align: center;
+}
+
+.waiting-reticle {
+  color: var(--accent);
+  font-family: Georgia, serif;
+  font-size: 4rem;
+  line-height: 1;
+}
+
+.clue-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 1.35rem;
+  background: var(--ink-green);
+  padding: 1.2rem 1.3rem;
+  color: var(--primary-foreground);
+  box-shadow: 0 1rem 2rem rgb(20 35 25 / 18%);
+}
+
+.clue-label {
+  color: color-mix(in oklab, var(--primary-foreground) 62%, transparent);
+}
+
+.clue-word {
+  margin-top: 0.2rem;
+  font-size: clamp(2rem, 8vw, 4.2rem);
+  font-weight: 950;
+  letter-spacing: -0.06em;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.clue-count {
+  display: grid;
+  width: clamp(4.3rem, 12vw, 6.5rem);
+  height: clamp(4.3rem, 12vw, 6.5rem);
+  flex-shrink: 0;
+  place-items: center;
+  border: 2px solid
+    color-mix(in oklab, var(--primary-foreground) 50%, transparent);
+  border-radius: 999px;
+  color: var(--primary-foreground);
+  font-family: var(--font-mono);
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 900;
+}
+
+.board-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.score-row {
+  justify-content: space-between;
+}
+
+.score-value {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ink-green);
+  color: var(--primary-foreground);
+  font-family: var(--font-mono);
+  font-weight: 900;
+}
+
+.score-row-winner {
+  border-color: color-mix(in oklab, var(--target) 60%, var(--border));
+  background: var(--target-soft);
+}
+
+.lobby-grid {
+  display: grid;
+  gap: 2.5rem;
+  align-items: start;
+  margin-top: clamp(3rem, 10vw, 7rem);
+}
+
+.lobby-player {
+  padding: 0.65rem 0.75rem;
+}
+
+.player-number {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.player-role {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.remove-player {
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.remove-player:hover {
+  background: var(--accent-soft);
+}
+
+.waiting-host {
+  margin-top: 1rem;
+  border-radius: 999px;
+  background: var(--muted);
+  padding: 0.8rem 1rem;
+  color: var(--muted-foreground);
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+@media (min-width: 40rem) {
+  .word-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+
+  .word-card {
+    min-height: 8.4rem;
+    padding: 0.95rem;
+  }
+
+  .clue-banner {
+    padding: 1.5rem 1.8rem;
+  }
+}
+
+@media (min-width: 58rem) {
+  .home-card {
+    grid-template-columns: minmax(0, 1.65fr) minmax(18rem, 0.65fr);
+    gap: 5rem;
+    padding: 4rem 0;
+  }
+
+  .game-layout {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    gap: 1.25rem;
+  }
+
+  .lobby-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(21rem, 0.72fr);
+  }
+}
+
+@media (min-width: 76rem) {
+  .word-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
