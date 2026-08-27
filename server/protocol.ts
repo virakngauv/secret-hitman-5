@@ -11,7 +11,7 @@ import {
 } from '../lib/game-protocol'
 import { GameServer } from './game-server'
 import { isPrivateNetworkOrigin } from './origins'
-import { isTrustedProxy } from './proxy-trust'
+import { resolveClientAddress } from './proxy-trust'
 import {
   parseCreateRoom,
   parseClaimCard,
@@ -121,7 +121,11 @@ export function createGameSocketServer(
     const auth = parseHandshakeAuth(socket.handshake.auth)
     if (!auth) return next(new Error('Unsupported or invalid game session.'))
     socket.data.token = auth.token
-    socket.data.address = clientAddress(socket, trustedProxyAddresses)
+    socket.data.address = resolveClientAddress(
+      socket.handshake.address,
+      socket.handshake.headers['x-forwarded-for'],
+      trustedProxyAddresses,
+    )
     next()
   })
 
@@ -437,15 +441,6 @@ export function createGameSocketServer(
       await new Promise<void>((resolve) => io.close(() => resolve()))
     },
   }
-}
-
-function clientAddress(socket: GameSocket, trustedProxies: string[]) {
-  const directAddress = socket.handshake.address
-  if (!isTrustedProxy(directAddress, trustedProxies)) return directAddress
-
-  const forwarded = socket.handshake.headers['x-forwarded-for']
-  const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded
-  return forwardedValue?.split(',')[0]?.trim() || directAddress
 }
 
 function isLoopbackAddress(address: string) {

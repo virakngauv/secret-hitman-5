@@ -1,8 +1,4 @@
-const publishConfirmationVariable = 'FIRST_PUBLIC_PLAYTEST_CONFIRMED'
-const requiredVercelVariables = [
-  'NEXT_PUBLIC_GAME_SERVER_URL',
-  publishConfirmationVariable,
-]
+const requiredVercelVariables = ['NEXT_PUBLIC_GAME_SERVER_URL']
 const optionalVercelVariables = [
   'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
   'CLERK_SECRET_KEY',
@@ -12,11 +8,9 @@ const optionalVercelVariables = [
 
 const isConfigured = (name) => Boolean(process.env[name]?.trim())
 const isValid = (name) =>
-  name === publishConfirmationVariable
-    ? process.env[name]?.trim() === 'true'
-    : name === 'NEXT_PUBLIC_GAME_SERVER_URL'
-      ? isHttpsUrl(process.env[name])
-      : isConfigured(name)
+  name === 'NEXT_PUBLIC_GAME_SERVER_URL'
+    ? isHttpsUrl(process.env[name])
+    : isConfigured(name)
 const missing = requiredVercelVariables.filter((name) => !isValid(name))
 
 console.log('Deployment environment (values are intentionally hidden):')

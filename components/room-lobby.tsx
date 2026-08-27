@@ -146,6 +146,7 @@ function LobbyScreen({
 }) {
   const isHost = view.player.role === 'host'
   const canStart = view.members.length >= view.minimumPlayers
+  const missingPlayers = view.minimumPlayers - view.members.length
 
   return (
     <main className="min-h-screen px-4 py-7 sm:px-7 lg:px-10">
@@ -215,7 +216,7 @@ function LobbyScreen({
               {error ??
                 (canStart
                   ? 'Ready when the host is.'
-                  : `Invite at least ${view.minimumPlayers - view.members.length} more player.`)}
+                  : `Invite at least ${missingPlayers} more ${missingPlayers === 1 ? 'player' : 'players'}.`)}
             </p>
 
             {isHost ? (

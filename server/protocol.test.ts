@@ -31,6 +31,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
     httpServer = createServer()
     socketServer = createGameSocketServer(httpServer, {
       allowedOrigins: [allowedOrigin],
+      entryCommandLimits: {
+        perPlayerPerMinute: 30,
+        perAddressPerMinute: 2,
+        globalPerMinute: 2_000,
+      },
       logger: { info() {}, warn() {}, error() {} },
     })
     await new Promise<void>((resolve) =>
@@ -46,10 +51,13 @@ describe('Socket.IO Secret Hitman protocol', () => {
     if (httpServer.listening) await socketServer.shutdown()
   })
 
-  async function connect(token: string) {
+  async function connect(token: string, forwardedFor?: string) {
     const client: TestClient = createClient(url, {
       auth: { token, protocolVersion: GAME_PROTOCOL_VERSION },
-      extraHeaders: { Origin: allowedOrigin },
+      extraHeaders: {
+        Origin: allowedOrigin,
+        ...(forwardedFor ? { 'X-Forwarded-For': forwardedFor } : {}),
+      },
       forceNew: true,
       transports: ['websocket'],
     })
@@ -60,6 +68,23 @@ describe('Socket.IO Secret Hitman protocol', () => {
     })
     return client
   }
+
+  it('shares the client address budget despite spoofed forwarding prefixes', async () => {
+    const first = await connect(hostToken, '198.51.100.1, 203.0.113.7')
+    const second = await connect(guestToken, '198.51.100.2, 203.0.113.7')
+
+    expect(
+      await first.emitWithAck('room:create', { name: 'Ada' }),
+    ).toMatchObject({
+      status: 'success',
+    })
+    expect(
+      await second.emitWithAck('room:create', { name: 'Grace' }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await second.emitWithAck('room:create', { name: 'Grace' }),
+    ).toMatchObject({ status: 'rate_limited' })
+  })
 
   it('runs room entry, hint readiness, host transition, scoring, and spectator permissions', async () => {
     const host = await connect(hostToken)

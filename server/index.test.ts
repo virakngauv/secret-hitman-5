@@ -1,5 +1,6 @@
 import { request } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { setImmediate } from 'node:timers/promises'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -131,5 +132,17 @@ describe('game server HTTP process', () => {
     await Promise.all([firstStop, secondStop])
     expect(server.httpServer.listening).toBe(false)
     server = null
+  })
+
+  it('closes the underlying HTTP server when stopped immediately after start', async () => {
+    server = startGameServer({ port: 0, host: '127.0.0.1' })
+    const closeSpy = vi.spyOn(server.httpServer, 'close')
+
+    await expect(server.stop()).resolves.toBeUndefined()
+    await setImmediate()
+
+    expect(closeSpy).toHaveBeenCalled()
+    expect(server.httpServer.listening).toBe(false)
+    expect(server.httpServer.address()).toBeNull()
   })
 })

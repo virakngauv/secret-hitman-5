@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { isTrustedProxy, parseTrustedProxies } from './proxy-trust'
+import {
+  isTrustedProxy,
+  parseTrustedProxies,
+  resolveClientAddress,
+} from './proxy-trust'
 
 describe('parseTrustedProxies', () => {
   it('splits, trims, and drops empty entries', () => {
@@ -53,4 +57,56 @@ describe('isTrustedProxy', () => {
     expect(isTrustedProxy('::ffff:10.1.2.3', ['10.0.0.0/8'])).toBe(false)
     expect(isTrustedProxy('fe80::1', ['fe80::/64'])).toBe(false)
   })
+})
+
+describe('resolveClientAddress', () => {
+  const trusted = ['10.0.0.0/8', '::1']
+
+  it('ignores forwarding headers from an untrusted peer', () => {
+    expect(resolveClientAddress('203.0.113.7', '198.51.100.9', trusted)).toBe(
+      '203.0.113.7',
+    )
+  })
+
+  it('ignores a spoofed prefix before the nearest untrusted hop', () => {
+    expect(
+      resolveClientAddress(
+        '10.0.0.1',
+        '198.51.100.9, 203.0.113.7, 10.0.0.2',
+        trusted,
+      ),
+    ).toBe('203.0.113.7')
+  })
+
+  it('preserves header order across multiple header values', () => {
+    expect(
+      resolveClientAddress(
+        '10.0.0.1',
+        ['198.51.100.9', '203.0.113.7, 10.0.0.2'],
+        trusted,
+      ),
+    ).toBe('203.0.113.7')
+  })
+
+  it('supports IPv6 clients and trusted proxy hops', () => {
+    expect(resolveClientAddress('::1', '2001:db8::7, ::1', trusted)).toBe(
+      '2001:db8::7',
+    )
+  })
+
+  it.each([
+    undefined,
+    '',
+    ' ',
+    'not-an-ip',
+    '203.0.113.7, invalid',
+    '10.0.0.2',
+  ])(
+    'falls back to the peer when the trusted suffix has no valid client: %s',
+    (forwarded) => {
+      expect(resolveClientAddress('10.0.0.1', forwarded, trusted)).toBe(
+        '10.0.0.1',
+      )
+    },
+  )
 })

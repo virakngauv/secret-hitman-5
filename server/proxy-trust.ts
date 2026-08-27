@@ -1,3 +1,5 @@
+import { isIP } from 'node:net'
+
 export function parseTrustedProxies(value: string | undefined): string[] {
   return (
     value
@@ -16,6 +18,28 @@ export function isTrustedProxy(
     if (matchesIpv4Cidr(address, entry)) return true
   }
   return false
+}
+
+/** Walks back through trusted proxies, ignoring any client-supplied prefix. */
+export function resolveClientAddress(
+  directAddress: string,
+  forwarded: string | string[] | undefined,
+  trustedProxies: string[],
+): string {
+  if (!isTrustedProxy(directAddress, trustedProxies)) return directAddress
+
+  const hops = (
+    Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? '')
+  )
+    .split(',')
+    .map((hop) => hop.trim())
+  for (let index = hops.length - 1; index >= 0; index -= 1) {
+    const hop = hops[index]
+    // Fail closed rather than accepting arbitrary rate-limit keys.
+    if (!isIP(hop)) return directAddress
+    if (!isTrustedProxy(hop, trustedProxies)) return hop
+  }
+  return directAddress
 }
 
 function matchesIpv4Cidr(address: string, entry: string): boolean {
