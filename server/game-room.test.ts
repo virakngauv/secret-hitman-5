@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { GameRoom } from './game-room'
+import { GameRoom, MAX_ROOM_IDENTITIES } from './game-room'
 
 const hostToken = 'a'.repeat(32)
 const guestToken = 'b'.repeat(32)
@@ -58,6 +58,59 @@ function startTwoPlayerGame() {
 }
 
 describe('GameRoom single-round flow', () => {
+  it('bounds room history by rejecting new identities instead of forgetting removals', () => {
+    const room = createRoom()
+    for (let index = 0; index < MAX_ROOM_IDENTITIES - 2; index += 1) {
+      const token = index.toString(16).padStart(32, '0')
+      joinAndRemove(token)
+    }
+
+    expect(room.join(guestToken, 'Last guest')).toEqual({ status: 'success' })
+    const snapshot = room.snapshotFor(guestToken)
+    if (snapshot.status !== 'lobby') throw new Error('Expected guest lobby.')
+    expect(room.join(thirdToken, 'Over capacity')).toMatchObject({
+      status: 'room_full',
+    })
+    expect(room.join(hostToken, 'Ada')).toEqual({ status: 'success' })
+    expect(room.join(guestToken, 'Last guest')).toEqual({ status: 'success' })
+    expect(
+      room.removePlayer(hostToken, snapshot.player.playerId),
+    ).toMatchObject({ status: 'success' })
+    expect(room.join(thirdToken, 'Still over capacity')).toMatchObject({
+      status: 'room_full',
+    })
+    expect(room.join('0'.repeat(32), 'Removed guest')).toMatchObject({
+      status: 'removed_from_room',
+    })
+    expect(room.join(guestToken, 'Removed last guest')).toMatchObject({
+      status: 'removed_from_room',
+    })
+
+    function joinAndRemove(token: string) {
+      expect(room.join(token, 'Guest')).toEqual({ status: 'success' })
+      const member = room.snapshotFor(token)
+      if (member.status !== 'lobby') throw new Error('Expected guest lobby.')
+      expect(
+        room.removePlayer(hostToken, member.player.playerId),
+      ).toMatchObject({ status: 'success' })
+    }
+  })
+
+  it('bounds spectator history while allowing existing game seats to reconnect', () => {
+    const room = startTwoPlayerGame()
+    for (let index = 0; index < MAX_ROOM_IDENTITIES - 2; index += 1) {
+      const token = index.toString(16).padStart(32, '0')
+      expect(room.join(token, 'Spectator')).toEqual({ status: 'success' })
+      expect(room.leave(token)).toEqual({ status: 'success' })
+    }
+    expect(room.join(thirdToken, 'New spectator')).toMatchObject({
+      status: 'room_full',
+    })
+    expect(room.leave(guestToken)).toEqual({ status: 'success' })
+    expect(room.join(guestToken, 'Grace')).toEqual({ status: 'success' })
+    expect(guessing(room, guestToken).player.participation).toBe('player')
+  })
+
   it('retains every removal restriction for the room lifetime', () => {
     const room = createRoom()
     const removedTokens = Array.from({ length: 300 }, (_, index) =>

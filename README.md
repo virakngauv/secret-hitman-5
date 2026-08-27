@@ -19,6 +19,7 @@ There are no gameplay timers. New identities may join after the game starts, but
 - One Node.js process owns all active rooms in memory and emits complete, personalized snapshots after every change.
 - The server is authoritative for roles, hidden card types, hint targets, scoring, spectators, and host-only transitions.
 - Rooms are ephemeral and expire after two hours without a meaningful game command.
+- A room retains at most 1,024 identities across member history and removal fingerprints. Once full, new identities must use a new room; existing game seats can reconnect, and removed identities remain blocked until the room expires.
 - Socket IDs never identify players; a private 128-bit browser token supports reconnects.
 
 ## Local development

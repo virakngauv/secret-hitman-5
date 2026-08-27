@@ -22,6 +22,8 @@ import { fingerprintClientToken } from './token-fingerprint'
 export const MIN_STARTING_PLAYERS = 2
 export const MAX_STARTING_PLAYERS = 12
 export const MAX_ROOM_MEMBERS = 32
+// Bound retained identities without ever evicting a room's removal restrictions.
+export const MAX_ROOM_IDENTITIES = 1_024
 const MAX_REMEMBERED_COMMANDS_PER_PLAYER = 100
 
 type Member = {
@@ -101,6 +103,17 @@ export class GameRoom {
     }
     if (this.activeMembers().length >= MAX_ROOM_MEMBERS) {
       return { status: 'room_full', message: 'This room is full.' }
+    }
+    if (
+      !existing &&
+      this.members.length + this.removedTokenFingerprints.size >=
+        MAX_ROOM_IDENTITIES
+    ) {
+      return {
+        status: 'room_full',
+        message:
+          'This room has reached its player history limit. Please create a new room.',
+      }
     }
 
     if (existing) {
