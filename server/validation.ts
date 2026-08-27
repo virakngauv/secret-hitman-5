@@ -3,6 +3,7 @@ import {
   MAX_TARGET_COUNT,
   type ClaimCardPayload,
   type CreateRoomPayload,
+  type FinishGuessingPayload,
   type JoinRoomPayload,
   type RemovePlayerPayload,
   type RoomCommandPayload,
@@ -60,6 +61,18 @@ export function parseRoomCommand(value: unknown): RoomCommandPayload | null {
   if (!isRecord(value)) return null
   const roomCode = parseRoomCode(value.roomCode)
   return roomCode ? { roomCode } : null
+}
+
+export function parseFinishGuessing(
+  value: unknown,
+): FinishGuessingPayload | null {
+  if (!isRecord(value)) return null
+  const room = parseRoomCommand(value)
+  return room &&
+    Number.isSafeInteger(value.revision) &&
+    (value.revision as number) >= 0
+    ? { ...room, revision: value.revision as number }
+    : null
 }
 
 export function parseRemovePlayer(value: unknown): RemovePlayerPayload | null {

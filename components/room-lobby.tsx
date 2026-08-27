@@ -124,7 +124,9 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
               commandId: crypto.randomUUID?.() ?? generateClientToken(),
             })
           }
-          onFinishGuessing={() => game.finishGuessing(roomCode)}
+          onFinishGuessing={() =>
+            game.finishGuessing({ roomCode, revision: snapshot.revision })
+          }
           onAdvanceTurn={() => game.advanceTurn(roomCode)}
         />
       )

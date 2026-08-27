@@ -21,6 +21,7 @@ import {
   type ClientToServerEvents,
   type CommandFailure,
   type CommandResult,
+  type FinishGuessingPayload,
   type RoomSnapshot,
   type ServerToClientEvents,
   type SubmitHintPayload,
@@ -48,7 +49,7 @@ type GameSocketContextValue = {
   claimCard: (
     payload: ClaimCardPayload,
   ) => Promise<CommandResult<{ kind: CardKind }>>
-  finishGuessing: (roomCode: string) => Promise<CommandResult>
+  finishGuessing: (payload: FinishGuessingPayload) => Promise<CommandResult>
   advanceTurn: (roomCode: string) => Promise<CommandResult>
 }
 
@@ -311,9 +312,9 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     [],
   )
   const finishGuessing = useCallback(
-    async (roomCode: string): Promise<CommandResult> =>
+    async (payload: FinishGuessingPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, (socket) =>
-        socket.emitWithAck('game:finish-guessing', { roomCode }),
+        socket.emitWithAck('game:finish-guessing', payload),
       ),
     [],
   )

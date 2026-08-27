@@ -60,6 +60,67 @@ function startTwoPlayerGame(withThirdPlayer = false) {
 }
 
 describe('GameRoom single-round flow', () => {
+  it('acknowledges repeated passes without effects and rejects passes from another turn', () => {
+    const room = startTwoPlayerGame(true)
+    const payload = { roomCode: room.code, revision: guessing(room).revision }
+    expect(room.finishGuessing(hostToken, payload)).toMatchObject({
+      status: 'forbidden',
+    })
+    expect(
+      room.finishGuessing(guestToken, {
+        ...payload,
+        revision: payload.revision + 1,
+      }),
+    ).toMatchObject({ status: 'stale' })
+    expect(room.finishGuessing(guestToken, payload, 2_000)).toEqual({
+      status: 'success',
+    })
+    const after = guessing(room, guestToken)
+    expect(room.finishGuessing(guestToken, payload, 3_000)).toEqual({
+      status: 'success',
+    })
+    expect(guessing(room, guestToken)).toEqual(after)
+    expect(room.lastMeaningfulActivityAt).toBe(2_000)
+    room.advanceTurn(hostToken)
+    room.advanceTurn(hostToken)
+    const next = guessing(room, guestToken)
+    expect(next.canGuess).toBe(true)
+    expect(room.finishGuessing(guestToken, payload)).toMatchObject({
+      status: 'stale',
+    })
+    expect(guessing(room, guestToken)).toEqual(next)
+  })
+
+  it('treats explicit leave as ending the turn and never restores guessing after rejoining', () => {
+    const room = startTwoPlayerGame(true)
+    const before = guessing(room, guestToken)
+    room.leave(guestToken)
+    room.join(guestToken, 'Grace')
+    const returned = guessing(room, guestToken)
+    expect(returned.player.playerId).toBe(before.player.playerId)
+    expect(returned.canGuess).toBe(false)
+    expect(
+      returned.board.every(
+        ({ revealedKind, disabled }) => revealedKind !== null && disabled,
+      ),
+    ).toBe(true)
+    expect(
+      room.claimCard(guestToken, {
+        roomCode: room.code,
+        cardId: returned.board[0].id,
+        revision: returned.revision,
+        commandId: 'after-leave-rejoin',
+      }),
+    ).toMatchObject({ status: 'forbidden' })
+    expect(
+      guessing(room, thirdToken).board.every(
+        ({ revealedKind }) => revealedKind === null,
+      ),
+    ).toBe(true)
+    expect(guessing(room, guestToken)).toEqual(returned)
+    expect(returned.scoreboard.map(({ score }) => score)).toEqual([0, 0, 0])
+  })
+
   it.each(['pass', 'civilian', 'assassin'] as const)(
     'privately reveals a finished picker after %s and hides the next board',
     (ending) => {
@@ -68,7 +129,12 @@ describe('GameRoom single-round flow', () => {
       room.join(spectatorToken, 'Spectator')
       const before = guessing(room, hostToken)
       if (ending === 'pass') {
-        expect(room.finishGuessing(guestToken)).toEqual({ status: 'success' })
+        expect(
+          room.finishGuessing(guestToken, {
+            roomCode: room.code,
+            revision: before.revision,
+          }),
+        ).toEqual({ status: 'success' })
       } else {
         const card = before.board.find(
           ({ revealedKind }) => revealedKind === ending,

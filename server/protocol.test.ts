@@ -438,7 +438,10 @@ describe('Socket.IO Secret Hitman protocol', () => {
         throw new Error('Expected guessing phase.')
       if (ending === 'pass') {
         expect(
-          await guest.emitWithAck('game:finish-guessing', { roomCode }),
+          await guest.emitWithAck('game:finish-guessing', {
+            roomCode,
+            revision: before.revision,
+          }),
         ).toEqual({ status: 'success' })
       } else if (ending !== 'active') {
         const card = revealed.board.find(
@@ -474,6 +477,15 @@ describe('Socket.IO Secret Hitman protocol', () => {
       )
         throw new Error('Expected resumed guessing snapshot.')
       expect(resumed.snapshot).toEqual(completed)
+      if (ending === 'pass') {
+        expect(
+          await reconnected.emitWithAck('game:finish-guessing', {
+            roomCode,
+            revision: before.revision,
+          }),
+        ).toEqual({ status: 'success' })
+        expect(server.snapshot(guestToken, roomCode)).toEqual(completed)
+      }
       expect(
         resumed.snapshot.board.map(({ revealedKind }) => revealedKind),
       ).toEqual(
