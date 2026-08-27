@@ -128,16 +128,19 @@ describe('Socket.IO Secret Hitman protocol', () => {
     if (hostHint.status !== 'hinting' || guestHint.status !== 'hinting') {
       throw new Error('Expected hinting snapshots.')
     }
-    const hostTargets =
-      hostHint.board
-        ?.filter(({ kind }) => kind === 'neutral')
-        .slice(0, 2)
-        .map(({ id }) => id) ?? []
-    const guestTargets =
-      guestHint.board
-        ?.filter(({ kind }) => kind === 'neutral')
-        .slice(0, 3)
-        .map(({ id }) => id) ?? []
+    if (!hostHint.board || !guestHint.board) {
+      throw new Error('Expected boards for participating players.')
+    }
+    const hostTargets = hostHint.board
+      .filter(({ kind }) => kind === 'neutral')
+      .slice(0, 2)
+      .map(({ id }) => id)
+    const guestTargets = guestHint.board
+      .filter(({ kind }) => kind === 'neutral')
+      .slice(0, 3)
+      .map(({ id }) => id)
+    expect(hostTargets).toHaveLength(2)
+    expect(guestTargets).toHaveLength(3)
 
     expect(
       await host.emitWithAck('game:submit-hint', {
