@@ -20,5 +20,12 @@ describe('HomePage', () => {
       'href',
       '/join',
     )
+    expect(screen.getByRole('link', { name: 'Rules' })).toHaveAttribute(
+      'href',
+      '/rules',
+    )
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual(
+      ['Create a room', 'Join a room', 'Rules'],
+    )
   })
 })

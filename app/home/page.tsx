@@ -49,6 +49,13 @@ export default function HomePage() {
               >
                 <Link href="/join">Join a room</Link>
               </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-12 w-full text-base"
+              >
+                <Link href="/rules">Rules</Link>
+              </Button>
             </div>
             <div className="home-rules">
               <span>12 WORDS</span>
