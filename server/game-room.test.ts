@@ -43,9 +43,10 @@ function submitFirstHint(room: GameRoom, token: string, hint: string) {
   return room.submitHint(token, { roomCode: room.code, hint, targetCardIds })
 }
 
-function startTwoPlayerGame() {
+function startTwoPlayerGame(withThirdPlayer = false) {
   const room = createRoom()
   room.join(guestToken, 'Grace', 1_001)
+  if (withThirdPlayer) room.join(thirdToken, 'Linus', 1_001)
   expect(room.start(hostToken, 1_002)).toEqual({ status: 'success' })
   expect(submitFirstHint(room, hostToken, 'Orbit')).toEqual({
     status: 'success',
@@ -53,11 +54,150 @@ function startTwoPlayerGame() {
   expect(submitFirstHint(room, guestToken, 'Garden')).toEqual({
     status: 'success',
   })
+  if (withThirdPlayer) submitFirstHint(room, thirdToken, 'Metal')
   expect(room.startGuessing(hostToken, 1_003)).toEqual({ status: 'success' })
   return room
 }
 
 describe('GameRoom single-round flow', () => {
+  it.each(['pass', 'civilian', 'assassin'] as const)(
+    'privately reveals a finished picker after %s and hides the next board',
+    (ending) => {
+      const room = startTwoPlayerGame(true)
+      const spectatorToken = 'd'.repeat(32)
+      room.join(spectatorToken, 'Spectator')
+      const before = guessing(room, hostToken)
+      if (ending === 'pass') {
+        expect(room.finishGuessing(guestToken)).toEqual({ status: 'success' })
+      } else {
+        const card = before.board.find(
+          ({ revealedKind }) => revealedKind === ending,
+        )!
+        expect(
+          room.claimCard(guestToken, {
+            roomCode: room.code,
+            cardId: card.id,
+            revision: before.revision,
+            commandId: `finish-${ending}`,
+          }),
+        ).toEqual({ status: 'success', kind: ending })
+      }
+
+      const finished = guessing(room, guestToken)
+      expect(finished.board.map(({ revealedKind }) => revealedKind)).toEqual(
+        before.board.map(({ revealedKind }) => revealedKind),
+      )
+      expect(finished.board.every(({ disabled }) => disabled)).toBe(true)
+      expect(finished.canGuess).toBe(false)
+      expect(finished.canMarkDone).toBe(false)
+      const target = before.board.find(
+        ({ revealedKind }) => revealedKind === 'target',
+      )!
+      expect(
+        room.claimCard(guestToken, {
+          roomCode: room.code,
+          cardId: target.id,
+          revision: finished.revision,
+          commandId: 'after-finishing',
+        }),
+      ).toMatchObject({ status: 'forbidden' })
+      expect(guessing(room, guestToken)).toEqual(finished)
+
+      for (const token of [thirdToken, spectatorToken]) {
+        const view = guessing(room, token)
+        expect(
+          view.board.filter(({ revealedKind }) => revealedKind !== null),
+        ).toHaveLength(ending === 'civilian' ? 1 : 0)
+        const assassin = before.board.find(
+          ({ revealedKind }) => revealedKind === 'assassin',
+        )!
+        expect(view.board.find(({ id }) => id === assassin.id)).toMatchObject({
+          revealedKind: null,
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: token === spectatorToken,
+        })
+      }
+      expect(
+        room.claimCard(thirdToken, {
+          roomCode: room.code,
+          cardId: target.id,
+          revision: before.revision,
+          commandId: 'active-picker-target',
+        }),
+      ).toEqual({ status: 'success', kind: 'target' })
+
+      room.advanceTurn(hostToken)
+      room.advanceTurn(hostToken)
+      const next = guessing(room, guestToken)
+      expect(next.clueGiverName).toBe('Linus')
+      expect(next.canGuess).toBe(true)
+      expect(
+        next.board.every(({ revealedKind }) => revealedKind === null),
+      ).toBe(true)
+      expect(
+        room.claimCard(guestToken, {
+          roomCode: room.code,
+          cardId: next.board[0].id,
+          revision: finished.revision,
+          commandId: 'previous-turn',
+        }),
+      ).toMatchObject({ status: 'stale' })
+      expect(guessing(room, guestToken)).toEqual(next)
+    },
+  )
+
+  it.each(['target', 'civilian', 'assassin'] as const)(
+    'arbitrates same-revision %s claims and retries without duplicate effects',
+    (kind) => {
+      const room = startTwoPlayerGame(true)
+      const before = guessing(room)
+      const card = before.board.find(
+        ({ revealedKind }) => revealedKind === kind,
+      )!
+      const payload = {
+        roomCode: room.code,
+        cardId: card.id,
+        revision: before.revision,
+        commandId: 'same-command-id-per-player',
+      }
+      expect(room.claimCard(guestToken, payload)).toEqual({
+        status: 'success',
+        kind,
+      })
+      const second = room.claimCard(thirdToken, payload)
+      expect(second).toMatchObject({
+        status: kind === 'assassin' ? 'success' : 'already_claimed',
+      })
+      const after = guessing(room)
+      expect(after.board.find(({ id }) => id === card.id)?.claimedBy).toEqual(
+        kind === 'assassin' ? ['Grace', 'Linus'] : ['Grace'],
+      )
+      expect(after.scoreboard.map(({ score }) => score)).toEqual(
+        kind === 'assassin'
+          ? [-2, -1, -1]
+          : kind === 'target'
+            ? [1, 1, 0]
+            : [0, 0, 0],
+      )
+      expect(room.claimCard(guestToken, payload)).toEqual({
+        status: 'success',
+        kind,
+      })
+      expect(room.claimCard(thirdToken, payload)).toEqual(second)
+      expect(
+        room.claimCard(guestToken, {
+          ...payload,
+          commandId: 'new-id-retry',
+          revision: after.revision,
+        }),
+      ).toMatchObject({
+        status: kind === 'target' ? 'already_claimed' : 'forbidden',
+      })
+      expect(guessing(room)).toEqual(after)
+    },
+  )
+
   it('reserves starting seats when spectators fill capacity', () => {
     const room = startTwoPlayerGame()
     const playerId = guessing(room, guestToken).player.playerId

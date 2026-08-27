@@ -21,9 +21,15 @@ finished
 ## Personalized information
 
 - During hinting, a starting player receives only their own private board. Spectators receive readiness status but no board.
-- During guessing, only the clue-giver sees every card type. Guessers and spectators see target/civilian types after a claim.
-- An assassin remains hidden from other guessers after it is selected, allowing each guesser to independently risk it.
+- During guessing, the clue-giver and finished pickers see every card type on the current board. Passing or selecting a civilian/assassin immediately ends that picker's turn and privately reveals the board. Active pickers and spectators see only publicly claimed target/civilian types.
+- An assassin's location and claimant list remain hidden from active pickers and spectators after it is selected, allowing each picker to independently risk it. Finished pickers cannot make additional picks, including after a refresh or reconnect.
 - At the end of the game, the final board is fully revealed to everyone in the room.
+
+## Claim ordering
+
+The server synchronously accepts claims against current turn and card state. Targets and civilians have one successful claimant; concurrent later requests receive `already_claimed`. An assassin can be selected once by each eligible picker without globally disabling it. Command retries return their remembered result without repeating scoring effects.
+
+Snapshot revisions from the current turn remain valid for claims, so simultaneous assassin picks do not invalidate one another. Revisions predating the current guessing turn or ahead of the server are rejected. Turn eligibility, card ownership, and scoring are always checked/applied on the server. Advancing resets turn eligibility and the minimum accepted revision; a previous private reveal does not expose the next board.
 
 ## Membership
 
