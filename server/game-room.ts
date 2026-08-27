@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  MAX_STARTING_PLAYERS,
   type CardKind,
   type ClaimCardPayload,
   type CommandResult,
@@ -20,7 +21,7 @@ import {
 import { fingerprintClientToken } from './token-fingerprint'
 
 export const MIN_STARTING_PLAYERS = 2
-export const MAX_STARTING_PLAYERS = 12
+export { MAX_STARTING_PLAYERS }
 export const MAX_ROOM_MEMBERS = 32
 // Bound retained identities without ever evicting a room's removal restrictions.
 export const MAX_ROOM_IDENTITIES = 1_024

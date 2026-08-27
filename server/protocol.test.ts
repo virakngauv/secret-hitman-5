@@ -89,6 +89,55 @@ describe('Socket.IO Secret Hitman protocol', () => {
     ).toMatchObject({ status: 'rate_limited' })
   })
 
+  it('shares budgets across forwarded source ports without merging different IPs', async () => {
+    const first = await connect(hostToken, '203.0.113.7:12345')
+    const second = await connect(guestToken, '203.0.113.7:54321')
+    const third = await connect(spectatorToken, '203.0.113.8:12345')
+    expect(
+      await first.emitWithAck('room:create', { name: 'Ada' }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await second.emitWithAck('room:create', { name: 'Grace' }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await second.emitWithAck('room:create', { name: 'Grace' }),
+    ).toMatchObject({ status: 'rate_limited' })
+    expect(
+      await third.emitWithAck('room:create', { name: 'Linus' }),
+    ).toMatchObject({ status: 'success' })
+  })
+
+  it('does not replace an explicit empty proxy allowlist with loopback trust', async () => {
+    await socketServer.shutdown()
+    httpServer = createServer()
+    socketServer = createGameSocketServer(httpServer, {
+      allowedOrigins: [allowedOrigin],
+      trustedProxyAddresses: [],
+      entryCommandLimits: {
+        perPlayerPerMinute: 30,
+        perAddressPerMinute: 2,
+        globalPerMinute: 2_000,
+      },
+      logger: { info() {}, warn() {}, error: logError },
+    })
+    await new Promise<void>((resolve) =>
+      httpServer.listen(0, '127.0.0.1', resolve),
+    )
+    url = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}`
+    const first = await connect(hostToken, '203.0.113.1')
+    const second = await connect(guestToken, '203.0.113.2')
+    const third = await connect(spectatorToken, '203.0.113.3')
+    expect(
+      await first.emitWithAck('room:create', { name: 'Ada' }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await second.emitWithAck('room:create', { name: 'Grace' }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await third.emitWithAck('room:create', { name: 'Linus' }),
+    ).toMatchObject({ status: 'rate_limited' })
+  })
+
   describe.each([undefined, null, 'not-a-callback'])(
     'with acknowledgement %s',
     (callback) => {

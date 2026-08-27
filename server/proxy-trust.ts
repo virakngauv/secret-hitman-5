@@ -54,12 +54,22 @@ export function resolveClientAddress(
     .split(',')
     .map((hop) => hop.trim())
   for (let index = hops.length - 1; index >= 0; index -= 1) {
-    const hop = hops[index]
+    const hop = parseForwardedAddress(hops[index])
     // Fail closed rather than accepting arbitrary rate-limit keys.
-    if (!isIP(hop)) return directAddress
+    if (!hop) return directAddress
     if (!isTrustedProxy(hop, trustedProxies)) return hop
   }
   return directAddress
+}
+
+/** Accepts raw IPs, IPv4:port, and bracketed IPv6:port, never hostnames. */
+function parseForwardedAddress(value: string): string | null {
+  if (isIP(value)) return value
+  const endpoint = /^(?:\[([^\]]+)\]|([^:]+)):(\d{1,5})$/.exec(value)
+  if (!endpoint || Number(endpoint[3]) > 65_535) return null
+  const address = endpoint[1] ?? endpoint[2]
+  const expectedFamily = endpoint[1] ? 6 : 4
+  return isIP(address) === expectedFamily ? address : null
 }
 
 function matchesIpv4Cidr(address: string, entry: string): boolean {

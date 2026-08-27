@@ -10,7 +10,7 @@ import {
   type SocketHandshakeAuth,
   type SubmitHintPayload,
 } from '../lib/game-protocol'
-import { ROOM_CODE_PATTERN } from './room-code'
+import { ROOM_CODE_PATTERN } from '../lib/room-code'
 
 export const CLIENT_TOKEN_PATTERN = /^[0-9a-f]{32}$/
 export { ROOM_CODE_PATTERN }

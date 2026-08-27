@@ -99,12 +99,16 @@ describe('game server HTTP process', () => {
     expect(parseEnvPort(' 3201 ')).toBe(3201)
   })
 
-  it('allows private-network origins outside production unless overridden', () => {
-    expect(parseAllowPrivateNetworkOrigins(undefined, undefined)).toBe(true)
+  it('allows private-network origins only in explicit development or with opt-in', () => {
+    expect(parseAllowPrivateNetworkOrigins(undefined, undefined)).toBe(false)
+    expect(parseAllowPrivateNetworkOrigins(undefined, '')).toBe(false)
+    expect(parseAllowPrivateNetworkOrigins(undefined, 'staging')).toBe(false)
     expect(parseAllowPrivateNetworkOrigins(undefined, 'development')).toBe(true)
     expect(parseAllowPrivateNetworkOrigins(undefined, 'production')).toBe(false)
     expect(parseAllowPrivateNetworkOrigins(' true ', 'production')).toBe(true)
     expect(parseAllowPrivateNetworkOrigins('false', undefined)).toBe(false)
+    expect(parseAllowPrivateNetworkOrigins('false', 'development')).toBe(false)
+    expect(parseAllowPrivateNetworkOrigins('true', undefined)).toBe(true)
     expect(parseAllowPrivateNetworkOrigins('garbage', 'production')).toBe(false)
   })
 

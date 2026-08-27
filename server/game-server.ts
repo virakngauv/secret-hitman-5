@@ -7,7 +7,10 @@ import type {
   SubmitHintPayload,
 } from '../lib/game-protocol'
 import { GameRoom } from './game-room'
-import { ROOM_CODE_CONSONANTS, ROOM_CODE_FINAL_CHARACTERS } from './room-code'
+import {
+  ROOM_CODE_CONSONANTS,
+  ROOM_CODE_FINAL_CHARACTERS,
+} from '../lib/room-code'
 
 const MAX_CODE_ATTEMPTS = 25
 export const MAX_ACTIVE_ROOMS = 25_000

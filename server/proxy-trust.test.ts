@@ -128,6 +128,38 @@ describe('resolveClientAddress', () => {
   })
 
   it.each([
+    ['203.0.113.7:12345', '203.0.113.7'],
+    ['203.0.113.7:54321', '203.0.113.7'],
+    ['[2001:db8::7]:443', '2001:db8::7'],
+    ['2001:db8::7:443', '2001:db8::7:443'],
+  ])('normalizes supported forwarded endpoint %s', (forwarded, expected) => {
+    expect(resolveClientAddress('10.0.0.1', forwarded, trusted)).toBe(expected)
+  })
+
+  it('walks trusted proxy endpoints with ports while ignoring a spoofed prefix', () => {
+    expect(
+      resolveClientAddress(
+        '10.0.0.1',
+        '198.51.100.9, 203.0.113.7:12345, 10.0.0.2:443',
+        trusted,
+      ),
+    ).toBe('203.0.113.7')
+  })
+
+  it.each([
+    '203.0.113.7:65536',
+    '203.0.113.7:-1',
+    '203.0.113.7:abc',
+    '[2001:db8::7]',
+    '[203.0.113.7]:443',
+    'example.com:443',
+  ])('fails closed for malformed endpoint %s', (forwarded) => {
+    expect(resolveClientAddress('10.0.0.1', forwarded, trusted)).toBe(
+      '10.0.0.1',
+    )
+  })
+
+  it.each([
     undefined,
     '',
     ' ',

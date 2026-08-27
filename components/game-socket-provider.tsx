@@ -99,6 +99,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       setConnectionStatus('connected')
       for (const roomCode of watchedRoomsRef.current.keys()) {
         socket.emit('session:resume', { roomCode }, (result) => {
+          if (socketRef.current !== socket) return
           if (result.status === 'success' && result.snapshot) {
             receiveSnapshot(result.snapshot)
           }
@@ -186,6 +187,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     const socket = socketRef.current
     if (socket?.connected) {
       socket.emit('session:resume', { roomCode }, (result) => {
+        if (socketRef.current !== socket) return
         if (result.status === 'success' && result.snapshot) {
           receiveSnapshotRef.current(result.snapshot)
         }

@@ -19,7 +19,11 @@ import {
   RoomInviteCard,
 } from '@/components/room-invite-card'
 import { Button } from '@/components/ui/button'
-import { isMemberSnapshot, type RoomSnapshot } from '@/lib/game-protocol'
+import {
+  isMemberSnapshot,
+  MAX_STARTING_PLAYERS,
+  type RoomSnapshot,
+} from '@/lib/game-protocol'
 import { generateClientToken } from '@/lib/player-session'
 
 type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
@@ -178,7 +182,9 @@ function LobbyScreen({
           <section className="game-panel">
             <div className="flex items-baseline justify-between gap-4">
               <h2 className="sidebar-title">Players</h2>
-              <span className="phase-count">{view.members.length}/12</span>
+              <span className="phase-count">
+                {view.members.length}/{MAX_STARTING_PLAYERS}
+              </span>
             </div>
             <ul className="mt-5 grid gap-2">
               {view.members.map((member, index) => (

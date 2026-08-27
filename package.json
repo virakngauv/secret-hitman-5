@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others --names web,game \"next dev --hostname ${WEB_HOST:-127.0.0.1}\" \"tsx watch server/index.ts\"",
+    "dev": "concurrently --kill-others --names web,game \"next dev --hostname ${WEB_HOST:-127.0.0.1}\" \"cross-env NODE_ENV=development tsx watch server/index.ts\"",
     "dev:web": "next dev --hostname ${WEB_HOST:-127.0.0.1}",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "cross-env NODE_ENV=development tsx watch server/index.ts",
     "dev:e2e": "cross-env NEXT_PUBLIC_GAME_SERVER_URL=http://127.0.0.1:3225 concurrently --kill-others --names web,game \"next dev --hostname 127.0.0.1 --port 3125\" \"cross-env PORT=3225 ALLOWED_ORIGINS=http://127.0.0.1:3125 tsx server/index.ts\"",
     "build": "next build",
     "deploy:build": "pnpm deploy:check-env && pnpm build",

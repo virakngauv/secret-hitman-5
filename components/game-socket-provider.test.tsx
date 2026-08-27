@@ -138,6 +138,57 @@ describe('GameSocketProvider', () => {
     )
   })
 
+  it.each(['watchRoom', 'connect resume'] as const)(
+    'ignores stale %s acknowledgements after replacing the player identity',
+    async (flow) => {
+      const replacementSocket = { ...mocks.socket }
+      mocks.io
+        .mockReturnValueOnce(mocks.socket)
+        .mockReturnValueOnce(replacementSocket)
+      let acknowledge: ((result: unknown) => void) | undefined
+      const captureAcknowledgement = () =>
+        mocks.socket.emit.mockImplementationOnce(
+          (_event, _payload, callback) => {
+            acknowledge = callback
+          },
+        )
+      const view = render(
+        <GameSocketProvider>
+          <div />
+        </GameSocketProvider>,
+      )
+      await waitFor(() => expect(mocks.io).toHaveBeenCalledOnce())
+
+      if (flow === 'watchRoom') captureAcknowledgement()
+      view.rerender(
+        <GameSocketProvider>
+          <RoomProbe roomCode="bcdf2" />
+        </GameSocketProvider>,
+      )
+      if (flow === 'connect resume') {
+        captureAcknowledgement()
+        act(() => mocks.handlers.get('connect')?.())
+      }
+      expect(acknowledge).toBeTypeOf('function')
+      mocks.clientToken = 'b'.repeat(32)
+      view.rerender(
+        <GameSocketProvider>
+          <RoomProbe roomCode="bcdf2" />
+        </GameSocketProvider>,
+      )
+      await waitFor(() => expect(mocks.io).toHaveBeenCalledTimes(2))
+
+      act(() =>
+        acknowledge?.({ status: 'success', snapshot: lobbySnapshot('bcdf2') }),
+      )
+      expect(screen.getByTestId('status')).toHaveTextContent('missing')
+      act(() =>
+        mocks.handlers.get('room:snapshot')?.(lobbySnapshot('bcdf2') as never),
+      )
+      expect(screen.getByTestId('status')).toHaveTextContent('lobby')
+    },
+  )
+
   it('derives the game server URL from a LAN page hostname when the public URL is empty', async () => {
     vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', '')
     const originalLocation = window.location

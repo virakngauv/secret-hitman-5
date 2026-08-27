@@ -27,9 +27,11 @@ export function startGameServer(
   const logger = createStructuredLogger(process.env.LOG_LEVEL)
   const trustedProxyAddresses =
     options.trustedProxyAddresses ??
-    parseTrustedProxies(process.env.TRUSTED_PROXIES, (entry) => {
-      logger.warn(JSON.stringify({ event: 'invalid_trusted_proxy', entry }))
-    })
+    (process.env.TRUSTED_PROXIES === undefined
+      ? undefined
+      : parseTrustedProxies(process.env.TRUSTED_PROXIES, (entry) => {
+          logger.warn(JSON.stringify({ event: 'invalid_trusted_proxy', entry }))
+        }))
 
   const httpServer = createServer((request, response) => {
     let pathname = ''
@@ -53,7 +55,7 @@ export function startGameServer(
   const socketServer = createGameSocketServer(httpServer, {
     allowedOrigins,
     allowPrivateNetworkOrigins,
-    ...(trustedProxyAddresses.length ? { trustedProxyAddresses } : {}),
+    ...(trustedProxyAddresses !== undefined ? { trustedProxyAddresses } : {}),
     logger,
   })
 
@@ -122,7 +124,7 @@ export function parseAllowPrivateNetworkOrigins(
   const normalized = value?.trim().toLowerCase()
   if (normalized === 'true') return true
   if (normalized === 'false') return false
-  return nodeEnv !== 'production'
+  return nodeEnv === 'development'
 }
 
 function validatePort(port: number) {

@@ -12,8 +12,7 @@ import { useGameSocket } from '@/components/game-socket-provider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-
-const ROOM_CODE_PATTERN = /^[bcdfghkpqrstvz]{4}[2-9y]$/
+import { ROOM_CODE_PATTERN } from '@/lib/room-code'
 
 export type JoinedRoom = { roomCode: string }
 

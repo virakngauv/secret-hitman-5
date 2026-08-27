@@ -75,9 +75,8 @@ export function createGameSocketServer(
     allowedOrigins.has(origin) ||
     (options.allowPrivateNetworkOrigins === true &&
       isPrivateNetworkOrigin(origin))
-  const trustedProxyAddresses = options.trustedProxyAddresses?.length
-    ? options.trustedProxyAddresses
-    : LOOPBACK_PROXY_ADDRESSES
+  const trustedProxyAddresses =
+    options.trustedProxyAddresses ?? LOOPBACK_PROXY_ADDRESSES
   const entryLimits: EntryCommandLimits = {
     ...DEFAULT_ENTRY_COMMAND_LIMITS,
     ...options.entryCommandLimits,
