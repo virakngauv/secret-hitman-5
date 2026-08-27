@@ -401,6 +401,70 @@ describe('Socket.IO Secret Hitman protocol', () => {
     ).toEqual([1, 1])
   })
 
+  it.each([false, true])(
+    'preserves guessing eligibility across a socket disconnect (civilian claimed: %s)',
+    async (claimedCivilian) => {
+      const host = await connect(hostToken)
+      const guest = await connect(guestToken)
+      const created = await host.emitWithAck('room:create', { name: 'Ada' })
+      if (created.status !== 'success')
+        throw new Error('Unable to create room.')
+      const { roomCode } = created
+      await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
+      const server = socketServer.gameServer
+      expect(server.startGame(hostToken, roomCode)).toEqual({
+        status: 'success',
+      })
+      for (const token of [hostToken, guestToken]) {
+        const view = server.snapshot(token, roomCode)
+        if (view.status !== 'hinting' || !view.board)
+          throw new Error('Expected hinting board.')
+        const target = view.board.find(({ kind }) => kind === 'neutral')!
+        expect(
+          server.submitHint(token, {
+            roomCode,
+            hint: 'Orbit',
+            targetCardIds: [target.id],
+          }),
+        ).toEqual({ status: 'success' })
+      }
+      expect(server.startGuessing(hostToken, roomCode)).toEqual({
+        status: 'success',
+      })
+      const revealed = server.snapshot(hostToken, roomCode)
+      const before = server.snapshot(guestToken, roomCode)
+      if (revealed.status !== 'guessing' || before.status !== 'guessing')
+        throw new Error('Expected guessing phase.')
+      if (claimedCivilian) {
+        const civilian = revealed.board.find(
+          ({ revealedKind }) => revealedKind === 'civilian',
+        )!
+        expect(
+          await guest.emitWithAck('game:claim-card', {
+            roomCode,
+            cardId: civilian.id,
+            revision: before.revision,
+            commandId: 'civilian-before-reconnect',
+          }),
+        ).toEqual({ status: 'success', kind: 'civilian' })
+      }
+      guest.disconnect()
+      const reconnected = await connect(guestToken)
+      const resumed = await reconnected.emitWithAck('session:resume', {
+        roomCode,
+      })
+      expect(resumed).toMatchObject({
+        status: 'success',
+        snapshot: {
+          status: 'guessing',
+          player: { playerId: before.player.playerId },
+          canGuess: !claimedCivilian,
+          canMarkDone: !claimedCivilian,
+        },
+      })
+    },
+  )
+
   it('restores the same player identity after reconnecting', async () => {
     const host = await connect(hostToken)
     const guest = await connect(guestToken)

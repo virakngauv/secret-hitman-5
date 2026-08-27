@@ -115,14 +115,36 @@ describe('isTrustedProxy', () => {
     expect(isTrustedProxy('10.1.2.3', ['10.0.0.0/'])).toBe(false)
   })
 
-  it('never CIDR-matches non-IPv4 addresses', () => {
-    expect(isTrustedProxy('::ffff:10.1.2.3', ['10.0.0.0/8'])).toBe(false)
+  it('never CIDR-matches native IPv6 addresses', () => {
     expect(isTrustedProxy('fe80::1', ['fe80::/64'])).toBe(false)
+  })
+
+  it.each(['::ffff:10.1.2.3', '::FFFF:a01:203', '0:0:0:0:0:ffff:0a01:0203'])(
+    'matches mapped IPv4 %s against IPv4 entries',
+    (address) => {
+      expect(isTrustedProxy(address, ['10.1.2.3'])).toBe(true)
+      expect(isTrustedProxy(address, ['10.0.0.0/8'])).toBe(true)
+      expect(isTrustedProxy(address, ['192.168.0.0/16'])).toBe(false)
+    },
+  )
+
+  it('matches an IPv4 peer against an exact mapped trusted entry', () => {
+    expect(isTrustedProxy('10.1.2.3', ['::ffff:10.1.2.3'])).toBe(true)
   })
 })
 
 describe('resolveClientAddress', () => {
   const trusted = ['10.0.0.0/8', '::1']
+
+  it('walks the trusted suffix when a dual-stack listener reports mapped peers', () => {
+    expect(
+      resolveClientAddress(
+        '::ffff:10.0.0.1',
+        '198.51.100.9, 203.0.113.7, ::ffff:10.0.0.2',
+        trusted,
+      ),
+    ).toBe('203.0.113.7')
+  })
 
   it('ignores forwarding headers from an untrusted peer', () => {
     expect(resolveClientAddress('203.0.113.7', '198.51.100.9', trusted)).toBe(

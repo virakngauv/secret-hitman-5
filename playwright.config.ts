@@ -6,9 +6,10 @@ const baseURL = remoteBaseURL ?? 'http://127.0.0.1:3125'
 // Server modes:
 // - default: Playwright boots the full `pnpm dev:e2e` stack (web 3125, game
 //   server 3225) and tears it down afterwards.
-// - PW_REUSE_SERVER=1: reuse an already-running dev:e2e stack. Reusing a
-//   long-running server is the known WebKit-flake variable (issue #86); when a
-//   reused run flakes, retry once against a fresh stack before debugging.
+// - PW_REUSE_SERVER=1: reuse an already-running dev:e2e stack. There are zero
+//   automatic retries locally and two in CI; neither mode restarts a reused
+//   server for a retry. If reuse flakes, manually stop the existing stack and
+//   rerun with PW_REUSE_SERVER and PLAYWRIGHT_BASE_URL unset for a fresh stack.
 // - PLAYWRIGHT_BASE_URL: run against your own dev server (for example a
 //   `pnpm dev` server on 127.0.0.1:3000). Keep both web and game server
 //   processes running; first hits on cold routes pay on-demand compile
