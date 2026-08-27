@@ -1,5 +1,15 @@
 import { isIP, isIPv4 } from 'node:net'
 
+/** Only use behind an ingress that overwrites this header, never on a direct server. */
+export function resolveDigitalOceanClientAddress(
+  directAddress: string,
+  connectingIp: string | string[] | undefined,
+): string {
+  return typeof connectingIp === 'string' && isIP(connectingIp.trim())
+    ? connectingIp.trim()
+    : directAddress
+}
+
 export function parseTrustedProxies(
   value: string | undefined,
   onInvalidEntry?: (entry: string) => void,

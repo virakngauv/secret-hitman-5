@@ -12,6 +12,7 @@ export function startGameServer(
     allowedOrigins?: string[]
     allowPrivateNetworkOrigins?: boolean
     trustedProxyAddresses?: string[]
+    trustDigitalOceanProxy?: boolean
   } = {},
 ) {
   const port = validatePort(options.port ?? parseEnvPort(process.env.PORT))
@@ -55,6 +56,9 @@ export function startGameServer(
   const socketServer = createGameSocketServer(httpServer, {
     allowedOrigins,
     allowPrivateNetworkOrigins,
+    trustDigitalOceanProxy:
+      options.trustDigitalOceanProxy ??
+      process.env.TRUST_DIGITALOCEAN_PROXY?.trim().toLowerCase() === 'true',
     ...(trustedProxyAddresses !== undefined ? { trustedProxyAddresses } : {}),
     logger,
   })

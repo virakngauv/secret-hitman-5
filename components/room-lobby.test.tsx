@@ -11,11 +11,15 @@ type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
 const mocks = vi.hoisted(() => ({
   view: null as LobbyView | null,
   startGame: vi.fn(),
+  removePlayer: vi.fn(),
   routerPush: vi.fn(),
 }))
 
 vi.mock('@/components/game-socket-provider', () => ({
-  useGameSocket: () => ({ startGame: mocks.startGame }),
+  useGameSocket: () => ({
+    startGame: mocks.startGame,
+    removePlayer: mocks.removePlayer,
+  }),
   useRoomSnapshot: () => ({
     snapshot: mocks.view,
     endedReason: null,
@@ -64,6 +68,7 @@ describe('RoomLobby invite prompt', () => {
   beforeEach(() => {
     mocks.view = lobbyView()
     mocks.startGame.mockReset().mockResolvedValue({ status: 'success' })
+    mocks.removePlayer.mockReset().mockResolvedValue({ status: 'success' })
     mocks.routerPush.mockReset()
   })
 
@@ -112,5 +117,24 @@ describe('RoomLobby invite prompt', () => {
     expect(
       screen.queryByText('Ready when the host is.'),
     ).not.toBeInTheDocument()
+  })
+
+  it('clears a prior command error when removing a player successfully', async () => {
+    const user = userEvent.setup()
+    mocks.view = readyLobby()
+    mocks.startGame.mockResolvedValue({
+      status: 'rate_limited',
+      message: 'Too many commands.',
+    })
+    render(<RoomLobby roomCode="bcdf2" />)
+    await user.click(
+      screen.getByRole('button', { name: 'Start the single round' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many commands.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove Grace' }))
+    expect(mocks.removePlayer).toHaveBeenCalledWith('bcdf2', 'guest')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

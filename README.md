@@ -60,4 +60,6 @@ The automated multiplayer tests use isolated browser contexts so each player rec
 
 The frontend can be deployed to Vercel. Run the game server as exactly one long-lived Node.js instance; horizontal scaling without a shared room adapter would split room state.
 
-Set `NEXT_PUBLIC_GAME_SERVER_URL` on the frontend and set `ALLOWED_ORIGINS` to the frontend origin on the game server. Socket.IO will use WSS when the public server URL uses HTTPS.
+Set `NEXT_PUBLIC_GAME_SERVER_URL` to an HTTPS endpoint on the frontend and set `ALLOWED_ORIGINS` to the frontend origin on the game server. Production clients refuse insecure socket endpoints; HTTP is available only in development for local/LAN testing.
+
+The App Platform example opts into `TRUST_DIGITALOCEAN_PROXY=true`, using the provider's [`do-connecting-ip` header](https://docs.digitalocean.com/support/where-can-i-find-the-client-ip-address-of-a-request-connecting-to-my-app/) rather than trusting a private address range. Enable this only behind that managed ingress, which sets the header; never use it on a directly reachable server. Missing or invalid headers fall back to the peer IP for conservative rate limiting.

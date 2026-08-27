@@ -88,6 +88,26 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     const gameServerUrl =
       process.env.NEXT_PUBLIC_GAME_SERVER_URL?.trim() ||
       defaultGameServerUrl(window.location.hostname)
+    // HTTP is for local/LAN development only. Fail closed before constructing
+    // the socket so a production misconfiguration cannot expose the token.
+    try {
+      const endpoint = new URL(gameServerUrl)
+      if (
+        endpoint.protocol !== 'https:' &&
+        !(
+          process.env.NODE_ENV === 'development' &&
+          endpoint.protocol === 'http:'
+        )
+      ) {
+        // Report a configuration failure just like a socket connection error.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setConnectionStatus('disconnected')
+        return
+      }
+    } catch {
+      setConnectionStatus('disconnected')
+      return
+    }
     const socket: GameSocket = io(gameServerUrl, {
       auth: { token: clientToken, protocolVersion: GAME_PROTOCOL_VERSION },
       autoConnect: true,

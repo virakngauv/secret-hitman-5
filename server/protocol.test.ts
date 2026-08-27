@@ -54,12 +54,17 @@ describe('Socket.IO Secret Hitman protocol', () => {
     vi.restoreAllMocks()
   })
 
-  async function connect(token: string, forwardedFor?: string) {
+  async function connect(
+    token: string,
+    forwardedFor?: string,
+    connectingIp?: string,
+  ) {
     const client: TestClient = createClient(url, {
       auth: { token, protocolVersion: GAME_PROTOCOL_VERSION },
       extraHeaders: {
         Origin: allowedOrigin,
         ...(forwardedFor ? { 'X-Forwarded-For': forwardedFor } : {}),
+        ...(connectingIp ? { 'do-connecting-ip': connectingIp } : {}),
       },
       forceNew: true,
       transports: ['websocket'],
@@ -71,6 +76,39 @@ describe('Socket.IO Secret Hitman protocol', () => {
     })
     return client
   }
+
+  it.each([true, false])(
+    'trusts the provider header only when explicitly enabled: %s',
+    async (enabled) => {
+      await socketServer.shutdown()
+      httpServer = createServer()
+      socketServer = createGameSocketServer(httpServer, {
+        allowedOrigins: [allowedOrigin],
+        trustDigitalOceanProxy: enabled,
+        entryCommandLimits: {
+          perPlayerPerMinute: 30,
+          perAddressPerMinute: 2,
+          globalPerMinute: 2000,
+        },
+        logger: { info() {}, warn() {}, error: logError },
+      })
+      await new Promise<void>((resolve) =>
+        httpServer.listen(0, '127.0.0.1', resolve),
+      )
+      url = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}`
+      const first = await connect(hostToken, '203.0.113.1', '198.51.100.1')
+      const second = await connect(guestToken, '203.0.113.2', '198.51.100.1')
+      expect(
+        await first.emitWithAck('room:create', { name: 'Ada' }),
+      ).toMatchObject({ status: 'success' })
+      expect(
+        await first.emitWithAck('room:create', { name: 'Ada' }),
+      ).toMatchObject({ status: 'success' })
+      expect(
+        await second.emitWithAck('room:create', { name: 'Grace' }),
+      ).toMatchObject({ status: enabled ? 'rate_limited' : 'success' })
+    },
+  )
 
   it('shares the client address budget despite spoofed forwarding prefixes', async () => {
     const first = await connect(hostToken, '198.51.100.1, 203.0.113.7')

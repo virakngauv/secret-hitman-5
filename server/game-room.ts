@@ -102,7 +102,12 @@ export class GameRoom {
       this.touch(now)
       return { status: 'success' }
     }
-    if (this.activeMembers().length >= MAX_ROOM_MEMBERS) {
+    // Starting players keep their seats even while inactive. Spectators may
+    // use only the remaining capacity, so reconnects never exceed the limit.
+    const occupiedSlots = this.members.filter(
+      (member) => member.active || member.game !== null,
+    ).length
+    if (!existing?.game && occupiedSlots >= MAX_ROOM_MEMBERS) {
       return { status: 'room_full', message: 'This room is full.' }
     }
     if (

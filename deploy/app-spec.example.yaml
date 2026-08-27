@@ -26,11 +26,10 @@ services:
       - key: LOG_LEVEL
         value: info
         scope: RUN_TIME
-      # Trust the App Platform ingress to forward real client IPs. App Platform
-      # ingress uses private 10.x addressing; confirm the range your server
-      # actually observes before relying on it.
-      - key: TRUSTED_PROXIES
-        value: 10.0.0.0/8
+      # Only on App Platform: its ingress overwrites do-connecting-ip.
+      # Do not enable on servers reachable without this managed ingress.
+      - key: TRUST_DIGITALOCEAN_PROXY
+        value: 'true'
         scope: RUN_TIME
 alerts:
   - rule: DEPLOYMENT_FAILED

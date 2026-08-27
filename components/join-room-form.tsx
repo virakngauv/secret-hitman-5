@@ -26,6 +26,7 @@ export function JoinRoomForm({
   const roomCodeLocked = roomCode !== undefined
   const { joinRoom, connectionStatus } = useGameSocket()
   const [enteredRoomCode, setEnteredRoomCode] = useState(roomCode ?? '')
+  const effectiveRoomCode = roomCode ?? enteredRoomCode
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isJoining, setIsJoining] = useState(false)
@@ -42,7 +43,7 @@ export function JoinRoomForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const normalizedRoomCode = enteredRoomCode.trim().toLowerCase()
+    const normalizedRoomCode = effectiveRoomCode.trim().toLowerCase()
     const normalizedName = name.trim()
 
     if (!ROOM_CODE_PATTERN.test(normalizedRoomCode)) {
@@ -88,7 +89,7 @@ export function JoinRoomForm({
           id="room-code"
           name="roomCode"
           ref={roomCodeInputRef}
-          value={enteredRoomCode}
+          value={effectiveRoomCode}
           onChange={(event) => setEnteredRoomCode(event.target.value)}
           maxLength={5}
           autoCapitalize="none"

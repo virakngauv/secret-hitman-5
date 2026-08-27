@@ -251,6 +251,7 @@ export function GuessingScreen({
   }
 
   const finish = async () => {
+    setFeedback(null)
     setIsFinishing(true)
     const result = await onFinishGuessing()
     if (result.status !== 'success') setFeedback(result.message)
@@ -258,6 +259,7 @@ export function GuessingScreen({
   }
 
   const advance = async () => {
+    setFeedback(null)
     setIsAdvancing(true)
     const result = await onAdvanceTurn()
     if (result.status !== 'success') setFeedback(result.message)

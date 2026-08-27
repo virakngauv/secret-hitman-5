@@ -87,6 +87,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           }}
           onLeave={async () => {
             setIsActing(true)
+            setActionError(null)
             const result = await game.leaveRoom(roomCode)
             if (result.status === 'success') router.push('/home')
             else {
@@ -95,6 +96,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             }
           }}
           onRemove={async (playerId) => {
+            setActionError(null)
             const result = await game.removePlayer(roomCode, playerId)
             if (result.status !== 'success') setActionError(result.message)
           }}

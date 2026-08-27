@@ -4,7 +4,31 @@ import {
   isTrustedProxy,
   parseTrustedProxies,
   resolveClientAddress,
+  resolveDigitalOceanClientAddress,
 } from './proxy-trust'
+
+describe('resolveDigitalOceanClientAddress', () => {
+  it.each(['203.0.113.5', '2001:db8::1'])(
+    'accepts a single provider IP %s',
+    (address) => {
+      expect(resolveDigitalOceanClientAddress('10.1.2.3', ` ${address} `)).toBe(
+        address,
+      )
+    },
+  )
+  it.each([
+    undefined,
+    '',
+    'host.invalid',
+    '203.0.113.5:80',
+    '203.0.113.5, 203.0.113.6',
+    ['203.0.113.5'],
+  ])('falls back to the peer for missing or ambiguous headers %s', (header) => {
+    expect(resolveDigitalOceanClientAddress('10.1.2.3', header)).toBe(
+      '10.1.2.3',
+    )
+  })
+})
 
 describe('parseTrustedProxies', () => {
   it('splits, trims, and drops empty entries', () => {

@@ -7,7 +7,7 @@ lobby
 hinting
   ├─ each starting player selects 1–11 targets around a frozen assassin
   ├─ the selection count becomes the hint number
-  └─ host starts guessing after every hint is submitted
+  └─ after all hints are submitted, the host manually selects “Start guessing”
        ↓
 guessing
   ├─ one clue-giver turn per starting player

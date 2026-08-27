@@ -106,6 +106,7 @@ function MembershipProbe({
 
 describe('GameSocketProvider', () => {
   beforeEach(() => {
+    vi.stubEnv('NODE_ENV', 'development')
     mocks.clientToken = 'a'.repeat(32)
     mocks.handlers.clear()
     mocks.resumeSnapshots.clear()
@@ -120,6 +121,41 @@ describe('GameSocketProvider', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+  })
+
+  it.each([
+    '',
+    'http://example.com:3200',
+    'http://localhost:3200',
+    'not-a-url',
+  ])(
+    'does not transmit a production token to an insecure endpoint %s',
+    (endpoint) => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', endpoint)
+      render(
+        <GameSocketProvider>
+          <RoomProbe roomCode="bcdf2" />
+        </GameSocketProvider>,
+      )
+      expect(mocks.io).not.toHaveBeenCalled()
+    },
+  )
+
+  it('authenticates production connections over HTTPS', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'https://game.example.com')
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    expect(mocks.io).toHaveBeenCalledWith(
+      'https://game.example.com',
+      expect.objectContaining({
+        auth: expect.objectContaining({ token: mocks.clientToken }),
+      }),
+    )
   })
 
   it('uses the local game server when the public URL is empty', async () => {

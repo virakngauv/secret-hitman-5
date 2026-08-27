@@ -11,7 +11,10 @@ import {
 } from '../lib/game-protocol'
 import { GameServer } from './game-server'
 import { isPrivateNetworkOrigin } from './origins'
-import { resolveClientAddress } from './proxy-trust'
+import {
+  resolveClientAddress,
+  resolveDigitalOceanClientAddress,
+} from './proxy-trust'
 import {
   parseCreateRoom,
   parseClaimCard,
@@ -50,6 +53,7 @@ export type GameSocketServerOptions = {
   allowedOrigins: string[]
   allowPrivateNetworkOrigins?: boolean
   trustedProxyAddresses?: string[]
+  trustDigitalOceanProxy?: boolean
   gameServer?: GameServer
   expirationSweepMs?: number
   entryCommandLimits?: EntryCommandLimits
@@ -120,11 +124,17 @@ export function createGameSocketServer(
     const auth = parseHandshakeAuth(socket.handshake.auth)
     if (!auth) return next(new Error('Unsupported or invalid game session.'))
     socket.data.token = auth.token
-    socket.data.address = resolveClientAddress(
-      socket.handshake.address,
-      socket.handshake.headers['x-forwarded-for'],
-      trustedProxyAddresses,
-    )
+    socket.data.address =
+      options.trustDigitalOceanProxy === true
+        ? resolveDigitalOceanClientAddress(
+            socket.handshake.address,
+            socket.handshake.headers['do-connecting-ip'],
+          )
+        : resolveClientAddress(
+            socket.handshake.address,
+            socket.handshake.headers['x-forwarded-for'],
+            trustedProxyAddresses,
+          )
     next()
   })
 
@@ -430,6 +440,7 @@ export function createGameSocketServer(
 
   function entryKey(socket: GameSocket) {
     const isDirectLocalClient =
+      options.trustDigitalOceanProxy !== true &&
       isLoopbackAddress(socket.handshake.address) &&
       socket.handshake.headers['x-forwarded-for'] === undefined
     return isDirectLocalClient

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { GameRoom, MAX_ROOM_IDENTITIES } from './game-room'
+import { GameRoom, MAX_ROOM_IDENTITIES, MAX_ROOM_MEMBERS } from './game-room'
 
 const hostToken = 'a'.repeat(32)
 const guestToken = 'b'.repeat(32)
@@ -58,6 +58,26 @@ function startTwoPlayerGame() {
 }
 
 describe('GameRoom single-round flow', () => {
+  it('reserves starting seats when spectators fill capacity', () => {
+    const room = startTwoPlayerGame()
+    const playerId = guessing(room, guestToken).player.playerId
+    room.leave(guestToken)
+    for (let index = 0; index < MAX_ROOM_MEMBERS - 2; index += 1) {
+      expect(
+        room.join(index.toString(16).padStart(32, '0'), 'Spectator'),
+      ).toEqual({ status: 'success' })
+    }
+    expect(room.join(thirdToken, 'Overflow')).toMatchObject({
+      status: 'room_full',
+    })
+    expect(room.join(guestToken, 'Grace')).toEqual({ status: 'success' })
+    expect(guessing(room, guestToken).player.playerId).toBe(playerId)
+    expect(guessing(room, guestToken).members).toHaveLength(MAX_ROOM_MEMBERS)
+    expect(room.join(thirdToken, 'Still full')).toMatchObject({
+      status: 'room_full',
+    })
+  })
+
   it('bounds room history by rejecting new identities instead of forgetting removals', () => {
     const room = createRoom()
     for (let index = 0; index < MAX_ROOM_IDENTITIES - 2; index += 1) {

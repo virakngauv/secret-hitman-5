@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { RoomSnapshot } from '@/lib/game-protocol'
 
-import { FinishedScreen, HintPhaseScreen } from './game-screen'
+import { FinishedScreen, GuessingScreen, HintPhaseScreen } from './game-screen'
 
 const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
   status: 'hinting',
@@ -77,6 +77,57 @@ describe('HintPhaseScreen', () => {
       'p0-card-1',
     ])
   })
+})
+
+describe('GuessingScreen messages', () => {
+  it.each(['finish', 'advance'] as const)(
+    'clears a stale error before a successful %s retry',
+    async (command) => {
+      const user = userEvent.setup()
+      const action = vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: 'rate_limited',
+          message: 'Try again shortly.',
+        })
+        .mockResolvedValueOnce({ status: 'success' })
+      const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+        status: 'guessing',
+        roomCode: 'bcdf2',
+        revision: 4,
+        player: hintingView.player,
+        members: hintingView.members,
+        turnNumber: 1,
+        totalTurns: 2,
+        clueGiverId: 'player-2',
+        clueGiverName: 'Grace',
+        hint: 'Orbit',
+        hintNumber: 2,
+        board: [],
+        turnPlayers: [],
+        scoreboard: [],
+        canGuess: true,
+        canMarkDone: command === 'finish',
+        canAdvanceTurn: command === 'advance',
+      }
+      render(
+        <GuessingScreen
+          view={view}
+          onClaimCard={vi.fn()}
+          onFinishGuessing={action}
+          onAdvanceTurn={action}
+        />,
+      )
+      const button = screen.getByRole('button', {
+        name: command === 'finish' ? 'I’m done guessing' : 'Next hint',
+      })
+      await user.click(button)
+      expect(await screen.findByText('Try again shortly.')).toBeInTheDocument()
+      await user.click(button)
+      expect(action).toHaveBeenCalledTimes(2)
+      expect(screen.queryByText('Try again shortly.')).not.toBeInTheDocument()
+    },
+  )
 })
 
 describe('FinishedScreen', () => {
