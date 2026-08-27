@@ -139,11 +139,18 @@ test.describe('Secret Hitman single round', () => {
           await expect(
             third.getByText(/Assassin. You and the clue-giver/),
           ).toBeVisible()
-          await expect(third.locator('.score-value')).toHaveText([
-            '-1',
-            '-1',
-            '0',
-          ])
+          for (const [name, score] of [
+            ['Ada', '-1'],
+            ['Grace', '-1'],
+            ['Linus', '0'],
+          ]) {
+            await expect(
+              third
+                .locator('.score-row')
+                .filter({ has: third.getByText(name, { exact: true }) })
+                .locator('.score-value'),
+            ).toHaveText(score)
+          }
           await expect(
             guest.locator(`button[data-card-id="${assassinId}"]`),
           ).toContainText('Grace, Linus')
