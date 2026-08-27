@@ -107,6 +107,24 @@ function MembershipProbe({
 }
 
 describe('GameSocketProvider', () => {
+  beforeEach(() => {
+    vi.stubEnv('NODE_ENV', 'development')
+    mocks.clientToken = 'a'.repeat(32)
+    mocks.handlers.clear()
+    mocks.resumeSnapshots.clear()
+    mocks.emitWithAck.mockReset().mockResolvedValue({ status: 'success' })
+    mocks.io.mockReset().mockReturnValue(mocks.socket)
+    mocks.socket.connected = true
+    mocks.socket.on.mockClear()
+    mocks.socket.emit.mockClear()
+    mocks.socket.timeout.mockReset().mockReturnValue(mocks.socket)
+    mocks.socket.disconnect.mockClear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it.each(['create', 'join', 'leave'] as const)(
     'ignores a stale %s command after replacing the player token',
     async (command) => {
@@ -151,24 +169,6 @@ describe('GameSocketProvider', () => {
       )
     },
   )
-
-  beforeEach(() => {
-    vi.stubEnv('NODE_ENV', 'development')
-    mocks.clientToken = 'a'.repeat(32)
-    mocks.handlers.clear()
-    mocks.resumeSnapshots.clear()
-    mocks.emitWithAck.mockReset().mockResolvedValue({ status: 'success' })
-    mocks.io.mockReset().mockReturnValue(mocks.socket)
-    mocks.socket.connected = true
-    mocks.socket.on.mockClear()
-    mocks.socket.emit.mockClear()
-    mocks.socket.timeout.mockReset().mockReturnValue(mocks.socket)
-    mocks.socket.disconnect.mockClear()
-  })
-
-  afterEach(() => {
-    vi.unstubAllEnvs()
-  })
 
   it.each([
     '',

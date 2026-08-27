@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   generateClientToken,
   getClientToken,
   getOrCreateClientToken,
   saveClientToken,
+  subscribeToClientToken,
 } from './player-session'
 
 describe('player session storage', () => {
@@ -30,6 +31,31 @@ describe('player session storage', () => {
 
     expect(firstToken).toMatch(/^[0-9a-f]{32}$/)
     expect(secondToken).toBe(firstToken)
+  })
+
+  it('refreshes for token changes and storage clears, then unsubscribes', () => {
+    const onChange = vi.fn()
+    const unsubscribe = subscribeToClientToken(onChange)
+    const dispatchStorage = (
+      key: string | null,
+      storageArea = window.localStorage,
+    ) => window.dispatchEvent(new StorageEvent('storage', { key, storageArea }))
+    try {
+      dispatchStorage('secret-hitman-5:client-token')
+      dispatchStorage(null)
+      expect(onChange).toHaveBeenCalledTimes(2)
+      dispatchStorage('unrelated-key')
+      dispatchStorage(null, window.sessionStorage)
+      expect(onChange).toHaveBeenCalledTimes(2)
+      saveClientToken('a'.repeat(32))
+      expect(onChange).toHaveBeenCalledTimes(3)
+      unsubscribe()
+      dispatchStorage(null)
+      saveClientToken('b'.repeat(32))
+      expect(onChange).toHaveBeenCalledTimes(3)
+    } finally {
+      unsubscribe()
+    }
   })
 
   it('rejects malformed tokens before persisting them', () => {

@@ -42,7 +42,7 @@ export function subscribeToClientToken(onStoreChange: () => void) {
   function handleStorage(event: StorageEvent) {
     if (
       event.storageArea === window.localStorage &&
-      event.key === CLIENT_TOKEN_KEY
+      (event.key === CLIENT_TOKEN_KEY || event.key === null)
     ) {
       onStoreChange()
     }

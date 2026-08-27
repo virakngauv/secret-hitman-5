@@ -5,14 +5,15 @@ import {
   type NextRequest,
 } from 'next/server'
 
-export default function proxy(request: NextRequest, event: NextFetchEvent) {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
-  const secretKey = process.env.CLERK_SECRET_KEY?.trim()
-  if (!publishableKey || !secretKey) {
-    return NextResponse.next()
-  }
+const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
+const secretKey = process.env.CLERK_SECRET_KEY?.trim()
+const clerkProxy =
+  publishableKey && secretKey
+    ? clerkMiddleware({ publishableKey, secretKey })
+    : null
 
-  return clerkMiddleware({ publishableKey, secretKey })(request, event)
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  return clerkProxy ? clerkProxy(request, event) : NextResponse.next()
 }
 
 export const config = {

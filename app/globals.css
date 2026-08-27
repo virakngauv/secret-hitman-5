@@ -32,8 +32,8 @@
   --color-accent: var(--accent);
   --color-border: var(--border);
   --color-ring: var(--ring);
-  --font-sans: 'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif;
-  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --font-sans: 'Avenir Next', 'Segoe UI', helvetica, arial, sans-serif;
+  --font-mono: 'SFMono-Regular', consolas, 'Liberation Mono', monospace;
 }
 
 * {

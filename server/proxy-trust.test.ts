@@ -22,12 +22,17 @@ describe('resolveDigitalOceanClientAddress', () => {
     'host.invalid',
     '203.0.113.5:80',
     '203.0.113.5, 203.0.113.6',
-    ['203.0.113.5'],
   ])('falls back to the peer for missing or ambiguous headers %s', (header) => {
     expect(resolveDigitalOceanClientAddress('10.1.2.3', header)).toBe(
       '10.1.2.3',
     )
   })
+})
+
+it('rejects repeated provider headers as an explicit string array', () => {
+  expect(resolveDigitalOceanClientAddress('10.1.2.3', ['203.0.113.5'])).toBe(
+    '10.1.2.3',
+  )
 })
 
 describe('parseTrustedProxies', () => {

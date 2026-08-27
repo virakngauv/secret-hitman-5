@@ -32,16 +32,6 @@ function renderForm(props: JoinRoomFormProps = {}) {
 }
 
 describe('JoinRoomForm', () => {
-  it('displays and submits the latest locked route code after navigation', async () => {
-    const user = userEvent.setup()
-    const { rerenderForm } = renderForm({ roomCode: 'frvg7' })
-    await user.type(screen.getByLabelText('Name'), 'Ada')
-    rerenderForm({ roomCode: 'bcdf2' })
-    expect(screen.getByLabelText('Room code')).toHaveValue('bcdf2')
-    await user.click(screen.getByRole('button', { name: 'Join' }))
-    expect(mocks.joinRoom).toHaveBeenCalledWith('bcdf2', 'Ada')
-  })
-
   beforeEach(() => {
     mocks.connectionStatus = 'connected'
     mocks.joinRoom.mockReset()
@@ -51,6 +41,16 @@ describe('JoinRoomForm', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+  })
+
+  it('displays and submits the latest locked route code after navigation', async () => {
+    const user = userEvent.setup()
+    const { rerenderForm } = renderForm({ roomCode: 'frvg7' })
+    await user.type(screen.getByLabelText('Name'), 'Ada')
+    rerenderForm({ roomCode: 'bcdf2' })
+    expect(screen.getByLabelText('Room code')).toHaveValue('bcdf2')
+    await user.click(screen.getByRole('button', { name: 'Join' }))
+    expect(mocks.joinRoom).toHaveBeenCalledWith('bcdf2', 'Ada')
   })
 
   it('locks a room code supplied by the room route', () => {
