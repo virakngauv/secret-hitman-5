@@ -134,7 +134,8 @@ export function createGameSocketServer(
       JSON.stringify({ event: 'socket_connected', socketId: socket.id }),
     )
 
-    socket.on('session:resume', (payload, acknowledge) => {
+    socket.on('session:resume', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       const parsed = parseSessionResume(payload)
       if (!canRun(socket, acknowledge)) return
       safely('session:resume', acknowledge, async () => {
@@ -155,7 +156,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('room:create', (payload, acknowledge) => {
+    socket.on('room:create', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge, true)) return
       safely('room:create', acknowledge, async () => {
         const parsed = parseCreateRoom(payload)
@@ -169,7 +171,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('room:join', (payload, acknowledge) => {
+    socket.on('room:join', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge, true)) return
       safely('room:join', acknowledge, async () => {
         const parsed = parseJoinRoom(payload)
@@ -187,7 +190,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('room:leave', (payload, acknowledge) => {
+    socket.on('room:leave', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('room:leave', acknowledge, async () => {
         const parsed = parseRoomCommand(payload)
@@ -200,7 +204,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('room:remove-player', (payload, acknowledge) => {
+    socket.on('room:remove-player', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('room:remove-player', acknowledge, async () => {
         const parsed = parseRemovePlayer(payload)
@@ -223,7 +228,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('game:start', (payload, acknowledge) => {
+    socket.on('game:start', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:start', acknowledge, () => {
         const parsed = parseRoomCommand(payload)
@@ -234,7 +240,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('game:submit-hint', (payload, acknowledge) => {
+    socket.on('game:submit-hint', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:submit-hint', acknowledge, () => {
         const parsed = parseSubmitHint(payload)
@@ -245,7 +252,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('game:start-guessing', (payload, acknowledge) => {
+    socket.on('game:start-guessing', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:start-guessing', acknowledge, () => {
         const parsed = parseRoomCommand(payload)
@@ -259,7 +267,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('game:claim-card', (payload, acknowledge) => {
+    socket.on('game:claim-card', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:claim-card', acknowledge, () => {
         const parsed = parseClaimCard(payload)
@@ -270,7 +279,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('game:finish-guessing', (payload, acknowledge) => {
+    socket.on('game:finish-guessing', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:finish-guessing', acknowledge, () => {
         const parsed = parseRoomCommand(payload)
@@ -284,7 +294,8 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('game:advance-turn', (payload, acknowledge) => {
+    socket.on('game:advance-turn', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:advance-turn', acknowledge, () => {
         const parsed = parseRoomCommand(payload)
@@ -361,9 +372,10 @@ export function createGameSocketServer(
 
   function safely<TResult extends object>(
     command: string,
-    acknowledge: (result: CommandResult<TResult>) => void,
+    callback: (result: CommandResult<TResult>) => void,
     run: () => void | Promise<void>,
   ) {
+    const acknowledge = normalizeAcknowledgement(callback)
     const fail = (error: unknown) => {
       logFailure('command_failed', error, command)
       acknowledge({
@@ -444,6 +456,13 @@ export function createGameSocketServer(
       await new Promise<void>((resolve) => io.close(() => resolve()))
     },
   }
+}
+
+/** Socket.IO clients may omit acknowledgement IDs or send non-functions. */
+function normalizeAcknowledgement<TResult>(
+  callback: ((result: TResult) => void) | undefined,
+): (result: TResult) => void {
+  return typeof callback === 'function' ? callback : () => {}
 }
 
 function isLoopbackAddress(address: string) {

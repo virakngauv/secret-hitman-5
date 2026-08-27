@@ -5,7 +5,7 @@ import {
   io as createClient,
   type Socket as ClientSocket,
 } from 'socket.io-client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   GAME_PROTOCOL_VERSION,
@@ -26,8 +26,10 @@ describe('Socket.IO Secret Hitman protocol', () => {
   let socketServer: ReturnType<typeof createGameSocketServer>
   let url: string
   const clients: TestClient[] = []
+  const logError = vi.fn()
 
   beforeEach(async () => {
+    logError.mockClear()
     httpServer = createServer()
     socketServer = createGameSocketServer(httpServer, {
       allowedOrigins: [allowedOrigin],
@@ -36,7 +38,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         perAddressPerMinute: 2,
         globalPerMinute: 2_000,
       },
-      logger: { info() {}, warn() {}, error() {} },
+      logger: { info() {}, warn() {}, error: logError },
     })
     await new Promise<void>((resolve) =>
       httpServer.listen(0, '127.0.0.1', resolve),
@@ -49,6 +51,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     for (const client of clients) client.disconnect()
     clients.length = 0
     if (httpServer.listening) await socketServer.shutdown()
+    vi.restoreAllMocks()
   })
 
   async function connect(token: string, forwardedFor?: string) {
@@ -85,6 +88,97 @@ describe('Socket.IO Secret Hitman protocol', () => {
       await second.emitWithAck('room:create', { name: 'Grace' }),
     ).toMatchObject({ status: 'rate_limited' })
   })
+
+  describe.each([undefined, null, 'not-a-callback'])(
+    'with acknowledgement %s',
+    (callback) => {
+      it.each([
+        'session:resume',
+        'room:create',
+        'room:join',
+        'room:leave',
+        'room:remove-player',
+        'game:start',
+        'game:submit-hint',
+        'game:start-guessing',
+        'game:claim-card',
+        'game:finish-guessing',
+        'game:advance-turn',
+      ] satisfies (keyof ClientToServerEvents)[])(
+        'handles %s without crashing',
+        async (event) => {
+          const client = await connect(hostToken)
+          // Deliberately bypass the client types to model malformed wire packets.
+          const rawClient = client as ClientSocket
+          if (callback === undefined) rawClient.emit(event, {})
+          else rawClient.emit(event, {}, callback)
+
+          await expect(
+            client.timeout(2_000).emitWithAck('session:resume', {}),
+          ).resolves.toEqual({ status: 'success' })
+          expect(logError).not.toHaveBeenCalled()
+        },
+      )
+    },
+  )
+
+  it('creates a room and broadcasts its snapshot without an acknowledgement', async () => {
+    const client = await connect(hostToken)
+    const snapshot = new Promise<unknown>((resolve) =>
+      client.once('room:snapshot', resolve),
+    )
+    ;(client as ClientSocket).emit('room:create', { name: 'Ada' })
+
+    await expect(snapshot).resolves.toMatchObject({
+      status: 'lobby',
+      player: { name: 'Ada' },
+    })
+    expect(logError).not.toHaveBeenCalled()
+  })
+
+  it('handles rate-limited commands without acknowledgements', async () => {
+    const client = await connect(hostToken)
+    for (let index = 0; index < 45; index += 1) {
+      ;(client as ClientSocket).emit('session:resume', {})
+    }
+    await expect(
+      client.timeout(2_000).emitWithAck('session:resume', {}),
+    ).resolves.toMatchObject({ status: 'rate_limited' })
+    expect(logError).not.toHaveBeenCalled()
+  })
+
+  it.each(['room:create', 'game:start'] as const)(
+    'contains %s failures without an acknowledgement',
+    async (event) => {
+      const client = await connect(hostToken)
+      if (event === 'room:create')
+        vi.spyOn(socketServer.gameServer, 'createRoom').mockImplementation(
+          () => {
+            throw new Error('test failure')
+          },
+        )
+      else
+        vi.spyOn(socketServer.gameServer, 'startGame').mockImplementation(
+          () => {
+            throw new Error('test failure')
+          },
+        )
+      ;(client as ClientSocket).emit(
+        event,
+        event === 'room:create' ? { name: 'Ada' } : { roomCode: 'bcdf2' },
+      )
+
+      await vi.waitFor(() => expect(logError).toHaveBeenCalledOnce())
+      expect(JSON.parse(logError.mock.calls[0][0] as string)).toMatchObject({
+        event: 'command_failed',
+        command: event,
+        message: 'test failure',
+      })
+      await expect(
+        client.timeout(2_000).emitWithAck('session:resume', {}),
+      ).resolves.toEqual({ status: 'success' })
+    },
+  )
 
   it('does not grant the local token exemption to forwarded loopback clients', async () => {
     const first = await connect(hostToken, '127.0.0.1')
