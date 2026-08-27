@@ -76,10 +76,10 @@ function MembershipProbe({
   command,
   roomCode,
 }: {
-  command: 'create' | 'join'
+  command: 'create' | 'join' | 'leave'
   roomCode: string
 }) {
-  const { createRoom, joinRoom } = useGameSocket()
+  const { createRoom, joinRoom, leaveRoom } = useGameSocket()
   const { endedReason } = useRoomSnapshot(roomCode)
   const [completed, setCompleted] = useState(false)
   const [resultStatus, setResultStatus] = useState('pending')
@@ -87,7 +87,9 @@ function MembershipProbe({
   async function runCommand() {
     const result = await (command === 'create'
       ? createRoom('Ada')
-      : joinRoom(roomCode, 'Ada'))
+      : command === 'join'
+        ? joinRoom(roomCode, 'Ada')
+        : leaveRoom(roomCode))
     setResultStatus(result.status)
     setCompleted(true)
   }
@@ -105,6 +107,51 @@ function MembershipProbe({
 }
 
 describe('GameSocketProvider', () => {
+  it.each(['create', 'join', 'leave'] as const)(
+    'ignores a stale %s command after replacing the player token',
+    async (command) => {
+      const user = userEvent.setup()
+      let resolveCommand!: (value: unknown) => void
+      mocks.emitWithAck.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveCommand = resolve
+          }),
+      )
+      const view = render(
+        <GameSocketProvider>
+          <MembershipProbe command={command} roomCode="bcdf2" />
+        </GameSocketProvider>,
+      )
+      await user.click(screen.getByRole('button', { name: command }))
+      mocks.clientToken = 'b'.repeat(32)
+      mocks.io.mockReturnValue({ ...mocks.socket })
+      view.rerender(
+        <GameSocketProvider>
+          <MembershipProbe command={command} roomCode="bcdf2" />
+        </GameSocketProvider>,
+      )
+      await waitFor(() => expect(mocks.io).toHaveBeenCalledTimes(2))
+      if (command === 'leave') {
+        act(() =>
+          mocks.handlers.get('room:snapshot')?.(
+            lobbySnapshot('bcdf2') as never,
+          ),
+        )
+      }
+      await act(async () =>
+        resolveCommand({ status: 'success', roomCode: 'bcdf2' }),
+      )
+      expect(screen.getByTestId('command-status')).toHaveTextContent(
+        'server_unavailable',
+      )
+      act(() => mocks.handlers.get('server:shutdown')?.())
+      expect(screen.getByTestId('membership-ended')).toHaveTextContent(
+        command === 'leave' ? 'server_restart' : 'active',
+      )
+    },
+  )
+
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'development')
     mocks.clientToken = 'a'.repeat(32)

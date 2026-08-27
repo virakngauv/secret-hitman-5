@@ -19,6 +19,7 @@ import {
   type CardKind,
   type ClaimCardPayload,
   type ClientToServerEvents,
+  type CommandFailure,
   type CommandResult,
   type RoomSnapshot,
   type ServerToClientEvents,
@@ -223,9 +224,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
 
   const createRoom = useCallback(
     async (name: string): Promise<CommandResult<{ roomCode: string }>> => {
-      const result = await runCommand(socketRef.current, (socket) =>
+      const socket = socketRef.current
+      const result = await runCommand(socket, (socket) =>
         socket.emitWithAck('room:create', { name }),
       )
+      if (socketRef.current !== socket) return unavailable()
       if (result.status === 'success') {
         memberRoomsRef.current.add(result.roomCode)
       }
@@ -238,9 +241,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       roomCode: string,
       name: string,
     ): Promise<CommandResult<{ roomCode: string }>> => {
-      const result = await runCommand(socketRef.current, (socket) =>
+      const socket = socketRef.current
+      const result = await runCommand(socket, (socket) =>
         socket.emitWithAck('room:join', { roomCode, name }),
       )
+      if (socketRef.current !== socket) return unavailable()
       if (result.status === 'success') {
         memberRoomsRef.current.add(result.roomCode)
       }
@@ -250,9 +255,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   )
   const leaveRoom = useCallback(
     async (roomCode: string): Promise<CommandResult> => {
-      const result = await runCommand(socketRef.current, (socket) =>
+      const socket = socketRef.current
+      const result = await runCommand(socket, (socket) =>
         socket.emitWithAck('room:leave', { roomCode }),
       )
+      if (socketRef.current !== socket) return unavailable()
       if (result.status === 'success') {
         memberRoomsRef.current.delete(roomCode)
         setEndedRooms((rooms) => {
@@ -391,7 +398,7 @@ async function runCommand<TResult extends object>(
   }
 }
 
-function unavailable(): CommandResult {
+function unavailable(): CommandFailure {
   return {
     status: 'server_unavailable',
     message: 'The game server is unavailable. Please try again.',

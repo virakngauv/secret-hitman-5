@@ -9,10 +9,10 @@ import { GameSocketProvider } from '@/components/game-socket-provider'
 import { PlayerSessionProvider } from '@/components/player-session-provider'
 
 export function Providers({ children }: { children: ReactNode }) {
-  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
+  const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim()
   const posthogHost =
-    process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com'
+    process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim() || 'https://us.i.posthog.com'
 
   useEffect(() => {
     if (posthogKey) {

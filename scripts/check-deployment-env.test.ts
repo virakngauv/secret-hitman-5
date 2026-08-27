@@ -14,6 +14,16 @@ function checkEnvironment(env: Record<string, string | undefined>) {
 }
 
 describe('deployment environment check', () => {
+  it('treats whitespace-only optional Clerk values as disabled', () => {
+    const result = checkEnvironment({
+      NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '  ',
+      CLERK_SECRET_KEY: '\t',
+    })
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+  })
+
   it('accepts just an HTTPS game-server URL without exposing its value', () => {
     const result = checkEnvironment({
       NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
