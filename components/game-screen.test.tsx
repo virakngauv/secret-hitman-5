@@ -1,10 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { RoomSnapshot } from '@/lib/game-protocol'
 
-import { HintPhaseScreen } from './game-screen'
+import { FinishedScreen, HintPhaseScreen } from './game-screen'
 
 const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
   status: 'hinting',
@@ -77,4 +77,65 @@ describe('HintPhaseScreen', () => {
       'p0-card-1',
     ])
   })
+})
+
+describe('FinishedScreen', () => {
+  it.each([
+    { scores: [8, 8, 5, 5, 1], places: [1, 1, 3, 3, 5] },
+    { scores: [8, 5, 1], places: [1, 2, 3] },
+  ])(
+    'ranks final scores $scores consistently, including ties',
+    ({ scores, places }) => {
+      const scoreboard = scores.map((score, index) => ({
+        playerId: `player-${index}`,
+        name: `Player ${index}`,
+        role: 'player' as const,
+        participation: 'player' as const,
+        position: index,
+        score,
+      }))
+      const spectator = {
+        playerId: 'spectator',
+        name: 'Spectator',
+        role: 'player' as const,
+        participation: 'spectator' as const,
+        position: null,
+        score: null,
+      }
+      const view: Extract<RoomSnapshot, { status: 'finished' }> = {
+        status: 'finished',
+        roomCode: 'bcdf2',
+        revision: 20,
+        player: scoreboard[0],
+        members: [...scoreboard, spectator],
+        scoreboard: [spectator, ...scoreboard.toReversed()],
+        winners: scoreboard.filter(({ score }) => score === scores[0]),
+        lastClueGiverName: 'Player 0',
+        lastHint: 'orbit',
+        lastHintNumber: 2,
+        board: [],
+      }
+      render(<FinishedScreen view={view} />)
+
+      const rows = within(screen.getByRole('list')).getAllByRole('listitem')
+      expect(rows).toHaveLength(scores.length)
+      rows.forEach((row, index) => {
+        expect(
+          within(row).getByText(String(scores[index]), {
+            selector: '.score-value',
+          }),
+        ).toBeInTheDocument()
+        expect(
+          within(row).getByText(
+            places[index] === 1 ? 'Top score' : `Place ${places[index]}`,
+          ),
+        ).toBeInTheDocument()
+        if (places[index] === 1) expect(row).toHaveClass('score-row-winner')
+        else expect(row).not.toHaveClass('score-row-winner')
+      })
+      expect(
+        within(screen.getByRole('list')).queryByText('Spectator'),
+      ).not.toBeInTheDocument()
+    },
+  )
 })

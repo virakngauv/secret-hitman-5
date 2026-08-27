@@ -462,22 +462,28 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
         <aside className="game-panel game-sidebar">
           <h2 className="sidebar-title">Final standings</h2>
           <ol className="mt-4 grid gap-2">
-            {players.map((player, index) => (
-              <li
-                className={cn('score-row', index === 0 && 'score-row-winner')}
-                key={player.playerId}
-              >
-                <div className="min-w-0">
-                  <span className="block truncate font-semibold">
-                    {player.name}
-                  </span>
-                  <span className="text-xs text-[var(--muted-foreground)]">
-                    {index === 0 ? 'Top score' : `Place ${index + 1}`}
-                  </span>
-                </div>
-                <span className="score-value">{player.score}</span>
-              </li>
-            ))}
+            {players.map((player) => {
+              const place =
+                players.findIndex(
+                  ({ score }) => (score ?? 0) === (player.score ?? 0),
+                ) + 1
+              return (
+                <li
+                  className={cn('score-row', place === 1 && 'score-row-winner')}
+                  key={player.playerId}
+                >
+                  <div className="min-w-0">
+                    <span className="block truncate font-semibold">
+                      {player.name}
+                    </span>
+                    <span className="text-xs text-[var(--muted-foreground)]">
+                      {place === 1 ? 'Top score' : `Place ${place}`}
+                    </span>
+                  </div>
+                  <span className="score-value">{player.score}</span>
+                </li>
+              )
+            })}
           </ol>
           <Button asChild className="mt-6 w-full">
             <Link href="/home">Back to home</Link>
