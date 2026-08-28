@@ -154,7 +154,9 @@ export class GameRoom {
     } else if (member.game) {
       if (this.phase === 'hinting' && !member.game.hintSubmitted) {
         member.game.hint = 'PASS'
-        member.game.targetCount = 0
+        member.game.targetCount = member.game.board.filter(
+          ({ kind }) => kind === 'target',
+        ).length
         member.game.hintSubmitted = true
       }
       if (this.phase === 'guessing') member.game.turnState = 'done'

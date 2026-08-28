@@ -75,6 +75,50 @@ function finishActiveGuessers(room: GameRoom) {
 }
 
 describe('GameRoom single-round flow', () => {
+  it.each([false, true])(
+    'counts the fixed target when a player leaves before hinting (rejoins: %s)',
+    (rejoins) => {
+      const room = createRoom()
+      room.join(guestToken, 'Grace', 1_001)
+      room.start(hostToken, 1_002)
+      const originalBoard = hinting(room).board!
+      const fixedTarget = originalBoard.find(({ kind }) => kind === 'target')!
+
+      expect(room.leave(hostToken, 1_003)).toEqual({ status: 'success' })
+      if (rejoins) {
+        expect(room.join(hostToken, 'Ada', 1_004)).toEqual({
+          status: 'success',
+        })
+        expect(hinting(room).board).toEqual(originalBoard)
+        expect(hinting(room).hintSubmitted).toBe(true)
+      }
+      expect(submitFirstHint(room, guestToken, 'Garden')).toEqual({
+        status: 'success',
+      })
+      expect(room.startGuessing(guestToken, 1_005)).toEqual({
+        status: 'success',
+      })
+      const view = guessing(room, guestToken)
+      expect(view.hint).toBe('PASS')
+      expect(view.hintNumber).toBe(1)
+      expect(
+        view.board.every(({ revealedKind }) => revealedKind === null),
+      ).toBe(true)
+      expect(
+        room.claimCard(guestToken, {
+          roomCode: room.code,
+          commandId: 'departed-fixed-target',
+          revision: view.revision,
+          cardId: fixedTarget.id,
+        }),
+      ).toEqual({ status: 'success', kind: 'target' })
+      const after = guessing(room, guestToken)
+      expect(after.scoreboard.map(({ score }) => score)).toEqual([1, 1])
+      expect(after.canGuess).toBe(false)
+      expect(after.canAdvanceTurn).toBe(true)
+    },
+  )
+
   it('rejects fixed-role tampering atomically and keeps assignments through resubmission and rejoin', () => {
     const room = createRoom()
     room.join(guestToken, 'Grace', 1_001)
