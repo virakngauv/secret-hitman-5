@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 4 as const
+export const GAME_PROTOCOL_VERSION = 5 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -51,7 +51,6 @@ export type TurnPlayerSnapshot = {
 
 type MemberSnapshotBase = {
   roomCode: string
-  revision: number
   player: PlayerIdentity
   members: PlayerIdentity[]
 }
@@ -70,6 +69,7 @@ export type RoomSnapshot =
     } & MemberSnapshotBase)
   | ({
       status: 'guessing'
+      turnId: string
       turnNumber: number
       totalTurns: number
       clueGiverId: string
@@ -134,7 +134,7 @@ export type SessionResumePayload = { roomCode?: string }
 export type CreateRoomPayload = { name: string }
 export type JoinRoomPayload = { roomCode: string; name: string }
 export type RoomCommandPayload = { roomCode: string }
-export type FinishGuessingPayload = RoomCommandPayload & { revision: number }
+export type FinishGuessingPayload = RoomCommandPayload & { turnId: string }
 export type RemovePlayerPayload = RoomCommandPayload & { playerId: string }
 export type SubmitHintPayload = RoomCommandPayload & {
   hint: string
@@ -142,7 +142,7 @@ export type SubmitHintPayload = RoomCommandPayload & {
 }
 export type ClaimCardPayload = RoomCommandPayload & {
   commandId: string
-  revision: number
+  turnId: string
   cardId: string
 }
 

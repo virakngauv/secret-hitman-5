@@ -123,20 +123,27 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
         .toEqual({ columns, rows: 12 / columns })
       await assertCardContentFits(page)
 
-      // A layout-only stress fixture: use the longest real deck word on every
-      // rendered card, without changing game state, roles, or interactions.
+      // Layout-only stress fixtures exercise real deck words and wrapping,
+      // without changing game state, roles, or interactions.
       const originalWords = await grid
         .locator('.word-card-word')
         .allTextContents()
       try {
-        await grid.locator('.word-card-word').evaluateAll((elements, word) => {
-          for (const element of elements) element.textContent = word
-        }, longestWord)
-        await assertCardContentFits(page)
-        if ([320, 359, 360, 390, 640, 1280].includes(width)) {
-          await grid.screenshot({
-            path: testInfo.outputPath(`${phase}-${width}-long-words.png`),
-          })
+        for (const [label, word] of [
+          ['long-words', longestWord],
+          ['wrapped-words', 'COUNTERREVOLUTIONARIES'],
+        ]) {
+          await grid
+            .locator('.word-card-word')
+            .evaluateAll((elements, word) => {
+              for (const element of elements) element.textContent = word
+            }, word)
+          await assertCardContentFits(page)
+          if ([320, 359, 360, 390, 640, 1280].includes(width)) {
+            await grid.screenshot({
+              path: testInfo.outputPath(`${phase}-${width}-${label}.png`),
+            })
+          }
         }
       } finally {
         await grid.locator('.word-card-word').evaluateAll((elements, words) => {
@@ -157,6 +164,21 @@ async function assertCardContentFits(page: Page) {
     }
     for (const [index, card] of [...grid.children].entries()) {
       const box = card.getBoundingClientRect()
+      const word = card.querySelector<HTMLElement>('.word-card-word')!
+      const wordBox = word.getBoundingClientRect()
+      if (
+        Math.abs(
+          wordBox.left + wordBox.width / 2 - (box.left + box.width / 2),
+        ) > 1 ||
+        Math.abs(
+          wordBox.top + wordBox.height / 2 - (box.top + box.height / 2),
+        ) > 1
+      ) {
+        issues.push(`Card ${index}: word is not centered`)
+      }
+      if (getComputedStyle(word).textAlign !== 'center') {
+        issues.push(`Card ${index}: wrapped word lines are not centered`)
+      }
       if (box.width < 44 || box.height < 44) {
         issues.push(`Card ${index} is smaller than a 44px tap target`)
       }

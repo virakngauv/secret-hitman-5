@@ -50,10 +50,9 @@ type GameSeat = {
 }
 
 type GameState = {
-  seed: string
   playerOrder: string[]
   turnIndex: number
-  turnStartRevision: number
+  turnId: string
 }
 
 export type GameRoomOptions = {
@@ -65,7 +64,6 @@ export type GameRoomOptions = {
 export class GameRoom {
   readonly code: string
   phase: RoomPhase = 'lobby'
-  revision = 1
   lastMeaningfulActivityAt: number
 
   private readonly members: Member[]
@@ -133,7 +131,7 @@ export class GameRoom {
       this.members.push(member)
     }
 
-    this.changed(now)
+    this.touch(now)
     return { status: 'success' }
   }
 
@@ -163,7 +161,7 @@ export class GameRoom {
     }
 
     this.commandResults.delete(token)
-    this.changed(now)
+    this.touch(now)
     return { status: 'success' }
   }
 
@@ -205,7 +203,7 @@ export class GameRoom {
     this.removedTokenFingerprints.add(fingerprintClientToken(target.token))
     this.members.splice(this.members.indexOf(target), 1)
     this.commandResults.delete(target.token)
-    this.changed(now)
+    this.touch(now)
     return { status: 'success', removedToken: target.token }
   }
 
@@ -238,7 +236,7 @@ export class GameRoom {
       }
     }
 
-    const seed = `${this.initialSeed}:${this.revision}:${now}`
+    const seed = `${this.initialSeed}:${now}`
     players.forEach((member, position) => {
       member.participation = 'player'
       member.game = {
@@ -252,14 +250,13 @@ export class GameRoom {
       }
     })
     this.game = {
-      seed,
       playerOrder: players.map(({ playerId }) => playerId),
       turnIndex: 0,
-      turnStartRevision: 0,
+      turnId: randomUUID(),
     }
     this.phase = 'hinting'
     this.commandResults.clear()
-    this.changed(now)
+    this.touch(now)
     return { status: 'success' }
   }
 
@@ -306,7 +303,7 @@ export class GameRoom {
     seat.hint = payload.hint
     seat.targetCount = targetIds.size
     seat.hintSubmitted = true
-    this.changed(now)
+    this.touch(now)
     return { status: 'success' }
   }
 
@@ -328,7 +325,7 @@ export class GameRoom {
     this.phase = 'guessing'
     this.requireGame().turnIndex = 0
     this.prepareCurrentTurn()
-    this.changed(now)
+    this.touch(now)
     return { status: 'success' }
   }
 
@@ -337,14 +334,20 @@ export class GameRoom {
     payload: ClaimCardPayload,
     now = Date.now(),
   ): CommandResult<{ kind: CardKind }> {
-    const previous = this.commandResults.get(token)?.get(payload.commandId)
-    if (previous) return previous
-
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'guessing') {
       return { status: 'forbidden', message: 'You cannot guess on this turn.' }
     }
+    if (payload.turnId !== this.requireGame().turnId) {
+      return {
+        status: 'stale',
+        message: 'That guessing turn is no longer current.',
+      }
+    }
+    const previous = this.commandResults.get(token)?.get(payload.commandId)
+    if (previous) return previous
+
     const clueGiver = this.currentClueGiver()
     if (
       member.playerId === clueGiver.playerId ||
@@ -352,18 +355,6 @@ export class GameRoom {
     ) {
       return { status: 'forbidden', message: 'You cannot guess on this turn.' }
     }
-    // Claims from the same turn can race. Validate against current card
-    // ownership below, while rejecting requests from a different turn.
-    if (
-      payload.revision < this.requireGame().turnStartRevision ||
-      payload.revision > this.revision
-    ) {
-      return this.remember(token, payload.commandId, {
-        status: 'stale',
-        message: 'The board changed before that guess arrived.',
-      })
-    }
-
     const card = clueGiver.game?.board.find(({ id }) => id === payload.cardId)
     if (!card) {
       return this.remember(token, payload.commandId, {
@@ -404,7 +395,7 @@ export class GameRoom {
       }
     }
 
-    this.changed(now)
+    this.touch(now)
     return this.remember(token, payload.commandId, {
       status: 'success',
       kind: card.kind,
@@ -424,20 +415,17 @@ export class GameRoom {
     if (member.playerId === clueGiver.playerId) {
       return { status: 'forbidden', message: 'You are not an active guesser.' }
     }
-    if (
-      payload.revision < this.requireGame().turnStartRevision ||
-      payload.revision > this.revision
-    ) {
+    if (payload.turnId !== this.requireGame().turnId) {
       return {
         status: 'stale',
         message: 'That guessing turn is no longer current.',
       }
     }
     // Passing has no scoring effect: reaching the same finished state is
-    // already a success, without changing revision or extending room life.
+    // already a success, without extending room life.
     if (member.game.turnState === 'done') return { status: 'success' }
     member.game.turnState = 'done'
-    this.changed(now)
+    this.touch(now)
     return { status: 'success' }
   }
 
@@ -467,10 +455,11 @@ export class GameRoom {
       this.phase = 'finished'
     } else {
       game.turnIndex += 1
+      game.turnId = randomUUID()
       this.prepareCurrentTurn()
     }
     this.commandResults.clear()
-    this.changed(now)
+    this.touch(now)
     return { status: 'success' }
   }
 
@@ -489,7 +478,6 @@ export class GameRoom {
 
     const base = {
       roomCode: this.code,
-      revision: this.revision,
       player: this.identity(member),
       members: this.activeMembers().map((candidate) =>
         this.identity(candidate),
@@ -585,6 +573,7 @@ export class GameRoom {
 
     return {
       status: 'guessing',
+      turnId: this.requireGame().turnId,
       ...base,
       turnNumber: this.requireGame().turnIndex + 1,
       totalTurns: this.requireGame().playerOrder.length,
@@ -695,7 +684,6 @@ export class GameRoom {
   }
 
   private prepareCurrentTurn() {
-    this.requireGame().turnStartRevision = this.revision + 1
     const clueGiver = this.currentClueGiver()
     for (const player of this.gamePlayers()) {
       if (!player.game) continue
@@ -746,11 +734,6 @@ export class GameRoom {
 
   private touch(now: number) {
     this.lastMeaningfulActivityAt = now
-  }
-
-  private changed(now: number) {
-    this.revision += 1
-    this.touch(now)
   }
 
   private remember(
