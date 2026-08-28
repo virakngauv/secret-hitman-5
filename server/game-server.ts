@@ -3,6 +3,7 @@ import { randomBytes, randomInt } from 'node:crypto'
 import type {
   ClaimCardPayload,
   CommandResult,
+  FinishGuessingPayload,
   RoomSnapshot,
   SubmitHintPayload,
 } from '../lib/game-protocol'
@@ -110,8 +111,14 @@ export class GameServer {
     )
   }
 
-  finishGuessing(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.finishGuessing(token, now))
+  finishGuessing(
+    token: string,
+    payload: FinishGuessingPayload,
+    now = Date.now(),
+  ) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.finishGuessing(token, payload, now),
+    )
   }
 
   advanceTurn(token: string, roomCode: string, now = Date.now()) {

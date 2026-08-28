@@ -278,7 +278,7 @@ export function GuessingScreen({
             ? 'Spectator mode · follow the guesses without changing the board.'
             : view.canGuess
               ? 'Choose carefully. A civilian ends your turn; the assassin costs two points total.'
-              : 'Your guessing is done for this hint. Watch the rest of the room.'
+              : 'Your guessing is done for this hint. Your board is fully revealed; active pickers still see hidden cards.'
       }
     >
       <section className="clue-banner" aria-label="Current hint">

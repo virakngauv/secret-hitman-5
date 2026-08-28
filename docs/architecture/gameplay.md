@@ -21,13 +21,23 @@ finished
 ## Personalized information
 
 - During hinting, a starting player receives only their own private board. Spectators receive readiness status but no board.
-- During guessing, only the clue-giver sees every card type. Guessers and spectators see target/civilian types after a claim.
-- An assassin remains hidden from other guessers after it is selected, allowing each guesser to independently risk it.
+- During guessing, the clue-giver and finished pickers see every card type on the current board. Passing or selecting a civilian/assassin immediately ends that picker's turn and privately reveals the board. Active pickers and spectators see only publicly claimed target/civilian types.
+- An assassin's location and claimant list remain hidden from active pickers and spectators after it is selected, allowing each picker to independently risk it. Finished pickers cannot make additional picks, including after a refresh or reconnect.
 - At the end of the game, the final board is fully revealed to everyone in the room.
+
+## Claim ordering
+
+The server synchronously accepts claims against current turn and card state. Targets and civilians have one successful claimant; concurrent later requests receive `already_claimed`. An assassin can be selected once by each eligible picker without globally disabling it. Command retries return their remembered result without repeating scoring effects.
+
+Snapshot revisions from the current turn remain valid for claims, so simultaneous assassin picks do not invalidate one another. Revisions predating the current guessing turn or ahead of the server are rejected. Turn eligibility, card ownership, and scoring are always checked/applied on the server. Advancing resets turn eligibility and the minimum accepted revision; a previous private reveal does not expose the next board.
+
+Pass commands also carry a snapshot revision. A repeated pass within the same turn succeeds without changing scores, revision, or room lifetime; a delayed pass from an earlier turn is rejected. This state-setting operation does not need a separate command-result cache. Protocol version 3 requires this payload: deploy the frontend and game server together, and reload older clients to reconnect.
 
 ## Membership
 
 Room membership is independent from a Socket.IO connection. Disconnecting does not remove a player. Explicitly leaving during a game preserves the historical seat and score; reconnecting with the same browser token restores it. A new identity joining after the lobby is assigned spectator participation and cannot submit hints, claim cards, or enter the player standings.
+
+Explicitly leaving during guessing ends the picker's turn, like passing. Rejoining restores a finished, privately revealed view, never eligibility to guess again on that board. This reveals no more than the freely available pass action; transport disconnect alone does not finish the turn or reveal hidden roles.
 
 ### Guest identity security boundary
 

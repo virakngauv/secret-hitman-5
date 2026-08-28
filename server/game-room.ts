@@ -5,6 +5,7 @@ import {
   type CardKind,
   type ClaimCardPayload,
   type CommandResult,
+  type FinishGuessingPayload,
   type Participation,
   type PlayerIdentity,
   type PlayerRole,
@@ -52,6 +53,7 @@ type GameState = {
   seed: string
   playerOrder: string[]
   turnIndex: number
+  turnStartRevision: number
 }
 
 export type GameRoomOptions = {
@@ -251,6 +253,7 @@ export class GameRoom {
       seed,
       playerOrder: players.map(({ playerId }) => playerId),
       turnIndex: 0,
+      turnStartRevision: 0,
     }
     this.phase = 'hinting'
     this.commandResults.clear()
@@ -340,7 +343,12 @@ export class GameRoom {
     ) {
       return { status: 'forbidden', message: 'You cannot guess on this turn.' }
     }
-    if (payload.revision !== this.revision) {
+    // Claims from the same turn can race. Validate against current card
+    // ownership below, while rejecting requests from a different turn.
+    if (
+      payload.revision < this.requireGame().turnStartRevision ||
+      payload.revision > this.revision
+    ) {
       return this.remember(token, payload.commandId, {
         status: 'stale',
         message: 'The board changed before that guess arrived.',
@@ -394,18 +402,31 @@ export class GameRoom {
     })
   }
 
-  finishGuessing(token: string, now = Date.now()): CommandResult {
+  finishGuessing(
+    token: string,
+    payload: FinishGuessingPayload,
+    now = Date.now(),
+  ): CommandResult {
     const member = this.findActiveMember(token)
     if (!member?.game || this.phase !== 'guessing') {
       return { status: 'forbidden', message: 'You are not an active guesser.' }
     }
     const clueGiver = this.currentClueGiver()
-    if (
-      member.playerId === clueGiver.playerId ||
-      member.game.turnState !== 'guessing'
-    ) {
+    if (member.playerId === clueGiver.playerId) {
       return { status: 'forbidden', message: 'You are not an active guesser.' }
     }
+    if (
+      payload.revision < this.requireGame().turnStartRevision ||
+      payload.revision > this.revision
+    ) {
+      return {
+        status: 'stale',
+        message: 'That guessing turn is no longer current.',
+      }
+    }
+    // Passing has no scoring effect: reaching the same finished state is
+    // already a success, without changing revision or extending room life.
+    if (member.game.turnState === 'done') return { status: 'success' }
     member.game.turnState = 'done'
     this.changed(now)
     return { status: 'success' }
@@ -488,7 +509,10 @@ export class GameRoom {
     const clueSeat = clueGiver.game
     if (!clueSeat?.hint)
       throw new Error('Current clue giver is missing a hint.')
-    const revealAll = this.phase === 'finished' || member === clueGiver
+    const revealAll =
+      this.phase === 'finished' ||
+      member === clueGiver ||
+      member.game?.turnState === 'done'
     const board = clueSeat.board.map((card) => {
       const selectedByYou = card.claimers.some(
         ({ playerId }) => playerId === member.playerId,
@@ -655,6 +679,7 @@ export class GameRoom {
   }
 
   private prepareCurrentTurn() {
+    this.requireGame().turnStartRevision = this.revision + 1
     const clueGiver = this.currentClueGiver()
     for (const player of this.gamePlayers()) {
       if (!player.game) continue

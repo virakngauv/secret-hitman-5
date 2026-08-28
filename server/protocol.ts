@@ -18,6 +18,7 @@ import {
 import {
   parseCreateRoom,
   parseClaimCard,
+  parseFinishGuessing,
   parseHandshakeAuth,
   parseJoinRoom,
   parseRemovePlayer,
@@ -292,12 +293,9 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:finish-guessing', acknowledge, () => {
-        const parsed = parseRoomCommand(payload)
+        const parsed = parseFinishGuessing(payload)
         if (!parsed) return acknowledge(invalid())
-        const result = gameServer.finishGuessing(
-          socket.data.token,
-          parsed.roomCode,
-        )
+        const result = gameServer.finishGuessing(socket.data.token, parsed)
         acknowledge(result)
         if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   GAME_PROTOCOL_VERSION,
   type ClientToServerEvents,
+  type RoomSnapshot,
   type ServerToClientEvents,
 } from '../lib/game-protocol'
 import { createGameSocketServer } from './protocol'
@@ -401,9 +402,9 @@ describe('Socket.IO Secret Hitman protocol', () => {
     ).toEqual([1, 1])
   })
 
-  it.each([false, true])(
-    'preserves guessing eligibility across a socket disconnect (civilian claimed: %s)',
-    async (claimedCivilian) => {
+  it.each(['active', 'pass', 'civilian', 'assassin'] as const)(
+    'preserves guessing eligibility and private visibility across a socket disconnect: %s',
+    async (ending) => {
       const host = await connect(hostToken)
       const guest = await connect(guestToken)
       const created = await host.emitWithAck('room:create', { name: 'Ada' })
@@ -435,19 +436,27 @@ describe('Socket.IO Secret Hitman protocol', () => {
       const before = server.snapshot(guestToken, roomCode)
       if (revealed.status !== 'guessing' || before.status !== 'guessing')
         throw new Error('Expected guessing phase.')
-      if (claimedCivilian) {
-        const civilian = revealed.board.find(
-          ({ revealedKind }) => revealedKind === 'civilian',
+      if (ending === 'pass') {
+        expect(
+          await guest.emitWithAck('game:finish-guessing', {
+            roomCode,
+            revision: before.revision,
+          }),
+        ).toEqual({ status: 'success' })
+      } else if (ending !== 'active') {
+        const card = revealed.board.find(
+          ({ revealedKind }) => revealedKind === ending,
         )!
         expect(
           await guest.emitWithAck('game:claim-card', {
             roomCode,
-            cardId: civilian.id,
+            cardId: card.id,
             revision: before.revision,
-            commandId: 'civilian-before-reconnect',
+            commandId: `${ending}-before-reconnect`,
           }),
-        ).toEqual({ status: 'success', kind: 'civilian' })
+        ).toEqual({ status: 'success', kind: ending })
       }
+      const completed = server.snapshot(guestToken, roomCode)
       guest.disconnect()
       const reconnected = await connect(guestToken)
       const resumed = await reconnected.emitWithAck('session:resume', {
@@ -458,10 +467,147 @@ describe('Socket.IO Secret Hitman protocol', () => {
         snapshot: {
           status: 'guessing',
           player: { playerId: before.player.playerId },
-          canGuess: !claimedCivilian,
-          canMarkDone: !claimedCivilian,
+          canGuess: ending === 'active',
+          canMarkDone: ending === 'active',
         },
       })
+      if (
+        resumed.status !== 'success' ||
+        resumed.snapshot?.status !== 'guessing'
+      )
+        throw new Error('Expected resumed guessing snapshot.')
+      expect(resumed.snapshot).toEqual(completed)
+      if (ending === 'pass') {
+        expect(
+          await reconnected.emitWithAck('game:finish-guessing', {
+            roomCode,
+            revision: before.revision,
+          }),
+        ).toEqual({ status: 'success' })
+        expect(server.snapshot(guestToken, roomCode)).toEqual(completed)
+      }
+      expect(
+        resumed.snapshot.board.map(({ revealedKind }) => revealedKind),
+      ).toEqual(
+        ending === 'active'
+          ? before.board.map(({ revealedKind }) => revealedKind)
+          : revealed.board.map(({ revealedKind }) => revealedKind),
+      )
+    },
+  )
+
+  it.each(['target', 'civilian', 'assassin'] as const)(
+    'handles concurrent %s requests through distinct sockets with private broadcasts',
+    async (kind) => {
+      const host = await connect(hostToken)
+      const guest = await connect(guestToken)
+      const thirdToken = 'd'.repeat(32)
+      const third = await connect(thirdToken)
+      const spectator = await connect(spectatorToken)
+      const created = await host.emitWithAck('room:create', { name: 'Ada' })
+      if (created.status !== 'success')
+        throw new Error('Unable to create room.')
+      const { roomCode } = created
+      await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
+      await third.emitWithAck('room:join', { roomCode, name: 'Linus' })
+      await host.emitWithAck('game:start', { roomCode })
+      for (const [client, token] of [
+        [host, hostToken],
+        [guest, guestToken],
+        [third, thirdToken],
+      ] as const) {
+        const view = socketServer.gameServer.snapshot(token, roomCode)
+        if (view.status !== 'hinting' || !view.board)
+          throw new Error('Expected private board.')
+        expect(
+          await client.emitWithAck('game:submit-hint', {
+            roomCode,
+            hint: 'Orbit',
+            targetCardIds: view.board
+              .filter(({ kind }) => kind === 'neutral')
+              .slice(0, 2)
+              .map(({ id }) => id),
+          }),
+        ).toEqual({ status: 'success' })
+      }
+      await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
+      await host.emitWithAck('game:start-guessing', { roomCode })
+      const before = socketServer.gameServer.snapshot(hostToken, roomCode)
+      if (before.status !== 'guessing') throw new Error('Expected guessing.')
+      const card = before.board.find(
+        ({ revealedKind }) => revealedKind === kind,
+      )!
+      const spectatorSnapshots = vi.fn<(snapshot: RoomSnapshot) => void>()
+      spectator.on('room:snapshot', spectatorSnapshots)
+      const payload = {
+        roomCode,
+        cardId: card.id,
+        revision: before.revision,
+        commandId: `race-${kind}`,
+      }
+      const results = await Promise.all([
+        guest.emitWithAck('game:claim-card', payload),
+        third.emitWithAck('game:claim-card', payload),
+      ])
+      expect(results.map(({ status }) => status).sort()).toEqual(
+        kind === 'assassin'
+          ? ['success', 'success']
+          : ['already_claimed', 'success'],
+      )
+      const after = socketServer.gameServer.snapshot(hostToken, roomCode)
+      if (after.status !== 'guessing') throw new Error('Expected guessing.')
+      const winnerNames = results.flatMap((result, index) =>
+        result.status === 'success' ? [index === 0 ? 'Grace' : 'Linus'] : [],
+      )
+      expect(
+        after.board.find(({ id }) => id === card.id)?.claimedBy.toSorted(),
+      ).toEqual(winnerNames.toSorted())
+      expect(
+        after.scoreboard
+          .filter(({ participation }) => participation === 'player')
+          .map(({ score }) => score),
+      ).toEqual(
+        kind === 'assassin'
+          ? [-2, -1, -1]
+          : kind === 'civilian'
+            ? [0, 0, 0]
+            : [
+                1,
+                ...results.map(({ status }) => (status === 'success' ? 1 : 0)),
+              ],
+      )
+      expect(await guest.emitWithAck('game:claim-card', payload)).toEqual(
+        results[0],
+      )
+      expect(await third.emitWithAck('game:claim-card', payload)).toEqual(
+        results[1],
+      )
+      expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toEqual(
+        after,
+      )
+      await vi.waitFor(() =>
+        expect(spectatorSnapshots).toHaveBeenCalledWith(
+          expect.objectContaining({ revision: after.revision }),
+        ),
+      )
+      for (const [snapshot] of spectatorSnapshots.mock.calls) {
+        if (
+          snapshot.status !== 'guessing' ||
+          snapshot.revision <= before.revision
+        )
+          continue
+        const visibleCard = snapshot.board.find(({ id }) => id === card.id)
+        expect(visibleCard).toMatchObject(
+          kind === 'assassin'
+            ? {
+                revealedKind: null,
+                claimedBy: [],
+                selectedByYou: false,
+                disabled: true,
+              }
+            : { revealedKind: kind, claimedBy: winnerNames, disabled: true },
+        )
+      }
     },
   )
 

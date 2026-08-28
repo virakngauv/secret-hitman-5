@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 2 as const
+export const GAME_PROTOCOL_VERSION = 3 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -133,6 +133,7 @@ export type SessionResumePayload = { roomCode?: string }
 export type CreateRoomPayload = { name: string }
 export type JoinRoomPayload = { roomCode: string; name: string }
 export type RoomCommandPayload = { roomCode: string }
+export type FinishGuessingPayload = RoomCommandPayload & { revision: number }
 export type RemovePlayerPayload = RoomCommandPayload & { playerId: string }
 export type SubmitHintPayload = RoomCommandPayload & {
   hint: string
@@ -182,7 +183,7 @@ export type ClientToServerEvents = {
     acknowledge: (result: CommandResult<{ kind: CardKind }>) => void,
   ) => void
   'game:finish-guessing': (
-    payload: RoomCommandPayload,
+    payload: FinishGuessingPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:advance-turn': (

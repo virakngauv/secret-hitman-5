@@ -1,12 +1,48 @@
 import { describe, expect, it } from 'vitest'
+import { GAME_PROTOCOL_VERSION } from '../lib/game-protocol'
 
 import {
   MAX_HINT_LENGTH,
+  parseFinishGuessing,
+  parseHandshakeAuth,
   parseHint,
   parsePlayerName,
   parseRemovePlayer,
   parseSubmitHint,
 } from './validation'
+
+describe('versioned pass commands', () => {
+  it('normalizes the room and requires a valid revision', () => {
+    expect(parseFinishGuessing({ roomCode: ' BCDF2 ', revision: 5 })).toEqual({
+      roomCode: 'bcdf2',
+      revision: 5,
+    })
+    for (const revision of [
+      undefined,
+      null,
+      '5',
+      -1,
+      1.5,
+      Infinity,
+      NaN,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(parseFinishGuessing({ roomCode: 'bcdf2', revision })).toBeNull()
+    }
+    expect(parseFinishGuessing(null)).toBeNull()
+    expect(parseFinishGuessing({ roomCode: 'bad', revision: 5 })).toBeNull()
+  })
+
+  it('rejects older clients that cannot send the turn-bound pass payload', () => {
+    const token = 'a'.repeat(32)
+    expect(
+      parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
+    ).toBeNull()
+    expect(
+      parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION }),
+    ).toEqual({ token, protocolVersion: GAME_PROTOCOL_VERSION })
+  })
+})
 
 describe('parseHint', () => {
   it('normalizes whitespace while removing unsafe formatting controls', () => {
