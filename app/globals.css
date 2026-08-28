@@ -276,12 +276,13 @@ input {
 
 .word-card {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* Equal outer rows keep the word centered with or without picker labels. */
+  grid-template-rows: 1fr auto 1fr;
+  row-gap: 0.4rem;
   min-width: 0;
   min-height: 7.5rem;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
   border: 1px solid var(--border);
   border-radius: 1rem;
   background: var(--card);
@@ -310,6 +311,8 @@ button.word-card:focus-visible {
 }
 
 .word-card-index {
+  grid-row: 1;
+  align-self: start;
   color: var(--muted-foreground);
   font-family: var(--font-mono);
   font-size: 0.55rem;
@@ -318,15 +321,20 @@ button.word-card:focus-visible {
 }
 
 .word-card-word {
+  grid-row: 2;
+  justify-self: center;
   max-width: 100%;
   overflow-wrap: anywhere;
   font-size: clamp(0.9rem, 2vw, 1.16rem);
   font-weight: 950;
   letter-spacing: -0.025em;
   line-height: 1.05;
+  text-align: center;
 }
 
 .word-card-claimers {
+  grid-row: 3;
+  align-self: end;
   min-height: 1em;
   max-width: 100%;
   overflow: hidden;

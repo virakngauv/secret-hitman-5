@@ -116,16 +116,16 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
       return (
         <GuessingScreen
           view={snapshot}
-          onClaimCard={(cardId, revision) =>
+          onClaimCard={(cardId, turnId) =>
             game.claimCard({
               roomCode,
-              revision,
+              turnId,
               cardId,
               commandId: crypto.randomUUID?.() ?? generateClientToken(),
             })
           }
           onFinishGuessing={() =>
-            game.finishGuessing({ roomCode, revision: snapshot.revision })
+            game.finishGuessing({ roomCode, turnId: snapshot.turnId })
           }
           onAdvanceTurn={() => game.advanceTurn(roomCode)}
         />

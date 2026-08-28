@@ -29,13 +29,24 @@ finished
 
 The server synchronously accepts claims against current turn and card state. Targets and civilians have one successful claimant; concurrent later requests receive `already_claimed`. An assassin can be selected once by each eligible picker without globally disabling it. Command retries return their remembered result without repeating scoring effects.
 
-Snapshot revisions from the current turn remain valid for claims, so simultaneous assassin picks do not invalidate one another. Revisions predating the current guessing turn or ahead of the server are rejected. Turn eligibility, card ownership, and scoring are always checked/applied on the server. Advancing resets turn eligibility and the minimum accepted revision; a previous private reveal does not expose the next board.
+Each guessing snapshot includes an opaque `turnId` (a server-generated UUID). Claims and passes echo that ID. It stays fixed throughout one turn, including membership changes, other claims, and reconnects, and changes on advancement. A new game receives a fresh ID even if the room code, clock, players, and board seed are reused after a restart. It is independent of the private board seed, so publishing it cannot reveal hidden roles. Delayed commands with a different turn ID are rejected before applying any effects.
 
-Pass commands also carry a snapshot revision. A repeated pass within the same turn succeeds without changing scores, revision, or room lifetime; a delayed pass from an earlier turn is rejected. This state-setting operation does not need a separate command-result cache. Protocol version 3 requires this payload: deploy the frontend and game server together, and reload older clients to reconnect.
+Validation and claim application are synchronous: current player eligibility, tile membership, and ownership decide whether a move succeeds. Retries in the same turn return the remembered result without scoring twice, including after the accepted move ends the picker’s turn. Advancing clears the per-turn result cache. A repeated pass in the same turn succeeds without changing scores or room lifetime; it does not need a separate result cache.
+
+### Revision removal audit (#25)
+
+Room revisions are removed completely, not retained as a second identity mechanism:
+
+- Server counter, increments, and turn-window bookkeeping: replaced by explicit turn identity; activity timestamps still track meaningful changes.
+- Snapshots and client payloads: no counter remains. The provider already applies snapshots without revision comparisons. Broadcasts read authoritative state immediately before emission; reconnect resumes current state, and callbacks from replaced sockets are ignored. Socket.IO delivers packets in connection order; no counter-based ordering consumer was found.
+- Board initialization: uses the existing private initial seed and start time without a room counter. Default initial seeds already contain random entropy. Explicit fixed test seeds remain reproducible and do not control public turn identities.
+- Tests and smoke script: assert actual state, ownership, scores, and restored turn identity instead of treating counter increments as evidence of correctness.
+
+Protocol version 4 requires the new payloads and snapshots. Deploy the frontend and game server together; older clients must reload to reconnect. No compatibility shim accepts revision-only commands.
 
 ## Host advancement
 
-Both “Next hint” and “Finish the game” require every eligible picker on the current board to finish. The server checks current state before changing the turn or phase, and snapshots drive the host's disabled control and waiting message. A stale client or a repeated advance cannot skip an active guessing turn. Rejected advancement does not change the board, scores, player turns, revision, or room activity time.
+Both “Next hint” and “Finish the game” require every eligible picker on the current board to finish. The server checks current state before changing the turn or phase, and snapshots drive the host's disabled control and waiting message. A stale client or a repeated advance cannot skip an active guessing turn. Rejected advancement does not change the board, scores, player turns, or room activity time.
 
 Passing, selecting a civilian/assassin, or explicitly leaving completes that picker's turn. Claiming the last target completes all pickers, so no extra passes are required. The clue-giver, spectators, and inactive seats do not block advancement; a host who is also a picker must finish along with everyone else. Completion enables the host action without automatically advancing.
 

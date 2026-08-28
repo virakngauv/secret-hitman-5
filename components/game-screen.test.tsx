@@ -9,7 +9,6 @@ import { FinishedScreen, GuessingScreen, HintPhaseScreen } from './game-screen'
 const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
   status: 'hinting',
   roomCode: 'bcdf2',
-  revision: 3,
   player: {
     playerId: 'player-1',
     name: 'Ada',
@@ -92,8 +91,8 @@ describe('GuessingScreen messages', () => {
       const onAdvanceTurn = vi.fn().mockResolvedValue({ status: 'success' })
       const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
         status: 'guessing',
+        turnId: '00000000-0000-4000-8000-000000000001',
         roomCode: 'bcdf2',
-        revision: 4,
         player: hintingView.player,
         members: hintingView.members,
         turnNumber,
@@ -160,8 +159,8 @@ describe('GuessingScreen messages', () => {
         .mockResolvedValueOnce({ status: 'success' })
       const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
         status: 'guessing',
+        turnId: '00000000-0000-4000-8000-000000000001',
         roomCode: 'bcdf2',
-        revision: 4,
         player: hintingView.player,
         members: hintingView.members,
         turnNumber: 1,
@@ -234,7 +233,6 @@ describe('FinishedScreen', () => {
       const view: Extract<RoomSnapshot, { status: 'finished' }> = {
         status: 'finished',
         roomCode: 'bcdf2',
-        revision: 20,
         player: scoreboard[0],
         members: [...scoreboard, spectator],
         scoreboard: [spectator, ...scoreboard.toReversed()],

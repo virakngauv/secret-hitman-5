@@ -9,8 +9,10 @@ import { RoomLobby } from './room-lobby'
 type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
 
 const mocks = vi.hoisted(() => ({
-  view: null as LobbyView | null,
+  view: null as RoomSnapshot | null,
   startGame: vi.fn(),
+  claimCard: vi.fn(),
+  finishGuessing: vi.fn(),
   removePlayer: vi.fn(),
   routerPush: vi.fn(),
 }))
@@ -18,6 +20,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/components/game-socket-provider', () => ({
   useGameSocket: () => ({
     startGame: mocks.startGame,
+    claimCard: mocks.claimCard,
+    finishGuessing: mocks.finishGuessing,
     removePlayer: mocks.removePlayer,
   }),
   useRoomSnapshot: () => ({
@@ -46,7 +50,6 @@ function lobbyView(minimumPlayers = 2): LobbyView {
   return {
     status: 'lobby',
     roomCode: 'bcdf2',
-    revision: 1,
     player,
     members: [player],
     minimumPlayers,
@@ -68,8 +71,65 @@ describe('RoomLobby invite prompt', () => {
   beforeEach(() => {
     mocks.view = lobbyView()
     mocks.startGame.mockReset().mockResolvedValue({ status: 'success' })
+    mocks.claimCard
+      .mockReset()
+      .mockResolvedValue({ status: 'success', kind: 'target' })
+    mocks.finishGuessing.mockReset().mockResolvedValue({ status: 'success' })
     mocks.removePlayer.mockReset().mockResolvedValue({ status: 'success' })
     mocks.routerPush.mockReset()
+  })
+
+  it('sends the displayed turn identity with claims and passes after a snapshot change', async () => {
+    const user = userEvent.setup()
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      ...readyLobby(),
+      status: 'guessing',
+      turnId: '00000000-0000-4000-8000-000000000001',
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'guest',
+      clueGiverName: 'Grace',
+      hint: 'Orbit',
+      hintNumber: 2,
+      board: [
+        {
+          id: 'p1-card-0',
+          word: 'MOON',
+          revealedKind: null,
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: false,
+        },
+      ],
+      turnPlayers: [],
+      scoreboard: [],
+      canGuess: true,
+      canMarkDone: true,
+      canAdvanceTurn: false,
+    }
+    mocks.view = view
+    const rendered = render(<RoomLobby roomCode="bcdf2" />)
+    for (const turnId of [
+      view.turnId,
+      '00000000-0000-4000-8000-000000000002',
+    ]) {
+      mocks.view = { ...view, turnId }
+      rendered.rerender(<RoomLobby roomCode="bcdf2" />)
+      await user.click(screen.getByRole('button', { name: /moon/i }))
+      expect(mocks.claimCard).toHaveBeenLastCalledWith({
+        roomCode: 'bcdf2',
+        turnId,
+        cardId: 'p1-card-0',
+        commandId: expect.any(String),
+      })
+      await user.click(
+        screen.getByRole('button', { name: 'I’m done guessing' }),
+      )
+      expect(mocks.finishGuessing).toHaveBeenLastCalledWith({
+        roomCode: 'bcdf2',
+        turnId,
+      })
+    }
   })
 
   it.each([
