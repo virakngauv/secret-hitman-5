@@ -19,6 +19,11 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await host.setViewportSize({ width: 360, height: 900 })
     await guest.setViewportSize({ width: 360, height: 900 })
     await host.goto('/create')
+    // The server-rendered input can accept text before hydration; wait for
+    // the socket-backed form to be ready so hydration cannot reset the name.
+    await expect(
+      host.getByRole('button', { name: 'Create', exact: true }),
+    ).toBeEnabled()
     await host.getByLabel('Name').fill('Ada Layout')
     await host.getByRole('button', { name: 'Create', exact: true }).click()
     await expect(
