@@ -607,9 +607,15 @@ button.word-card:focus-visible {
   font-weight: 800;
 }
 
-@media (min-width: 40rem) {
+/* Keep two columns below 360px so narrow phones retain readable card content. */
+@media (min-width: 22.5rem) {
   .word-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 40rem) {
+  .word-grid {
     gap: 0.7rem;
   }
 
