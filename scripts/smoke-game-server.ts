@@ -174,7 +174,8 @@ function selectableIds(
 ) {
   return (
     snapshot.board
-      ?.filter(({ kind }) => kind === 'neutral')
+      ?.filter(({ kind }) => kind === 'target' || kind === 'neutral')
+      .sort((a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'))
       .slice(0, count)
       .map(({ id }) => id) ?? []
   )

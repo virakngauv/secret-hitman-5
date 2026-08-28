@@ -260,7 +260,7 @@ async function makeHint(page: Page, hint: string, count: number) {
   await expect(page.getByLabel('Your hint')).toBeVisible()
   await page.getByLabel('Your hint').fill(hint)
   const cards = page.locator('button[data-card-kind="neutral"]')
-  for (let index = 0; index < count; index += 1) {
+  for (let index = 0; index < count - 1; index += 1) {
     await cards.nth(index).click()
   }
   await page.getByRole('button', { name: `Lock in hint · ${count}` }).click()

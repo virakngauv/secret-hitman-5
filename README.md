@@ -5,8 +5,8 @@ A one-round, host-driven multiplayer word game built with Next.js, React, TypeSc
 ## Gameplay
 
 1. The host creates a room and invites at least one other player.
-2. Starting players each receive a private board of 12 words. One randomly selected word is the frozen assassin.
-3. Every player writes a hint and selects the non-assassin words it should describe. The number is generated from the selection count.
+2. Starting players each receive a private board of 12 words. One target, two civilians, and the assassin are randomly locked for the lifetime of the board.
+3. Every player writes a hint and selects additional editable words it should describe. The number includes the fixed target (1–9 targets total).
 4. When every hint is locked, the host starts guessing and manually advances each player’s clue-giver turn.
 5. Guessing a target awards one point to both the guesser and clue-giver. A civilian ends that player’s guessing for the hint. The assassin ends their guessing and removes one point from both players.
 6. After every starting player gives one hint, the single round ends and final standings are revealed.

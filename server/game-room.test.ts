@@ -37,7 +37,8 @@ function submitFirstHint(room: GameRoom, token: string, hint: string) {
   const view = hinting(room, token)
   const targetCardIds =
     view.board
-      ?.filter(({ kind }) => kind === 'neutral')
+      ?.filter(({ kind }) => kind === 'target' || kind === 'neutral')
+      .sort((a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'))
       .slice(0, 2)
       .map(({ id }) => id) ?? []
   return room.submitHint(token, { roomCode: room.code, hint, targetCardIds })
@@ -74,6 +75,97 @@ function finishActiveGuessers(room: GameRoom) {
 }
 
 describe('GameRoom single-round flow', () => {
+  it('rejects fixed-role tampering atomically and keeps assignments through resubmission and rejoin', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.start(hostToken, 1_002)
+    const before = hinting(room)
+    const board = before.board!
+    const target = board.find(({ kind }) => kind === 'target')!
+    const neutral = board.find(({ kind }) => kind === 'neutral')!
+    const forbidden = board.filter(
+      ({ kind }) => kind === 'civilian' || kind === 'assassin',
+    )
+    for (const targetCardIds of [
+      [],
+      [neutral.id],
+      [target.id, target.id],
+      [target.id, 'not-a-card'],
+      ...forbidden.map(({ id }) => [target.id, id]),
+      [target.id, hinting(room, guestToken).board![0].id],
+    ]) {
+      const activity = room.lastMeaningfulActivityAt
+      expect(
+        room.submitHint(hostToken, {
+          roomCode: room.code,
+          hint: 'Orbit',
+          targetCardIds,
+        }),
+      ).toMatchObject({ status: 'invalid' })
+      expect(hinting(room)).toEqual(before)
+      expect(room.lastMeaningfulActivityAt).toBe(activity)
+    }
+    expect(
+      room.submitHint(hostToken, {
+        roomCode: room.code,
+        hint: 'Orbit',
+        targetCardIds: [target.id],
+      }),
+    ).toEqual({ status: 'success' })
+    expect(hinting(room).board).toEqual(board)
+    expect(
+      room.submitHint(hostToken, {
+        roomCode: room.code,
+        hint: 'Changed',
+        targetCardIds: [neutral.id],
+      }),
+    ).toMatchObject({ status: 'invalid' })
+    room.leave(hostToken)
+    room.join(hostToken, 'Ada')
+    expect(hinting(room).board).toEqual(board)
+    expect(hinting(room).hintSubmitted).toBe(true)
+    room.join(thirdToken, 'Spectator')
+    expect(hinting(room, thirdToken).board).toBeNull()
+    submitFirstHint(room, guestToken, 'Garden')
+    room.startGuessing(guestToken)
+    expect(guessing(room).hintNumber).toBe(1)
+    expect(
+      guessing(room).board.filter(
+        ({ revealedKind }) => revealedKind === 'target',
+      ),
+    ).toHaveLength(1)
+    expect(
+      guessing(room, guestToken).board.every(
+        (card) => card.revealedKind === null && !('locked' in card),
+      ),
+    ).toBe(true)
+  })
+
+  it('allows all eight editable words as targets without changing the four locks', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.start(hostToken, 1_002)
+    const board = hinting(room).board!
+    const targetCardIds = board
+      .filter(({ kind }) => kind === 'neutral' || kind === 'target')
+      .map(({ id }) => id)
+    expect(targetCardIds).toHaveLength(9)
+    expect(
+      room.submitHint(hostToken, {
+        roomCode: room.code,
+        hint: 'All',
+        targetCardIds,
+      }),
+    ).toEqual({ status: 'success' })
+    submitFirstHint(room, guestToken, 'Garden')
+    room.startGuessing(hostToken)
+    expect(guessing(room).hintNumber).toBe(9)
+    expect(
+      guessing(room).board.filter(
+        ({ revealedKind }) => revealedKind === 'civilian',
+      ),
+    ).toHaveLength(2)
+  })
   it('rejects advancement without effects until the last eligible picker finishes', () => {
     const room = startTwoPlayerGame(true)
     const spectator = 'd'.repeat(32)
@@ -531,7 +623,12 @@ describe('GameRoom single-round flow', () => {
     const host = hinting(room)
     const assassin = host.board?.find(({ kind }) => kind === 'assassin')
     const targets =
-      host.board?.filter(({ kind }) => kind === 'neutral').slice(0, 3) ?? []
+      host.board
+        ?.filter(({ kind }) => kind === 'target' || kind === 'neutral')
+        .sort(
+          (a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'),
+        )
+        .slice(0, 3) ?? []
 
     expect(
       room.submitHint(hostToken, {

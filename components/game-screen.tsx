@@ -29,7 +29,14 @@ export function HintPhaseScreen({
   onStartGuessing: () => Promise<CommandResult>
 }) {
   const [hint, setHint] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [editableSelected, setSelected] = useState<Set<string>>(() => new Set())
+  const selected = new Set(
+    view.board
+      ?.filter((card) =>
+        card.locked ? card.kind === 'target' : editableSelected.has(card.id),
+      )
+      .map(({ id }) => id),
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +46,7 @@ export function HintPhaseScreen({
   ).length
 
   const toggleCard = (cardId: string) => {
+    if (view.board?.find(({ id }) => id === cardId)?.locked) return
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(cardId)) next.delete(cardId)
@@ -72,7 +80,7 @@ export function HintPhaseScreen({
       roomCode={view.roomCode}
       eyebrow="Phase 1 · Make your hint"
       title="Build one clue. Pick your targets."
-      subtitle="The assassin is locked. Your clue number updates from the words you select."
+      subtitle="One target, two civilians, and the assassin are locked. Your clue number includes the fixed target."
     >
       <div className="game-layout">
         <section className="game-panel min-w-0">
@@ -122,22 +130,41 @@ export function HintPhaseScreen({
                       type="button"
                       data-card-id={card.id}
                       data-card-kind={card.kind}
+                      data-card-locked={card.locked}
+                      aria-label={`${isAssassin ? 'Assassin' : isSelected ? 'Target' : card.kind === 'civilian' ? 'Civilian' : 'Available'}${card.locked ? ' · Locked' : ''} · ${card.word}`}
                       className={cn(
                         'word-card',
                         isSelected && 'word-card-target',
                         isAssassin && 'word-card-assassin',
+                        card.kind === 'civilian' && 'word-card-civilian',
                       )}
                       onClick={() => toggleCard(card.id)}
-                      disabled={isAssassin || isSubmitting}
+                      disabled={card.locked || isSubmitting}
                       aria-pressed={isSelected}
                     >
                       <span className="word-card-index">
                         {isAssassin
-                          ? 'ASSASSIN · LOCKED'
+                          ? 'ASSASSIN'
                           : isSelected
                             ? 'TARGET'
-                            : 'AVAILABLE'}
+                            : card.kind === 'civilian'
+                              ? 'CIVILIAN'
+                              : 'AVAILABLE'}
                       </span>
+                      {card.locked && (
+                        <svg
+                          className="word-card-lock"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <rect x="5" y="10" width="14" height="11" rx="2" />
+                          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                        </svg>
+                      )}
                       <span className="word-card-word">{card.word}</span>
                     </button>
                   )

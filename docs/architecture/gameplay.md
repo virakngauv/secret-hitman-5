@@ -5,7 +5,7 @@ lobby
   └─ host starts with 2–12 players
        ↓
 hinting
-  ├─ each starting player selects 1–11 targets around a frozen assassin
+  ├─ each starting player selects 1–9 targets, including one fixed target, around two fixed civilians and a frozen assassin
   ├─ the selection count becomes the hint number
   └─ after all hints are submitted, the host manually selects “Start guessing”
        ↓
@@ -31,7 +31,7 @@ The server synchronously accepts claims against current turn and card state. Tar
 
 Snapshot revisions from the current turn remain valid for claims, so simultaneous assassin picks do not invalidate one another. Revisions predating the current guessing turn or ahead of the server are rejected. Turn eligibility, card ownership, and scoring are always checked/applied on the server. Advancing resets turn eligibility and the minimum accepted revision; a previous private reveal does not expose the next board.
 
-Pass commands also carry a snapshot revision. A repeated pass within the same turn succeeds without changing scores, revision, or room lifetime; a delayed pass from an earlier turn is rejected. This state-setting operation does not need a separate command-result cache. Protocol version 3 requires this payload: deploy the frontend and game server together, and reload older clients to reconnect.
+Pass commands also carry a snapshot revision. A repeated pass within the same turn succeeds without changing scores, revision, or room lifetime; a delayed pass from an earlier turn is rejected. This state-setting operation does not need a separate command-result cache. Protocol version 4 also requires persistent fixed-role metadata in private hinting snapshots: deploy the frontend and game server together, and reload older clients to reconnect.
 
 ## Host advancement
 
@@ -54,3 +54,7 @@ The browser persists a randomly generated 128-bit guest token in localStorage an
 The token remains readable by same-origin JavaScript. XSS or a compromised third-party script could steal it and impersonate that guest in surviving rooms. HTTPS does not prevent this risk. Do not treat guest identity as suitable for sensitive account data or privileged non-game actions.
 
 Moving to a server-issued HttpOnly cookie requires a coordinated session protocol and deployment design: the frontend and game server can be on different sites, and cookie delivery, cross-origin credentials, origin/CSRF protections, local development, and reconnect migration must be tested together. A same-origin gateway or another explicitly designed session boundary is future security work; the current localStorage model does not provide HttpOnly protection.
+
+## Fixed clue-building roles
+
+Each 12-word board receives one locked target and two locked civilians in addition to its existing locked assassin. The server selects distinct positions using a separate seeded shuffle at board creation; rerenders, refreshes, and reconnects reuse the stored assignments. The eight remaining words stay editable. Submitted target IDs must include the fixed target and exclude both fixed civilians and the assassin; invalid requests leave the board and ready status unchanged. Only the clue-maker receives their private hinting board and lock metadata. Guessing snapshots do not expose locks.

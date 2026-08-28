@@ -32,11 +32,37 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await host.getByRole('button', { name: 'Start the single round' }).click()
 
     await expect(host.getByLabel('Your twelve word board')).toBeVisible()
+    const locked = host.locator('button[data-card-locked="true"]')
+    await expect(locked).toHaveCount(4)
+    await expect(host.locator('[data-card-kind="target"]')).toHaveCount(1)
+    await expect(host.locator('[data-card-kind="civilian"]')).toHaveCount(2)
+    const fixedBefore = await locked.evaluateAll((cards) =>
+      cards.map((card) => ({
+        id: card.getAttribute('data-card-id'),
+        role: card.getAttribute('data-card-kind'),
+        text: card.textContent,
+      })),
+    )
+    for (const card of await locked.all()) {
+      await expect(card).toBeDisabled()
+      await expect(card.locator('.word-card-lock')).toBeVisible()
+    }
+    await host.reload()
+    await expect(host.getByLabel('Your twelve word board')).toBeVisible()
+    expect(
+      await locked.evaluateAll((cards) =>
+        cards.map((card) => ({
+          id: card.getAttribute('data-card-id'),
+          role: card.getAttribute('data-card-kind'),
+          text: card.textContent,
+        })),
+      ),
+    ).toEqual(fixedBefore)
+    await expect(host.locator('.hint-number-value')).toHaveText('1')
     await expect(host.locator('[data-card-kind="assassin"]')).toBeDisabled()
     const targets = host.locator('button[data-card-kind="neutral"]')
     const targetId = await targets.first().getAttribute('data-card-id')
     await targets.nth(0).click()
-    await targets.nth(1).click()
     await expect(targets.nth(0)).toHaveAttribute('aria-pressed', 'true')
     await checkWidths(host, 'hinting', testInfo)
 
@@ -44,7 +70,6 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await host.getByRole('button', { name: 'Lock in hint · 2' }).click()
     await expect(host.getByText('Hint locked in')).toBeVisible()
     await guest.getByLabel('Your hint').fill('Garden')
-    await guest.locator('button[data-card-kind="neutral"]').first().click()
     await guest.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await host.getByRole('button', { name: 'Start guessing' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
@@ -131,6 +156,29 @@ async function assertCardContentFits(page: Page) {
         issues.push(`Card ${index} is smaller than a 44px tap target`)
       }
       const contents = [...card.querySelectorAll<HTMLElement>('span')]
+      const lock = card
+        .querySelector('.word-card-lock')
+        ?.getBoundingClientRect()
+      if (lock) {
+        if (
+          lock.right > box.right ||
+          lock.top < box.top ||
+          lock.left < box.left + box.width / 2
+        ) {
+          issues.push(`Card ${index}: lock is not inside the top-right corner`)
+        }
+        for (const content of contents) {
+          const rect = content.getBoundingClientRect()
+          if (
+            rect.left < lock.right &&
+            rect.right > lock.left &&
+            rect.top < lock.bottom &&
+            rect.bottom > lock.top
+          ) {
+            issues.push(`Card ${index}: lock overlaps ${content.className}`)
+          }
+        }
+      }
       for (const content of contents) {
         const rect = content.getBoundingClientRect()
         if (

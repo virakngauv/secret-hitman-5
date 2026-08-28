@@ -7,6 +7,7 @@ export type GameCard = {
   id: string
   word: string
   kind: CardKind
+  locked: boolean
   claimers: Array<{ playerId: string; name: string }>
 }
 
@@ -19,11 +20,24 @@ export function createPlayerBoard(seed: string, position: number): GameCard[] {
     `${seed}:assassin:${position}`,
     words.length,
   )
+  const [targetIndex, ...civilianIndices] = shuffle(
+    words.map((_, index) => index).filter((index) => index !== assassinIndex),
+    `${seed}:fixed-roles:${position}`,
+  ).slice(0, 3)
 
   return words.map((word, index) => ({
     id: `p${position}-card-${index}`,
     word,
-    kind: index === assassinIndex ? 'assassin' : 'civilian',
+    kind:
+      index === assassinIndex
+        ? 'assassin'
+        : index === targetIndex
+          ? 'target'
+          : 'civilian',
+    locked:
+      index === assassinIndex ||
+      index === targetIndex ||
+      civilianIndices.includes(index),
     claimers: [],
   }))
 }
@@ -31,7 +45,7 @@ export function createPlayerBoard(seed: string, position: number): GameCard[] {
 export function applyTargets(board: GameCard[], targetCardIds: string[]) {
   const targets = new Set(targetCardIds)
   for (const card of board) {
-    if (card.kind === 'assassin') continue
+    if (card.locked) continue
     card.kind = targets.has(card.id) ? 'target' : 'civilian'
   }
 }

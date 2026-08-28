@@ -314,15 +314,52 @@ describe('Socket.IO Secret Hitman protocol', () => {
       throw new Error('Expected boards for participating players.')
     }
     const hostTargets = hostHint.board
-      .filter(({ kind }) => kind === 'neutral')
+      .filter(({ kind }) => kind === 'target' || kind === 'neutral')
+      .sort((a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'))
       .slice(0, 2)
       .map(({ id }) => id)
     const guestTargets = guestHint.board
-      .filter(({ kind }) => kind === 'neutral')
+      .filter(({ kind }) => kind === 'target' || kind === 'neutral')
+      .sort((a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'))
       .slice(0, 3)
       .map(({ id }) => id)
     expect(hostTargets).toHaveLength(2)
     expect(guestTargets).toHaveLength(3)
+
+    const lockedCivilian = hostHint.board.find(
+      ({ kind }) => kind === 'civilian',
+    )!
+    for (const targetCardIds of [
+      hostTargets.slice(1),
+      [...hostTargets, lockedCivilian.id],
+    ]) {
+      expect(
+        await host.emitWithAck('game:submit-hint', {
+          roomCode,
+          hint: 'Invalid',
+          targetCardIds,
+        }),
+      ).toMatchObject({ status: 'invalid' })
+      expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toEqual(
+        hostHint,
+      )
+    }
+    host.disconnect()
+    const reconnectedHost = await connect(hostToken)
+    const resumed = await reconnectedHost.emitWithAck('session:resume', {
+      roomCode,
+    })
+    expect(resumed).toMatchObject({
+      status: 'success',
+      snapshot: {
+        status: 'hinting',
+        board: hostHint.board,
+        hintSubmitted: false,
+      },
+    })
+    reconnectedHost.disconnect()
+    host.connect()
+    await new Promise<void>((resolve) => host.once('connect', () => resolve()))
 
     expect(
       await host.emitWithAck('game:submit-hint', {
@@ -420,7 +457,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         const view = server.snapshot(token, roomCode)
         if (view.status !== 'hinting' || !view.board)
           throw new Error('Expected hinting board.')
-        const target = view.board.find(({ kind }) => kind === 'neutral')!
+        const target = view.board.find(({ kind }) => kind === 'target')!
         expect(
           server.submitHint(token, {
             roomCode,
@@ -546,7 +583,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
             roomCode,
             hint: 'Orbit',
             targetCardIds: view.board
-              .filter(({ kind }) => kind === 'neutral')
+              .filter(({ kind }) => kind === 'target' || kind === 'neutral')
+              .sort(
+                (a, b) =>
+                  Number(b.kind === 'target') - Number(a.kind === 'target'),
+              )
               .slice(0, 2)
               .map(({ id }) => id),
           }),

@@ -45,10 +45,12 @@ export default function RulesPage() {
               2. Build and lock in your clue
             </h2>
             <p>
-              You receive a private board of 12 words. One word is the locked
-              assassin: you cannot change its role. Select the words you want
-              your clue to connect as targets. Choose at least one target; every
-              other non-assassin word becomes a civilian.
+              You receive a private board of 12 words. One target, two
+              civilians, and the assassin are randomly locked: you cannot change
+              their roles. Build your clue around the fixed target and select
+              any of the eight remaining words as additional targets. Unselected
+              words become civilians. Your clue number includes the fixed
+              target.
             </p>
             <p className="mt-3">
               Enter your hint and select <strong>Lock in hint</strong>. The

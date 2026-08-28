@@ -280,16 +280,23 @@ export class GameRoom {
 
     const targetIds = new Set(payload.targetCardIds)
     const selectableIds = new Set(
-      seat.board.filter(({ kind }) => kind !== 'assassin').map(({ id }) => id),
+      seat.board
+        .filter(({ kind, locked }) => !locked || kind === 'target')
+        .map(({ id }) => id),
     )
     if (
       targetIds.size !== payload.targetCardIds.length ||
       targetIds.size < 1 ||
-      [...targetIds].some((cardId) => !selectableIds.has(cardId))
+      [...targetIds].some((cardId) => !selectableIds.has(cardId)) ||
+      seat.board.some(
+        ({ id, kind, locked }) =>
+          locked && kind === 'target' && !targetIds.has(id),
+      )
     ) {
       return {
         status: 'invalid',
-        message: 'Select at least one non-assassin word for your hint.',
+        message:
+          'Keep the locked target selected and leave locked civilians and the assassin unchanged.',
       }
     }
 
@@ -502,10 +509,11 @@ export class GameRoom {
         })),
         allHintsSubmitted: this.allHintsSubmitted(),
         board:
-          member.game?.board.map(({ id, word, kind }) => ({
+          member.game?.board.map(({ id, word, kind, locked }) => ({
             id,
             word,
-            kind: kind === 'assassin' ? 'assassin' : 'neutral',
+            kind: locked ? kind : 'neutral',
+            locked,
           })) ?? null,
         hintSubmitted: member.game?.hintSubmitted ?? false,
       }
