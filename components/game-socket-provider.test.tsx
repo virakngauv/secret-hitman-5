@@ -574,7 +574,6 @@ function lobbySnapshot(roomCode: string): RoomSnapshot {
   return {
     status: 'lobby',
     roomCode,
-    revision: 1,
     minimumPlayers: 2,
     members: [
       {

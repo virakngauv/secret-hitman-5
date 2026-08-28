@@ -218,7 +218,7 @@ export function GuessingScreen({
   view: GuessingView
   onClaimCard: (
     cardId: string,
-    revision: number,
+    turnId: string,
   ) => Promise<CommandResult<{ kind: CardKind }>>
   onFinishGuessing: () => Promise<CommandResult>
   onAdvanceTurn: () => Promise<CommandResult>
@@ -238,7 +238,7 @@ export function GuessingScreen({
   const claim = async (cardId: string) => {
     setBusyCard(cardId)
     setFeedback(null)
-    const result = await onClaimCard(cardId, view.revision)
+    const result = await onClaimCard(cardId, view.turnId)
     setBusyCard(null)
     if (result.status !== 'success') return setFeedback(result.message)
     setFeedback(
