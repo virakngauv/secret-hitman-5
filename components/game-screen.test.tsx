@@ -80,6 +80,68 @@ describe('HintPhaseScreen', () => {
 })
 
 describe('GuessingScreen messages', () => {
+  it.each([1, 2])(
+    'keeps the host action disabled until the server permits advancement on turn %s',
+    async (turnNumber) => {
+      const user = userEvent.setup()
+      const onAdvanceTurn = vi.fn().mockResolvedValue({ status: 'success' })
+      const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+        status: 'guessing',
+        roomCode: 'bcdf2',
+        revision: 4,
+        player: hintingView.player,
+        members: hintingView.members,
+        turnNumber,
+        totalTurns: 2,
+        clueGiverId: 'player-2',
+        clueGiverName: 'Grace',
+        hint: 'Garden',
+        hintNumber: 2,
+        board: [],
+        turnPlayers: [],
+        scoreboard: [],
+        canGuess: false,
+        canMarkDone: false,
+        canAdvanceTurn: false,
+      }
+      const props = {
+        onClaimCard: vi.fn(),
+        onFinishGuessing: vi.fn(),
+        onAdvanceTurn,
+      }
+      const { rerender } = render(<GuessingScreen view={view} {...props} />)
+      const button = screen.getByRole('button', {
+        name: turnNumber === 1 ? 'Next hint' : 'Finish the game',
+      })
+      expect(button).toBeDisabled()
+      expect(button).toHaveAccessibleDescription(
+        'Waiting for players to finish guessing.',
+      )
+      await user.click(button)
+      expect(onAdvanceTurn).not.toHaveBeenCalled()
+      rerender(
+        <GuessingScreen view={{ ...view, canAdvanceTurn: true }} {...props} />,
+      )
+      expect(button).toBeEnabled()
+      expect(button).toHaveAccessibleDescription(
+        'Everyone has finished guessing. Advance when the room is ready.',
+      )
+      expect(onAdvanceTurn).not.toHaveBeenCalled()
+      await user.click(button)
+      expect(onAdvanceTurn).toHaveBeenCalledOnce()
+      rerender(
+        <GuessingScreen
+          view={{ ...view, player: hintingView.members[1] }}
+          {...props}
+        />,
+      )
+      expect(
+        screen.queryByRole('button', { name: /Next hint|Finish the game/ }),
+      ).not.toBeInTheDocument()
+      expect(screen.queryByText('Host control')).not.toBeInTheDocument()
+    },
+  )
+
   it.each(['finish', 'advance'] as const)(
     'clears a stale error before a successful %s retry',
     async (command) => {

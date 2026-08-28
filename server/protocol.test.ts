@@ -457,7 +457,26 @@ describe('Socket.IO Secret Hitman protocol', () => {
         ).toEqual({ status: 'success', kind: ending })
       }
       const completed = server.snapshot(guestToken, roomCode)
+      expect(server.snapshot(hostToken, roomCode)).toMatchObject({
+        canAdvanceTurn: ending !== 'active',
+      })
+      const serverGuest = [...socketServer.io.sockets.sockets.values()].find(
+        (socket) => socket.data.token === guestToken,
+      )!
+      const disconnected = new Promise<void>((resolve) =>
+        serverGuest.once('disconnect', () => resolve()),
+      )
       guest.disconnect()
+      await disconnected
+      if (ending === 'active') {
+        expect(
+          await host.emitWithAck('game:advance-turn', { roomCode }),
+        ).toEqual({
+          status: 'invalid',
+          message: 'Waiting for players to finish guessing.',
+        })
+        expect(server.snapshot(guestToken, roomCode)).toEqual(completed)
+      }
       const reconnected = await connect(guestToken)
       const resumed = await reconnected.emitWithAck('session:resume', {
         roomCode,
@@ -477,6 +496,9 @@ describe('Socket.IO Secret Hitman protocol', () => {
       )
         throw new Error('Expected resumed guessing snapshot.')
       expect(resumed.snapshot).toEqual(completed)
+      expect(server.snapshot(hostToken, roomCode)).toMatchObject({
+        canAdvanceTurn: ending !== 'active',
+      })
       if (ending === 'pass') {
         expect(
           await reconnected.emitWithAck('game:finish-guessing', {
