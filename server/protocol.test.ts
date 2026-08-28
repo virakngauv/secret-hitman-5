@@ -327,7 +327,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(guestTargets).toHaveLength(3)
 
     const lockedCivilian = hostHint.board.find(
-      ({ kind }) => kind === 'civilian',
+      ({ kind, locked }) => kind === 'civilian' && locked,
     )!
     for (const targetCardIds of [
       hostTargets.slice(1),

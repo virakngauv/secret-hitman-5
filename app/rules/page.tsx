@@ -49,15 +49,15 @@ export default function RulesPage() {
               civilians, and the assassin are randomly locked: you cannot change
               their roles. Build your clue around the fixed target and select
               any of the eight remaining words as additional targets. Unselected
-              words become civilians. Your clue number includes the fixed
-              target.
+              words become civilians.
             </p>
             <p className="mt-3">
               Enter your hint and select <strong>Lock in hint</strong>. The
-              number of targets you selected becomes your hint’s number. For
-              example, a hint of “Orbit” with the number 2 tells the other
-              players to look for two connected targets. Keep your target
-              choices and the assassin’s location secret.
+              total target count, including the fixed target and any additional
+              targets you select, becomes your hint’s number. For example, a
+              hint of “Orbit” with the number 2 tells the other players to look
+              for two connected targets. Keep your target choices and the
+              assassin’s location secret.
             </p>
             <p className="mt-3">
               Once everyone has locked in a hint, the host selects{' '}
