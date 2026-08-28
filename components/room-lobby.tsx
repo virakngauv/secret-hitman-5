@@ -172,10 +172,6 @@ function LobbyScreen({
         <div className="lobby-grid">
           <section>
             <h1 className="page-title">Assemble the room.</h1>
-            <p className="page-subtitle max-w-xl">
-              Everyone who is here when the host starts will make one hint. Late
-              arrivals can still watch as spectators.
-            </p>
             <div className="mt-8 max-w-lg">
               <RoomInviteCard roomCode={view.roomCode} />
               <RoomInviteActions roomCode={view.roomCode} />

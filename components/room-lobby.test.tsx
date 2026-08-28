@@ -150,6 +150,12 @@ describe('RoomLobby invite prompt', () => {
     mocks.view = readyLobby()
     render(<RoomLobby roomCode="bcdf2" />)
 
+    expect(
+      screen.getByRole('heading', { name: 'Assemble the room.' }),
+    ).toBeVisible()
+    expect(screen.getByRole('main')).not.toHaveTextContent(
+      /Everyone who is here when the host starts|Late arrivals can still watch as spectators/i,
+    )
     expect(screen.getByRole('status')).toHaveTextContent(
       'Ready when the host is.',
     )
