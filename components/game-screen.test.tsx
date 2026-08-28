@@ -60,6 +60,11 @@ describe('HintPhaseScreen', () => {
       />,
     )
 
+    expect(screen.getByText('Start when all hints are locked.')).toBeVisible()
+    expect(screen.getByRole('main')).not.toHaveTextContent(/\btimers?\b/i)
+    expect(
+      screen.getByRole('button', { name: 'Start guessing' }),
+    ).toBeDisabled()
     const assassin = screen.getByRole('button', { name: /assassin.*poison/i })
     expect(assassin).toBeDisabled()
     await user.type(screen.getByLabelText('Your hint'), 'orbit')
@@ -118,6 +123,15 @@ describe('GuessingScreen messages', () => {
           onAdvanceTurn={action}
         />,
       )
+      expect(screen.getByRole('heading', { name: 'Scorecard' })).toBeVisible()
+      expect(screen.getByRole('main')).not.toHaveTextContent(
+        /\b(?:timers?|rounds?)\b/i,
+      )
+      if (command === 'advance') {
+        expect(
+          screen.getByText('Advance whenever the room is ready.'),
+        ).toBeVisible()
+      }
       const button = screen.getByRole('button', {
         name: command === 'finish' ? 'I’m done guessing' : 'Next hint',
       })
@@ -168,6 +182,10 @@ describe('FinishedScreen', () => {
       }
       render(<FinishedScreen view={view} />)
 
+      expect(screen.getByText('Game complete')).toBeVisible()
+      expect(screen.getByRole('main')).not.toHaveTextContent(
+        /\b(?:timers?|rounds?)\b/i,
+      )
       const rows = within(screen.getByRole('list')).getAllByRole('listitem')
       expect(rows).toHaveLength(scores.length)
       rows.forEach((row, index) => {

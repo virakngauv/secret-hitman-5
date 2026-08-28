@@ -20,7 +20,7 @@ export default function HomePage() {
       </div>
 
       <div className="relative z-10 w-full max-w-5xl">
-        <p className="page-eyebrow">A social word game · One decisive round</p>
+        <p className="page-eyebrow">A social word game</p>
         <section className="home-card">
           <div>
             <span className="brand-sight home-brand-sight" aria-hidden="true">
@@ -33,7 +33,7 @@ export default function HomePage() {
             </h1>
             <p className="home-deck">
               Build a clue from twelve words. Avoid the frozen assassin. Then
-              take your shot—at the host’s pace, with no timer.
+              take your shot at the host’s pace.
             </p>
           </div>
           <div className="home-actions">
@@ -60,8 +60,6 @@ export default function HomePage() {
             <div className="home-rules">
               <span>12 WORDS</span>
               <span>1 ASSASSIN</span>
-              <span>1 ROUND</span>
-              <span>0 TIMERS</span>
             </div>
           </div>
         </section>

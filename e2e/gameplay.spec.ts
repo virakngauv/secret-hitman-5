@@ -29,9 +29,7 @@ test.describe('Secret Hitman single round', () => {
         await joinRoom(guest, roomCode, 'Grace')
         await joinRoom(third, roomCode, 'Linus')
         await expect(host.getByText('Linus', { exact: true })).toBeVisible()
-        await host
-          .getByRole('button', { name: 'Start the single round' })
-          .click()
+        await host.getByRole('button', { name: 'Start game' }).click()
         await makeHint(host, 'Orbit', 2)
         await makeHint(guest, 'Garden', 2)
         await makeHint(third, 'Metal', 2)
@@ -187,7 +185,7 @@ test.describe('Secret Hitman single round', () => {
       await guest.getByLabel('Name').fill('Grace')
       await guest.getByRole('button', { name: 'Join' }).click()
       await expect(host.getByText('Grace', { exact: true })).toBeVisible()
-      await host.getByRole('button', { name: 'Start the single round' }).click()
+      await host.getByRole('button', { name: 'Start game' }).click()
 
       await makeHint(host, 'Orbit', 2)
       await makeHint(guest, 'Garden', 3)
@@ -220,7 +218,7 @@ test.describe('Secret Hitman single round', () => {
       await expect(host.getByText('Garden', { exact: true })).toBeVisible()
       await host.getByRole('button', { name: 'Finish the game' }).click()
 
-      await expect(host.getByText('Single round complete')).toBeVisible()
+      await expect(host.getByText('Game complete')).toBeVisible()
       await expect(guest.getByText('Final standings')).toBeVisible()
       await expect(spectator.getByText('Final standings')).toBeVisible()
     } finally {

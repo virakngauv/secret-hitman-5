@@ -9,7 +9,11 @@ describe('HomePage', () => {
 
     expect(screen.getByRole('heading', { name: 'Secret Hitman' })).toBeVisible()
     expect(screen.getByText('12 WORDS')).toBeVisible()
-    expect(screen.getByText('0 TIMERS')).toBeVisible()
+    expect(screen.getByText('1 ASSASSIN')).toBeVisible()
+    expect(screen.getByText('A social word game')).toBeVisible()
+    expect(screen.getByRole('main')).not.toHaveTextContent(
+      /\b(?:timers?|rounds?)\b/i,
+    )
     expect(screen.queryByText('Play together')).not.toBeInTheDocument()
     expect(screen.queryByText(/prototype/i)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Create a room' })).toHaveAttribute(

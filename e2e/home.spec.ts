@@ -7,7 +7,7 @@ for (const viewport of [
 ]) {
   test(`home shares the app backdrop and preserves navigation at ${viewport.width}px`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.setViewportSize(viewport)
     await page.goto('/home')
 
@@ -15,6 +15,30 @@ for (const viewport of [
     await expect(
       page.getByRole('heading', { name: 'Secret Hitman' }),
     ).toBeVisible()
+    await expect(main).not.toContainText(/\b(?:timers?|rounds?)\b/i)
+    await expect(
+      page.getByText('A social word game', { exact: true }),
+    ).toBeVisible()
+    const stats = page.locator('.home-rules > span')
+    await expect(stats).toHaveText(['12 WORDS', '1 ASSASSIN'])
+    const statBounds = await stats.evaluateAll((elements) =>
+      elements.map((element) => {
+        const { x, y, width, height } = element.getBoundingClientRect()
+        return { x, y, width, height }
+      }),
+    )
+    expect(statBounds[0].y).toBeCloseTo(statBounds[1].y, 0)
+    expect(statBounds[0].width).toBeCloseTo(statBounds[1].width, 0)
+    for (const bounds of statBounds) {
+      expect(bounds.width).toBeGreaterThan(0)
+      expect(bounds.height).toBeGreaterThan(0)
+      expect(bounds.x).toBeGreaterThanOrEqual(0)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width)
+    }
+    await testInfo.attach(`home-${viewport.width}px`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    })
     // A transparent home stage exposes the same body backdrop as other routes.
     await expect(main).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
     await expect(main).toHaveCSS('background-image', 'none')
