@@ -446,6 +446,12 @@ export class GameRoom {
         message: 'The game is not in the guessing phase.',
       }
     }
+    if (this.hasActiveGuessers()) {
+      return {
+        status: 'invalid',
+        message: 'Waiting for players to finish guessing.',
+      }
+    }
 
     const game = this.requireGame()
     if (game.turnIndex >= game.playerOrder.length - 1) {
@@ -596,7 +602,7 @@ export class GameRoom {
         Boolean(member.game) &&
         member !== clueGiver &&
         member.game?.turnState === 'guessing',
-      canAdvanceTurn: member.role === 'host',
+      canAdvanceTurn: member.role === 'host' && !this.hasActiveGuessers(),
     }
   }
 
@@ -690,6 +696,16 @@ export class GameRoom {
 
   private allHintsSubmitted() {
     return this.gamePlayers().every(({ game }) => game?.hintSubmitted)
+  }
+
+  private hasActiveGuessers() {
+    const clueGiver = this.currentClueGiver()
+    return this.gamePlayers().some(
+      (player) =>
+        player.active &&
+        player !== clueGiver &&
+        player.game?.turnState === 'guessing',
+    )
   }
 
   private allTargetsClaimed() {

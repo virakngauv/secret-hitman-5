@@ -214,8 +214,26 @@ test.describe('Secret Hitman single round', () => {
       await expect(guest.getByText(/Target found/)).toBeVisible()
       await expect(guest.locator('.score-value')).toHaveText(['1', '1'])
 
+      const nextHint = host.getByRole('button', { name: 'Next hint' })
+      await expect(nextHint).toBeDisabled()
+      await expect(
+        host.getByText('Waiting for players to finish guessing.'),
+      ).toBeVisible()
+      await host.reload()
+      await guest.reload()
+      await expect(nextHint).toBeDisabled()
+      await guest.getByRole('button', { name: 'I’m done guessing' }).click()
+      await expect(nextHint).toBeEnabled()
+      await expect(host.getByText('Orbit', { exact: true })).toBeVisible()
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(host.getByText('Garden', { exact: true })).toBeVisible()
+      await expect(
+        host.getByRole('button', { name: 'Finish the game' }),
+      ).toBeDisabled()
+      await host.getByRole('button', { name: 'I’m done guessing' }).click()
+      await expect(
+        host.getByRole('button', { name: 'Finish the game' }),
+      ).toBeEnabled()
       await host.getByRole('button', { name: 'Finish the game' }).click()
 
       await expect(host.getByText('Game complete')).toBeVisible()
