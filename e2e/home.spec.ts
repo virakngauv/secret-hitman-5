@@ -19,22 +19,12 @@ for (const viewport of [
     await expect(
       page.getByText('A social word game', { exact: true }),
     ).toBeVisible()
-    const stats = page.locator('.home-rules > span')
-    await expect(stats).toHaveText(['12 WORDS', '1 ASSASSIN'])
-    const statBounds = await stats.evaluateAll((elements) =>
-      elements.map((element) => {
-        const { x, y, width, height } = element.getBoundingClientRect()
-        return { x, y, width, height }
-      }),
+    await expect(main).not.toContainText(
+      /12 words|1 assassin|build a clue|choose your entry/i,
     )
-    expect(statBounds[0].y).toBeCloseTo(statBounds[1].y, 0)
-    expect(statBounds[0].width).toBeCloseTo(statBounds[1].width, 0)
-    for (const bounds of statBounds) {
-      expect(bounds.width).toBeGreaterThan(0)
-      expect(bounds.height).toBeGreaterThan(0)
-      expect(bounds.x).toBeGreaterThanOrEqual(0)
-      expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width)
-    }
+    await expect(
+      page.getByRole('link', { name: 'Rules', exact: true }),
+    ).toBeVisible()
     await testInfo.attach(`home-${viewport.width}px`, {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',

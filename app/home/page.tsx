@@ -31,13 +31,8 @@ export default function HomePage() {
               <br />
               HITMAN
             </h1>
-            <p className="home-deck">
-              Build a clue from twelve words. Avoid the frozen assassin. Then
-              take your shot at the host’s pace.
-            </p>
           </div>
           <div className="home-actions">
-            <p className="home-action-label">Choose your entry</p>
             <div className="grid gap-3">
               <Button asChild className="h-12 w-full text-base">
                 <Link href="/create">Create a room</Link>
@@ -56,10 +51,6 @@ export default function HomePage() {
               >
                 <Link href="/rules">Rules</Link>
               </Button>
-            </div>
-            <div className="home-rules">
-              <span>12 WORDS</span>
-              <span>1 ASSASSIN</span>
             </div>
           </div>
         </section>
