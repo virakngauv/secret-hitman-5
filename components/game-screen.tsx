@@ -379,16 +379,23 @@ export function GuessingScreen({
             </p>
           ) : null}
 
-          {view.canAdvanceTurn ? (
+          {view.player.role === 'host' ? (
             <div className="host-control">
               <p className="host-control-label">Host control</p>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Advance whenever the room is ready. There is no timer.
+              <p
+                id="host-advance-status"
+                role="status"
+                className="mt-1 text-sm text-[var(--muted-foreground)]"
+              >
+                {view.canAdvanceTurn
+                  ? 'Everyone has finished guessing. Advance when the room is ready.'
+                  : 'Waiting for players to finish guessing.'}
               </p>
               <Button
                 className="mt-4 w-full"
                 onClick={() => void advance()}
-                disabled={isAdvancing}
+                disabled={isAdvancing || !view.canAdvanceTurn}
+                aria-describedby="host-advance-status"
               >
                 {isAdvancing
                   ? 'Advancing…'
