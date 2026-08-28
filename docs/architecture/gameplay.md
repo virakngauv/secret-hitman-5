@@ -12,7 +12,7 @@ hinting
 guessing
   ├─ one clue-giver turn per starting player
   ├─ players guess, stop voluntarily, or stop on civilian/assassin
-  └─ host advances every turn manually
+  └─ host advances manually only after all eligible pickers finish
        ↓
 finished
   └─ reveal the final board and final standings
@@ -32,6 +32,14 @@ The server synchronously accepts claims against current turn and card state. Tar
 Snapshot revisions from the current turn remain valid for claims, so simultaneous assassin picks do not invalidate one another. Revisions predating the current guessing turn or ahead of the server are rejected. Turn eligibility, card ownership, and scoring are always checked/applied on the server. Advancing resets turn eligibility and the minimum accepted revision; a previous private reveal does not expose the next board.
 
 Pass commands also carry a snapshot revision. A repeated pass within the same turn succeeds without changing scores, revision, or room lifetime; a delayed pass from an earlier turn is rejected. This state-setting operation does not need a separate command-result cache. Protocol version 3 requires this payload: deploy the frontend and game server together, and reload older clients to reconnect.
+
+## Host advancement
+
+Both “Next hint” and “Finish the game” require every eligible picker on the current board to finish. The server checks current state before changing the turn or phase, and snapshots drive the host's disabled control and waiting message. A stale client or a repeated advance cannot skip an active guessing turn. Rejected advancement does not change the board, scores, player turns, revision, or room activity time.
+
+Passing, selecting a civilian/assassin, or explicitly leaving completes that picker's turn. Claiming the last target completes all pickers, so no extra passes are required. The clue-giver, spectators, and inactive seats do not block advancement; a host who is also a picker must finish along with everyone else. Completion enables the host action without automatically advancing.
+
+Temporary disconnects do not change membership or guessing eligibility and therefore continue to block advancement until the picker reconnects and finishes, or all targets are found. There is no timeout-based abandonment or host force-advance override. Explicit leave preserves its existing finish-turn behavior; rejoining does not reopen guessing on that board.
 
 ## Membership
 

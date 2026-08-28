@@ -59,7 +59,140 @@ function startTwoPlayerGame(withThirdPlayer = false) {
   return room
 }
 
+function finishActiveGuessers(room: GameRoom) {
+  for (const token of [hostToken, guestToken, thirdToken]) {
+    const view = room.snapshotFor(token)
+    if (view.status === 'guessing' && view.canMarkDone) {
+      expect(
+        room.finishGuessing(token, {
+          roomCode: room.code,
+          revision: view.revision,
+        }),
+      ).toEqual({ status: 'success' })
+    }
+  }
+}
+
 describe('GameRoom single-round flow', () => {
+  it('rejects advancement without effects until the last eligible picker finishes', () => {
+    const room = startTwoPlayerGame(true)
+    const spectator = 'd'.repeat(32)
+    room.join(spectator, 'Spectator')
+    const payload = { roomCode: room.code, revision: guessing(room).revision }
+    expect(room.finishGuessing(guestToken, payload)).toEqual({
+      status: 'success',
+    })
+    const tokens = [hostToken, guestToken, thirdToken, spectator]
+    const before = tokens.map((token) => room.snapshotFor(token))
+    const activity = room.lastMeaningfulActivityAt
+    expect(guessing(room).canAdvanceTurn).toBe(false)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(room.advanceTurn(hostToken)).toEqual({
+        status: 'invalid',
+        message: 'Waiting for players to finish guessing.',
+      })
+      expect(tokens.map((token) => room.snapshotFor(token))).toEqual(before)
+      expect(room.lastMeaningfulActivityAt).toBe(activity)
+    }
+    // Both passes may arrive from the same snapshot; current eligibility wins.
+    expect(room.finishGuessing(thirdToken, payload)).toEqual({
+      status: 'success',
+    })
+    expect(guessing(room).canAdvanceTurn).toBe(true)
+    expect(guessing(room).turnNumber).toBe(1)
+    expect(guessing(room, guestToken).canAdvanceTurn).toBe(false)
+    expect(guessing(room, spectator).canAdvanceTurn).toBe(false)
+    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    // A delayed retry from the now-completed turn cannot skip new pickers.
+    const next = guessing(room)
+    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(guessing(room)).toEqual(next)
+  })
+
+  it('keeps a finished host waiting for other pickers', () => {
+    const room = startTwoPlayerGame(true)
+    finishActiveGuessers(room)
+    room.advanceTurn(hostToken)
+    room.finishGuessing(hostToken, {
+      roomCode: room.code,
+      revision: guessing(room).revision,
+    })
+    expect(guessing(room).canGuess).toBe(false)
+    expect(guessing(room).canAdvanceTurn).toBe(false)
+    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    room.finishGuessing(thirdToken, {
+      roomCode: room.code,
+      revision: guessing(room).revision,
+    })
+    expect(guessing(room).canAdvanceTurn).toBe(true)
+    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+  })
+
+  it.each(['civilian', 'assassin'] as const)(
+    'enables advancement after the final picker selects a %s',
+    (kind) => {
+      const room = startTwoPlayerGame()
+      const before = guessing(room)
+      const card = before.board.find(
+        ({ revealedKind }) => revealedKind === kind,
+      )!
+      expect(
+        room.claimCard(guestToken, {
+          roomCode: room.code,
+          revision: before.revision,
+          cardId: card.id,
+          commandId: 'last-picker',
+        }),
+      ).toEqual({ status: 'success', kind })
+      expect(guessing(room).canAdvanceTurn).toBe(true)
+      expect(guessing(room).turnNumber).toBe(1)
+      expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    },
+  )
+
+  it('enables advancement when racing claims find every target without requiring passes', () => {
+    const room = startTwoPlayerGame(true)
+    const before = guessing(room)
+    const targets = before.board.filter(
+      ({ revealedKind }) => revealedKind === 'target',
+    )
+    for (const [index, card] of targets.entries()) {
+      const payload = {
+        roomCode: room.code,
+        revision: before.revision,
+        cardId: card.id,
+        commandId: `target-${index}`,
+      }
+      const token = index === 0 ? guestToken : thirdToken
+      expect(room.claimCard(token, payload)).toEqual({
+        status: 'success',
+        kind: 'target',
+      })
+      const after = guessing(room)
+      expect(after.canAdvanceTurn).toBe(index === targets.length - 1)
+      expect(room.claimCard(token, payload)).toEqual({
+        status: 'success',
+        kind: 'target',
+      })
+      expect(guessing(room)).toEqual(after)
+    }
+    expect(guessing(room).turnNumber).toBe(1)
+    for (const token of [guestToken, thirdToken]) {
+      expect(guessing(room, token).canGuess).toBe(false)
+    }
+    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+  })
+
+  it('does not wait on explicitly departed pickers or reopen their turn on rejoin', () => {
+    const room = startTwoPlayerGame()
+    room.leave(guestToken)
+    expect(guessing(room).canAdvanceTurn).toBe(true)
+    room.join(guestToken, 'Grace')
+    expect(guessing(room, guestToken).canGuess).toBe(false)
+    expect(guessing(room).canAdvanceTurn).toBe(true)
+    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+  })
+
   it('acknowledges repeated passes without effects and rejects passes from another turn', () => {
     const room = startTwoPlayerGame(true)
     const payload = { roomCode: room.code, revision: guessing(room).revision }
@@ -81,8 +214,10 @@ describe('GameRoom single-round flow', () => {
     })
     expect(guessing(room, guestToken)).toEqual(after)
     expect(room.lastMeaningfulActivityAt).toBe(2_000)
-    room.advanceTurn(hostToken)
-    room.advanceTurn(hostToken)
+    finishActiveGuessers(room)
+    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    finishActiveGuessers(room)
+    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
     const next = guessing(room, guestToken)
     expect(next.canGuess).toBe(true)
     expect(room.finishGuessing(guestToken, payload)).toMatchObject({
@@ -193,8 +328,10 @@ describe('GameRoom single-round flow', () => {
         }),
       ).toEqual({ status: 'success', kind: 'target' })
 
-      room.advanceTurn(hostToken)
-      room.advanceTurn(hostToken)
+      finishActiveGuessers(room)
+      expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+      finishActiveGuessers(room)
+      expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
       const next = guessing(room, guestToken)
       expect(next.clueGiverName).toBe('Linus')
       expect(next.canGuess).toBe(true)
@@ -521,9 +658,16 @@ describe('GameRoom single-round flow', () => {
   it('lets only the host advance each clue and finishes after every starting player has one turn', () => {
     const room = startTwoPlayerGame()
     expect(room.advanceTurn(guestToken)).toMatchObject({ status: 'forbidden' })
+    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    finishActiveGuessers(room)
     expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
     expect(guessing(room).turnNumber).toBe(2)
     expect(guessing(room).clueGiverName).toBe('Grace')
+    const finalTurn = guessing(room)
+    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(guessing(room)).toEqual(finalTurn)
+    finishActiveGuessers(room)
+    expect(guessing(room).canAdvanceTurn).toBe(true)
     expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
 
     const finished = room.snapshotFor(hostToken)
