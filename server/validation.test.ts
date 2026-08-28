@@ -3,6 +3,7 @@ import { GAME_PROTOCOL_VERSION } from '../lib/game-protocol'
 
 import {
   MAX_HINT_LENGTH,
+  parseClaimCard,
   parseFinishGuessing,
   parseHandshakeAuth,
   parseHint,
@@ -11,29 +12,50 @@ import {
   parseSubmitHint,
 } from './validation'
 
-describe('versioned pass commands', () => {
-  it('normalizes the room and requires a valid revision', () => {
-    expect(parseFinishGuessing({ roomCode: ' BCDF2 ', revision: 5 })).toEqual({
-      roomCode: 'bcdf2',
-      revision: 5,
-    })
-    for (const revision of [
-      undefined,
-      null,
-      '5',
-      -1,
-      1.5,
-      Infinity,
-      NaN,
-      Number.MAX_SAFE_INTEGER + 1,
-    ]) {
-      expect(parseFinishGuessing({ roomCode: 'bcdf2', revision })).toBeNull()
-    }
-    expect(parseFinishGuessing(null)).toBeNull()
-    expect(parseFinishGuessing({ roomCode: 'bad', revision: 5 })).toBeNull()
-  })
+describe('turn-bound commands', () => {
+  const turnId = 'abcdef01-2345-4abc-8def-0123456789ab'
+  const claim = { commandId: 'claim-123', cardId: 'p0-card-0' }
 
-  it('rejects older clients that cannot send the turn-bound pass payload', () => {
+  it.each([parseFinishGuessing, parseClaimCard])(
+    'normalizes rooms and accepts only a UUID turn identity: %s',
+    (parse) => {
+      const extra = parse === parseClaimCard ? claim : {}
+      expect(parse({ roomCode: ' BCDF2 ', turnId, ...extra })).toEqual({
+        roomCode: 'bcdf2',
+        turnId,
+        ...extra,
+      })
+      for (const invalidId of [
+        undefined,
+        null,
+        5,
+        -1,
+        {},
+        '',
+        'turn-1',
+        turnId + 'a',
+        ' ' + turnId,
+        turnId.toUpperCase(),
+        'a'.repeat(1_000),
+      ]) {
+        expect(
+          parse({ roomCode: 'bcdf2', turnId: invalidId, ...extra }),
+        ).toBeNull()
+      }
+      expect(
+        parse({
+          roomCode: 'bcdf2',
+          turnId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+          ...extra,
+        }),
+      ).toBeNull()
+      expect(parse(null)).toBeNull()
+      expect(parse({ roomCode: 'bad', turnId, ...extra })).toBeNull()
+      expect(parse({ roomCode: 'bcdf2', revision: 5, ...extra })).toBeNull()
+    },
+  )
+
+  it('rejects older clients that cannot send the turn-bound payload', () => {
     const token = 'a'.repeat(32)
     expect(
       parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),

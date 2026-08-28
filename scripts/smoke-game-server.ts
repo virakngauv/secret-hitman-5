@@ -90,7 +90,7 @@ try {
     .emitWithAck('game:claim-card', {
       roomCode,
       commandId: randomUUID(),
-      revision: guestState.revision,
+      turnId: guestState.turnId,
       cardId: hostTargets[0]!,
     })
   if (guestClaim.status !== 'success') throw new Error(guestClaim.message)
@@ -108,6 +108,13 @@ try {
   if (resumed.status !== 'success' || resumed.snapshot?.status !== 'guessing') {
     throw new Error('Host could not restore the current snapshot.')
   }
+  if (
+    resumed.snapshot.turnId !== hostState.turnId ||
+    JSON.stringify(resumed.snapshot.scoreboard) !==
+      JSON.stringify(afterGuestScore.scoreboard)
+  ) {
+    throw new Error('Reconnect did not preserve the turn and scores.')
+  }
   if (!ROOM_CODE_PATTERN.test(roomCode))
     throw new Error('Invalid room code returned.')
 
@@ -117,8 +124,7 @@ try {
       health: true,
       wssClients: 2,
       roomCodePatternValid: true,
-      initialRevision: hostState.revision,
-      finalRevision: resumed.snapshot.revision,
+      turnIdentityRestored: true,
     }),
   )
 } finally {

@@ -17,6 +17,8 @@ export const CLIENT_TOKEN_PATTERN = /^[0-9a-f]{32}$/
 export { ROOM_CODE_PATTERN }
 export const COMMAND_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 export const PLAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+export const TURN_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 export const CARD_ID_PATTERN = /^p\d{1,2}-card-\d{1,2}$/
 export const MAX_PLAYER_NAME_LENGTH = 50
 export const MAX_HINT_LENGTH = 40
@@ -69,9 +71,9 @@ export function parseFinishGuessing(
   if (!isRecord(value)) return null
   const room = parseRoomCommand(value)
   return room &&
-    Number.isSafeInteger(value.revision) &&
-    (value.revision as number) >= 0
-    ? { ...room, revision: value.revision as number }
+    typeof value.turnId === 'string' &&
+    TURN_ID_PATTERN.test(value.turnId)
+    ? { ...room, turnId: value.turnId }
     : null
 }
 
@@ -115,8 +117,8 @@ export function parseClaimCard(value: unknown): ClaimCardPayload | null {
     !roomCode ||
     typeof value.commandId !== 'string' ||
     !COMMAND_ID_PATTERN.test(value.commandId) ||
-    !Number.isInteger(value.revision) ||
-    (value.revision as number) < 0 ||
+    typeof value.turnId !== 'string' ||
+    !TURN_ID_PATTERN.test(value.turnId) ||
     typeof value.cardId !== 'string' ||
     !CARD_ID_PATTERN.test(value.cardId)
   ) {
@@ -126,7 +128,7 @@ export function parseClaimCard(value: unknown): ClaimCardPayload | null {
   return {
     roomCode,
     commandId: value.commandId,
-    revision: value.revision as number,
+    turnId: value.turnId,
     cardId: value.cardId,
   }
 }
