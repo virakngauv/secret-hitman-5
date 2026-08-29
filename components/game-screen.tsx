@@ -10,6 +10,7 @@ import {
   type CommandResult,
   type RoomSnapshot,
 } from '@/lib/game-protocol'
+import { getDenseRanks } from '@/lib/scoreboard'
 import { cn } from '@/lib/utils'
 
 type HintingView = Extract<RoomSnapshot, { status: 'hinting' }>
@@ -412,6 +413,7 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
   const players = [...view.scoreboard]
     .filter(({ participation }) => participation === 'player')
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
+  const ranks = getDenseRanks(players.map(({ score }) => score))
   const winnerNames = view.winners.map(({ name }) => name).join(' & ')
 
   return (
@@ -468,11 +470,11 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
         <aside className="game-panel game-sidebar">
           <h2 className="sidebar-title">Final standings</h2>
           <ol className="mt-4 grid gap-2">
-            {players.map((player) => {
-              const place =
-                players.findIndex(
-                  ({ score }) => (score ?? 0) === (player.score ?? 0),
-                ) + 1
+            {players.map((player, index) => {
+              const place = ranks[index]
+              const medal = ['🥇', '🥈', '🥉'][place - 1]
+              const placeName = ['First', 'Second', 'Third'][place - 1]
+              const placeLabel = medal ? `${placeName} place` : `Place ${place}`
               return (
                 <li
                   className={cn('score-row', place === 1 && 'score-row-winner')}
@@ -482,8 +484,14 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
                     <span className="block truncate font-semibold">
                       {player.name}
                     </span>
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      {place === 1 ? 'Top score' : `Place ${place}`}
+                    <span className="score-placement text-xs text-[var(--muted-foreground)]">
+                      {medal ? (
+                        <>
+                          <span aria-hidden="true">{medal}</span> {placeLabel}
+                        </>
+                      ) : (
+                        placeLabel
+                      )}
                     </span>
                   </div>
                   <span className="score-value">{player.score}</span>
