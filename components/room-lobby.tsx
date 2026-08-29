@@ -170,9 +170,9 @@ function LobbyScreen({
         </header>
 
         <div className="lobby-grid">
-          <section>
-            <h1 className="page-title">Assemble the room.</h1>
-            <div className="mt-8 max-w-lg">
+          <section className="min-w-0">
+            <h1 className="page-title text-center">Assemble the room.</h1>
+            <div className="mx-auto w-full max-w-lg">
               <RoomInviteCard roomCode={view.roomCode} />
               <RoomInviteActions roomCode={view.roomCode} />
             </div>
