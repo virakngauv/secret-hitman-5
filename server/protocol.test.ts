@@ -813,15 +813,6 @@ describe('Socket.IO Secret Hitman protocol', () => {
     const roomCode = created.roomCode
     await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
 
-    expect(socketServer.gameServer.snapshot(spectatorToken, roomCode)).toEqual({
-      status: 'joinable',
-      roomCode,
-      joinsAsSpectator: false,
-    })
-    expect(
-      socketServer.gameServer.startGame(spectatorToken, roomCode),
-    ).toMatchObject({ status: 'forbidden' })
-
     // This second socket represents a token copied out of the host browser.
     // The protocol cannot distinguish it from a legitimate reconnect.
     const replayedHost = await connect(hostToken)
@@ -838,6 +829,37 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(await replayedHost.emitWithAck('game:start', { roomCode })).toEqual({
       status: 'success',
     })
+
+    const spectator = await connect(spectatorToken)
+    expect(
+      await spectator.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({
+      status: 'success',
+      snapshot: {
+        status: 'joinable',
+        roomCode,
+        joinsAsSpectator: true,
+      },
+    })
+    expect(
+      await spectator.emitWithAck('room:join', {
+        roomCode,
+        name: 'Spectator',
+      }),
+    ).toEqual({ status: 'success', roomCode })
+    expect(
+      await spectator.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({
+      status: 'success',
+      snapshot: {
+        status: 'hinting',
+        player: { participation: 'spectator' },
+        board: null,
+      },
+    })
+    expect(
+      await spectator.emitWithAck('game:start', { roomCode }),
+    ).toMatchObject({ status: 'forbidden' })
 
     const replayedHinting = await replayedHost.emitWithAck('session:resume', {
       roomCode,
@@ -861,6 +883,10 @@ describe('Socket.IO Secret Hitman protocol', () => {
       .filter(({ kind }) => kind === 'neutral')
       .slice(0, 2)
       .map(({ id }) => id)
+    expect(replayedTargets).toHaveLength(2)
+    expect(new Set(replayedTargets).size).toBe(2)
+    expect(guestTargets).toHaveLength(2)
+    expect(new Set(guestTargets).size).toBe(2)
 
     expect(
       await replayedHost.emitWithAck('game:submit-hint', {
