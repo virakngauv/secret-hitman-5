@@ -171,12 +171,7 @@ function LobbyScreen({
 
         <div className="lobby-grid">
           <section>
-            <p className="page-eyebrow">One round · No timers</p>
             <h1 className="page-title">Assemble the room.</h1>
-            <p className="page-subtitle max-w-xl">
-              Everyone who is here when the host starts will make one hint. Late
-              arrivals can still watch as spectators.
-            </p>
             <div className="mt-8 max-w-lg">
               <RoomInviteCard roomCode={view.roomCode} />
               <RoomInviteActions roomCode={view.roomCode} />
@@ -235,7 +230,7 @@ function LobbyScreen({
                 disabled={!canStart || isActing}
                 onClick={() => void onStart()}
               >
-                {isActing ? 'Starting…' : 'Start the single round'}
+                {isActing ? 'Starting…' : 'Start game'}
               </Button>
             ) : (
               <div className="waiting-host">Waiting for the host to start</div>

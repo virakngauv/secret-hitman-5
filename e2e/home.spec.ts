@@ -7,7 +7,7 @@ for (const viewport of [
 ]) {
   test(`home shares the app backdrop and preserves navigation at ${viewport.width}px`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.setViewportSize(viewport)
     await page.goto('/home')
 
@@ -15,6 +15,20 @@ for (const viewport of [
     await expect(
       page.getByRole('heading', { name: 'Secret Hitman' }),
     ).toBeVisible()
+    await expect(main).not.toContainText(/\b(?:timers?|rounds?)\b/i)
+    await expect(
+      page.getByText('A social word game', { exact: true }),
+    ).toBeVisible()
+    await expect(main).not.toContainText(
+      /12 words|1 assassin|build a clue|choose your entry/i,
+    )
+    await expect(
+      page.getByRole('link', { name: 'Rules', exact: true }),
+    ).toBeVisible()
+    await testInfo.attach(`home-${viewport.width}px`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    })
     // A transparent home stage exposes the same body backdrop as other routes.
     await expect(main).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
     await expect(main).toHaveCSS('background-image', 'none')

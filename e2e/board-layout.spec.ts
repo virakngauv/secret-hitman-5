@@ -29,7 +29,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await guest.getByLabel('Name').fill('Grace Layout')
     await guest.getByRole('button', { name: 'Join', exact: true }).click()
     await expect(host.getByText('Grace Layout', { exact: true })).toBeVisible()
-    await host.getByRole('button', { name: 'Start the single round' }).click()
+    await host.getByRole('button', { name: 'Start game' }).click()
 
     await expect(host.getByLabel('Your twelve word board')).toBeVisible()
     await expect(host.locator('[data-card-kind="assassin"]')).toBeDisabled()

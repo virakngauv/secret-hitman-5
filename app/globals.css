@@ -125,14 +125,6 @@ input {
   line-height: 0.78;
 }
 
-.home-deck {
-  max-width: 38rem;
-  margin-top: 2rem;
-  color: var(--muted-foreground);
-  font-size: clamp(1rem, 2vw, 1.2rem);
-  line-height: 1.65;
-}
-
 .home-actions {
   border-radius: 1.5rem;
   background: var(--card);
@@ -141,7 +133,6 @@ input {
   box-shadow: 0 1.2rem 3.5rem rgb(49 41 24 / 8%);
 }
 
-.home-action-label,
 .page-eyebrow,
 .clue-label,
 .host-control-label,
@@ -150,24 +141,6 @@ input {
   font-weight: 900;
   letter-spacing: 0.17em;
   text-transform: uppercase;
-}
-
-.home-action-label {
-  margin: 0 0 1rem;
-  color: var(--muted-foreground);
-}
-
-.home-rules {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem 1rem;
-  margin-top: 1.5rem;
-  border-top: 1px solid var(--border);
-  padding-top: 1rem;
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 700;
 }
 
 .home-brand-sight {

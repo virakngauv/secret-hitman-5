@@ -7,7 +7,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Secret Hitman',
-  description: 'A one-round, host-driven word game for friends.',
+  description: 'A host-driven word game for friends.',
 }
 
 export const viewport: Viewport = {
