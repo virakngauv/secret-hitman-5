@@ -20,13 +20,47 @@ for (const viewport of [
       '4. Count the points',
       '5. Finish the game',
     ])
-    await expect(page.getByText('Assassin · −3 each')).toBeVisible()
+    await expect(
+      page.getByText(
+        'Each means the picker and clue master receive the same score change.',
+      ),
+    ).toBeVisible()
+
+    const roleTable = page.getByRole('table', {
+      name: 'Role scoring and effects',
+    })
+    await expect(roleTable).toBeVisible()
+    await expect(roleTable.getByRole('columnheader')).toHaveText([
+      'Role',
+      'Points',
+      'Effect',
+      'Locked tiles',
+    ])
+    await expect(roleTable.getByRole('rowheader')).toHaveText([
+      'Target',
+      'Civilian',
+      'Assassin',
+    ])
+    await expect(roleTable.getByRole('row').nth(1)).toContainText(
+      'Target+2 eachKeep going.No target tiles start locked; the clue master can select at most 5 targets total.',
+    )
+    await expect(roleTable.getByRole('row').nth(2)).toContainText(
+      'Civilian−1 eachThe player who selected it stops guessing.3 randomly selected civilian tiles start locked.',
+    )
+    await expect(roleTable.getByRole('row').nth(3)).toContainText(
+      'Assassin−3 eachThe board ends globally for everyone.1 randomly selected assassin tile starts locked.',
+    )
     await expect(
       page.getByRole('button', { name: /sign in|join/i }),
     ).toHaveCount(0)
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true)
+    expect(
+      await roleTable.evaluate(
+        (table) => table.getBoundingClientRect().right <= window.innerWidth,
       ),
     ).toBe(true)
 
