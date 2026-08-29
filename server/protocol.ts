@@ -262,6 +262,18 @@ export function createGameSocketServer(
       })
     })
 
+    socket.on('game:unlock-hint', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('game:unlock-hint', acknowledge, () => {
+        const parsed = parseRoomCommand(payload)
+        if (!parsed) return acknowledge(invalid())
+        const result = gameServer.unlockHint(socket.data.token, parsed.roomCode)
+        acknowledge(result)
+        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
+      })
+    })
+
     socket.on('game:start-guessing', (payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return

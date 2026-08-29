@@ -109,6 +109,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onSubmitHint={(hint, targetCardIds) =>
             game.submitHint({ roomCode, hint, targetCardIds })
           }
+          onUnlockHint={() => game.unlockHint(roomCode)}
           onStartGuessing={() => game.startGuessing(roomCode)}
         />
       )

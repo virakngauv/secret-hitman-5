@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 6 as const
+export const GAME_PROTOCOL_VERSION = 7 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -66,6 +66,7 @@ export type RoomSnapshot =
       hintStatuses: HintStatus[]
       allHintsSubmitted: boolean
       board: HintCardSnapshot[] | null
+      hint: string | null
       hintSubmitted: boolean
     } & MemberSnapshotBase)
   | ({
@@ -174,6 +175,10 @@ export type ClientToServerEvents = {
   ) => void
   'game:submit-hint': (
     payload: SubmitHintPayload,
+    acknowledge: (result: CommandResult) => void,
+  ) => void
+  'game:unlock-hint': (
+    payload: RoomCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:start-guessing': (

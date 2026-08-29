@@ -371,6 +371,32 @@ describe('Socket.IO Secret Hitman protocol', () => {
         targetCardIds: guestTargets,
       }),
     ).toEqual({ status: 'success' })
+    expect(await host.emitWithAck('game:unlock-hint', { roomCode })).toEqual({
+      status: 'success',
+    })
+    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
+      {
+        status: 'hinting',
+        hint: 'Orbit',
+        hintSubmitted: false,
+        allHintsSubmitted: false,
+        board: expect.arrayContaining(
+          hostTargets.map((id) =>
+            expect.objectContaining({ id, kind: 'target' }),
+          ),
+        ),
+      },
+    )
+    expect(
+      await host.emitWithAck('game:start-guessing', { roomCode }),
+    ).toMatchObject({ status: 'invalid' })
+    expect(
+      await host.emitWithAck('game:submit-hint', {
+        roomCode,
+        hint: 'Galaxy',
+        targetCardIds: hostTargets.slice(0, 1),
+      }),
+    ).toEqual({ status: 'success' })
 
     expect(
       await spectator.emitWithAck('room:join', { roomCode, name: 'Linus' }),
@@ -390,6 +416,9 @@ describe('Socket.IO Secret Hitman protocol', () => {
         hint: 'Cheat',
         targetCardIds: hostTargets,
       }),
+    ).toMatchObject({ status: 'forbidden' })
+    expect(
+      await spectator.emitWithAck('game:unlock-hint', { roomCode }),
     ).toMatchObject({ status: 'forbidden' })
 
     expect(await host.emitWithAck('game:start-guessing', { roomCode })).toEqual(
