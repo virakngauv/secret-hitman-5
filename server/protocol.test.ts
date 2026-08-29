@@ -802,4 +802,82 @@ describe('Socket.IO Secret Hitman protocol', () => {
       },
     })
   })
+
+  it('demonstrates the copied guest-token replay boundary', async () => {
+    const legitimateHost = await connect(hostToken)
+    const guest = await connect(guestToken)
+    const created = await legitimateHost.emitWithAck('room:create', {
+      name: 'Ada',
+    })
+    if (created.status !== 'success') throw new Error('Unable to create room.')
+    const roomCode = created.roomCode
+    await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
+
+    expect(socketServer.gameServer.snapshot(spectatorToken, roomCode)).toEqual({
+      status: 'joinable',
+      roomCode,
+      joinsAsSpectator: false,
+    })
+    expect(
+      socketServer.gameServer.startGame(spectatorToken, roomCode),
+    ).toMatchObject({ status: 'forbidden' })
+
+    // This second socket represents a token copied out of the host browser.
+    // The protocol cannot distinguish it from a legitimate reconnect.
+    const replayedHost = await connect(hostToken)
+    const resumedLobby = await replayedHost.emitWithAck('session:resume', {
+      roomCode,
+    })
+    expect(resumedLobby).toMatchObject({
+      status: 'success',
+      snapshot: {
+        status: 'lobby',
+        player: { name: 'Ada', role: 'host' },
+      },
+    })
+    expect(await replayedHost.emitWithAck('game:start', { roomCode })).toEqual({
+      status: 'success',
+    })
+
+    const replayedHinting = await replayedHost.emitWithAck('session:resume', {
+      roomCode,
+    })
+    const guestHinting = socketServer.gameServer.snapshot(guestToken, roomCode)
+    if (
+      replayedHinting.status !== 'success' ||
+      replayedHinting.snapshot?.status !== 'hinting' ||
+      !replayedHinting.snapshot.board ||
+      guestHinting.status !== 'hinting' ||
+      !guestHinting.board
+    ) {
+      throw new Error('Expected both private hinting boards.')
+    }
+
+    const replayedTargets = replayedHinting.snapshot.board
+      .filter(({ kind }) => kind === 'neutral')
+      .slice(0, 2)
+      .map(({ id }) => id)
+    const guestTargets = guestHinting.board
+      .filter(({ kind }) => kind === 'neutral')
+      .slice(0, 2)
+      .map(({ id }) => id)
+
+    expect(
+      await replayedHost.emitWithAck('game:submit-hint', {
+        roomCode,
+        hint: 'Stolen authority',
+        targetCardIds: replayedTargets,
+      }),
+    ).toEqual({ status: 'success' })
+    expect(
+      await guest.emitWithAck('game:submit-hint', {
+        roomCode,
+        hint: 'Garden',
+        targetCardIds: guestTargets,
+      }),
+    ).toEqual({ status: 'success' })
+    expect(
+      await replayedHost.emitWithAck('game:start-guessing', { roomCode }),
+    ).toEqual({ status: 'success' })
+  })
 })

@@ -66,6 +66,9 @@ The token remains readable by same-origin JavaScript. XSS or a compromised third
 
 Moving to a server-issued HttpOnly cookie requires a coordinated session protocol and deployment design: the frontend and game server can be on different sites, and cookie delivery, cross-origin credentials, origin/CSRF protections, local development, and reconnect migration must be tested together. A same-origin gateway or another explicitly designed session boundary is future security work; the current localStorage model does not provide HttpOnly protection.
 
+The full threat model, replay evidence, lifecycle audit, and migration options are
+recorded in [the guest-token investigation](../security/guest-token-investigation.md).
+
 ## Fixed clue-building roles
 
 Each 12-word board receives three locked civilians and one locked assassin. The server selects distinct positions using a separate seeded shuffle at board creation; rerenders, refreshes, and reconnects reuse the stored assignments. The eight remaining words stay editable. Player-submitted target IDs must contain one through five distinct editable cards and exclude locked roles; invalid requests leave the board and ready status unchanged. A player who leaves before submitting receives an internal zero-target `PASS` fallback so the room can continue. Unselected cards become civilians. Only the clue-maker receives their private hinting board and lock metadata. Guessing snapshots do not expose locks.
