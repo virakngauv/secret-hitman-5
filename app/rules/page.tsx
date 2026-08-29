@@ -45,19 +45,17 @@ export default function RulesPage() {
               2. Build and lock in your clue
             </h2>
             <p>
-              You receive a private board of 12 words. One target, two
-              civilians, and the assassin are randomly locked: you cannot change
-              their roles. Build your clue around the fixed target and select
-              any of the eight remaining words as additional targets. Unselected
-              words become civilians.
+              You receive a private board of 12 words. Three civilians and the
+              assassin are randomly locked: you cannot change their roles. The
+              other eight words are editable. Select zero to five of them as
+              targets; every unselected non-assassin word becomes a civilian.
             </p>
             <p className="mt-3">
               Enter your hint and select <strong>Lock in hint</strong>. The
-              total target count, including the fixed target and any additional
-              targets you select, becomes your hint’s number. For example, a
-              hint of “Orbit” with the number 2 tells the other players to look
-              for two connected targets. Keep your target choices and the
-              assassin’s location secret.
+              number of targets you select becomes your hint’s number. For
+              example, a hint of “Orbit” with the number 2 tells the other
+              players to look for two connected targets. Keep your target
+              choices and the assassin’s location secret.
             </p>
             <p className="mt-3">
               Once everyone has locked in a hint, the host selects{' '}
@@ -84,8 +82,9 @@ export default function RulesPage() {
               everyone on that board.
             </p>
             <p className="mt-3">
-              An assassin hit stays hidden from players still guessing. More
-              than one player can hit it, and each hit has its own penalty.
+              The first assassin hit ends the board for every picker and reveals
+              every role and claimant to players and spectators. Later or
+              in-flight picks cannot change that completed board.
             </p>
           </section>
 
@@ -95,24 +94,24 @@ export default function RulesPage() {
             </h2>
             <dl className="space-y-4">
               <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Target · +1 each</dt>
+                <dt className="font-bold">Target · +2 each</dt>
                 <dd>
-                  The successful picker earns 1 point, and the clue writer earns
-                  1 point.
+                  The successful picker earns 2 points, and the clue writer
+                  earns 2 points.
                 </dd>
               </div>
               <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Civilian · 0 points</dt>
+                <dt className="font-bold">Civilian · −1 each</dt>
                 <dd>
-                  Neither score changes. The picker stops guessing on this
-                  board.
+                  The picker and clue writer each lose 1 point. Only that picker
+                  stops guessing on this board.
                 </dd>
               </div>
               <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Assassin · −1 each</dt>
+                <dt className="font-bold">Assassin · −3 each</dt>
                 <dd>
-                  The picker loses 1 point, and the clue writer loses 1 point.
-                  The picker stops guessing on this board.
+                  The first picker to find it and the clue writer each lose 3
+                  points. The board ends and is revealed to everyone.
                 </dd>
               </div>
             </dl>

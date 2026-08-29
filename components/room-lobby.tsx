@@ -115,6 +115,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
     case 'guessing':
       return (
         <GuessingScreen
+          key={snapshot.turnId}
           view={snapshot}
           onClaimCard={(cardId, turnId) =>
             game.claimCard({

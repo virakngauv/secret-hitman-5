@@ -98,7 +98,7 @@ try {
   const guestScore = afterGuestScore.scoreboard.find(
     ({ name }) => name === 'Smoke guest',
   )?.score
-  if (guestScore !== 1) throw new Error('Guest score did not synchronize.')
+  if (guestScore !== 2) throw new Error('Guest score did not synchronize.')
 
   host.disconnect()
   const reconnectedHost = await connect(hostToken)
@@ -180,8 +180,7 @@ function selectableIds(
 ) {
   return (
     snapshot.board
-      ?.filter(({ kind }) => kind === 'target' || kind === 'neutral')
-      .sort((a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'))
+      ?.filter(({ kind }) => kind === 'neutral')
       .slice(0, count)
       .map(({ id }) => id) ?? []
   )

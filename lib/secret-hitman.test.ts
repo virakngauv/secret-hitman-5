@@ -16,7 +16,7 @@ describe('fixed board roles', () => {
           'assassin',
           'civilian',
           'civilian',
-          'target',
+          'civilian',
         ])
         expect(board.filter(({ locked }) => !locked)).toHaveLength(8)
         expect(board).toEqual(createPlayerBoard(`seed-${seed}`, seat))
@@ -34,9 +34,9 @@ describe('fixed board roles', () => {
       board.map(({ id }) => id),
     )
     expect(board.filter(({ locked }) => locked)).toEqual(fixed)
-    expect(board.filter(({ kind }) => kind === 'target')).toHaveLength(9)
+    expect(board.filter(({ kind }) => kind === 'target')).toHaveLength(8)
     applyTargets(board, [])
     expect(board.filter(({ locked }) => locked)).toEqual(fixed)
-    expect(board.filter(({ kind }) => kind === 'target')).toHaveLength(1)
+    expect(board.filter(({ kind }) => kind === 'target')).toHaveLength(0)
   })
 })

@@ -5,10 +5,10 @@ A one-round, host-driven multiplayer word game built with Next.js, React, TypeSc
 ## Gameplay
 
 1. The host creates a room and invites at least one other player.
-2. Starting players each receive a private board of 12 words. One target, two civilians, and the assassin are randomly locked for the lifetime of the board.
-3. Every starting player writes a hint and selects additional editable words it should describe. The number includes the fixed target (1–9 targets total).
+2. Starting players each receive a private board of 12 words. Three civilians and the assassin are randomly locked for the lifetime of the board; the other eight words are editable.
+3. Every starting player writes a hint and selects 0–5 editable words it should describe. Selected words become targets and every other non-assassin word becomes a civilian.
 4. When every hint is locked, the host starts guessing and manually advances each player’s clue-giver turn.
-5. Guessing a target awards one point to both the guesser and clue-giver. A civilian ends that player’s guessing for the hint. The assassin ends their guessing and removes one point from both players.
+5. A target awards 2 points to both picker and clue-giver. A civilian removes 1 point from both and ends only that picker’s turn. The first assassin removes 3 points from its picker and the clue-giver, completes the board for everyone, and reveals every role and claimant.
 6. After every starting player gives one hint, the single round ends and final standings are revealed.
 
 There are no gameplay timers. New identities may join after the game starts, but they enter in read-only spectator mode. Reconnecting browsers recover their original seat from a private local token while the in-memory room still exists.

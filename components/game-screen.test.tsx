@@ -39,7 +39,7 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
     { id: 'p0-card-0', word: 'MOON', kind: 'neutral', locked: false },
     { id: 'p0-card-1', word: 'SATELLITE', kind: 'neutral', locked: false },
     { id: 'p0-card-2', word: 'POISON', kind: 'assassin', locked: true },
-    { id: 'p0-card-3', word: 'ROCKET', kind: 'target', locked: true },
+    { id: 'p0-card-3', word: 'ROCKET', kind: 'civilian', locked: true },
     { id: 'p0-card-4', word: 'RIVER', kind: 'civilian', locked: true },
     { id: 'p0-card-5', word: 'FOREST', kind: 'civilian', locked: true },
     ...Array.from({ length: 6 }, (_, index) => ({
@@ -52,13 +52,13 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
 }
 
 describe('HintPhaseScreen', () => {
-  it('keeps all fixed roles disabled, counts the fixed target after remount, and leaves neutral cards editable', async () => {
+  it('keeps all fixed roles disabled, allows zero targets, and leaves neutral cards editable', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
     const props = { view: hintingView, onSubmitHint, onStartGuessing: vi.fn() }
     const first = render(<HintPhaseScreen {...props} />)
     for (const name of [
-      /target.*locked.*rocket/i,
+      /civilian.*locked.*rocket/i,
       /civilian.*locked.*river/i,
       /civilian.*locked.*forest/i,
       /assassin.*locked.*poison/i,
@@ -70,20 +70,20 @@ describe('HintPhaseScreen', () => {
     }
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
     expect(
-      screen.getByText('2', { selector: '.hint-number-value' }),
+      screen.getByText('1', { selector: '.hint-number-value' }),
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /target.*moon/i }))
     expect(
-      screen.getByText('1', { selector: '.hint-number-value' }),
+      screen.getByText('0', { selector: '.hint-number-value' }),
     ).toBeInTheDocument()
     first.unmount()
     render(<HintPhaseScreen {...props} />)
     expect(
-      screen.getByRole('button', { name: /target.*locked.*rocket/i }),
-    ).toHaveAttribute('aria-pressed', 'true')
+      screen.getByRole('button', { name: /civilian.*locked.*rocket/i }),
+    ).toHaveAttribute('aria-pressed', 'false')
     await user.type(screen.getByLabelText('Your hint'), 'space')
-    await user.click(screen.getByRole('button', { name: 'Lock in hint · 1' }))
-    expect(onSubmitHint).toHaveBeenCalledWith('space', ['p0-card-3'])
+    await user.click(screen.getByRole('button', { name: 'Lock in hint · 0' }))
+    expect(onSubmitHint).toHaveBeenCalledWith('space', [])
   })
 
   it('auto-counts selected cards, freezes the assassin, and submits the derived targets', async () => {
@@ -110,15 +110,36 @@ describe('HintPhaseScreen', () => {
       screen.getByRole('button', { name: /available.*satellite/i }),
     )
     expect(
-      screen.getByText('3', { selector: '.hint-number-value' }),
+      screen.getByText('2', { selector: '.hint-number-value' }),
     ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Lock in hint · 3' }))
+    await user.click(screen.getByRole('button', { name: 'Lock in hint · 2' }))
 
     expect(onSubmitHint).toHaveBeenCalledWith('orbit', [
       'p0-card-0',
       'p0-card-1',
-      'p0-card-3',
     ])
+  })
+
+  it('caps target selection at five while keeping selected cards editable', async () => {
+    const user = userEvent.setup()
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+    const editable = screen
+      .getAllByRole('button', { name: /available/i })
+      .slice(0, 6)
+    for (const card of editable.slice(0, 5)) await user.click(card)
+    expect(
+      screen.getByText('5', { selector: '.hint-number-value' }),
+    ).toBeVisible()
+    expect(editable[5]).toBeDisabled()
+    expect(editable[0]).toBeEnabled()
+    await user.click(editable[0])
+    expect(editable[5]).toBeEnabled()
   })
 })
 

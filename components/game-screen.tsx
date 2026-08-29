@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  MAX_TARGET_COUNT,
   type CardKind,
   type CommandResult,
   type RoomSnapshot,
@@ -32,9 +33,7 @@ export function HintPhaseScreen({
   const [editableSelected, setSelected] = useState<Set<string>>(() => new Set())
   const selected = new Set(
     view.board
-      ?.filter((card) =>
-        card.locked ? card.kind === 'target' : editableSelected.has(card.id),
-      )
+      ?.filter((card) => !card.locked && editableSelected.has(card.id))
       .map(({ id }) => id),
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -50,7 +49,7 @@ export function HintPhaseScreen({
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(cardId)) next.delete(cardId)
-      else next.add(cardId)
+      else if (next.size < MAX_TARGET_COUNT) next.add(cardId)
       return next
     })
     setError(null)
@@ -58,8 +57,6 @@ export function HintPhaseScreen({
 
   const submit = async () => {
     if (!hint.trim()) return setError('Write a one-word or short phrase hint.')
-    if (selected.size === 0)
-      return setError('Select at least one word for your hint.')
     setIsSubmitting(true)
     setError(null)
     const result = await onSubmitHint(hint.trim(), [...selected])
@@ -80,7 +77,7 @@ export function HintPhaseScreen({
       roomCode={view.roomCode}
       eyebrow="Phase 1 · Make your hint"
       title="Build one clue. Pick your targets."
-      subtitle="One target, two civilians, and the assassin are locked. Your clue number includes the fixed target."
+      subtitle="Three civilians and the assassin are locked. Select up to five targets, or submit a zero-target clue."
     >
       <div className="game-layout">
         <section className="game-panel min-w-0">
@@ -118,7 +115,7 @@ export function HintPhaseScreen({
               </div>
 
               <p className="mb-3 text-sm text-[var(--muted-foreground)]">
-                Select every word this hint should point to.
+                Select up to five words this hint should point to.
               </p>
               <div className="word-grid" aria-label="Your twelve word board">
                 {view.board.map((card) => {
@@ -139,7 +136,11 @@ export function HintPhaseScreen({
                         card.kind === 'civilian' && 'word-card-civilian',
                       )}
                       onClick={() => toggleCard(card.id)}
-                      disabled={card.locked || isSubmitting}
+                      disabled={
+                        card.locked ||
+                        isSubmitting ||
+                        (!isSelected && selected.size >= MAX_TARGET_COUNT)
+                      }
                       aria-pressed={isSelected}
                     >
                       <span className="word-card-index">
@@ -177,7 +178,7 @@ export function HintPhaseScreen({
               <Button
                 className="mt-2 h-12 w-full sm:w-auto"
                 onClick={() => void submit()}
-                disabled={isSubmitting || selected.size === 0 || !hint.trim()}
+                disabled={isSubmitting || !hint.trim()}
               >
                 {isSubmitting
                   ? 'Locking in…'
@@ -270,10 +271,10 @@ export function GuessingScreen({
     if (result.status !== 'success') return setFeedback(result.message)
     setFeedback(
       result.kind === 'target'
-        ? 'Target found. Keep going or stop while you’re ahead.'
+        ? 'Target found. You and the clue-giver each gain 2 points.'
         : result.kind === 'civilian'
-          ? 'Civilian. Your guessing is done for this hint.'
-          : 'Assassin. You and the clue-giver each lose a point.',
+          ? 'Civilian. You and the clue-giver each lose 1 point; your guessing is done.'
+          : 'Assassin. You and the clue-giver each lose 3 points; this board is complete.',
     )
   }
 
@@ -304,8 +305,8 @@ export function GuessingScreen({
           : view.player.participation === 'spectator'
             ? 'Spectator mode · follow the guesses without changing the board.'
             : view.canGuess
-              ? 'Choose carefully. A civilian ends your turn; the assassin costs two points total.'
-              : 'Your guessing is done for this hint. Your board is fully revealed; active pickers still see hidden cards.'
+              ? 'Choose carefully. A civilian costs 1 point each; the assassin costs 3 points each and ends the board.'
+              : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
       }
     >
       <section className="clue-banner" aria-label="Current hint">

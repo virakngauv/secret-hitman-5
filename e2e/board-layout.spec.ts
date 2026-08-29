@@ -39,8 +39,8 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(host.getByLabel('Your twelve word board')).toBeVisible()
     const locked = host.locator('button[data-card-locked="true"]')
     await expect(locked).toHaveCount(4)
-    await expect(host.locator('[data-card-kind="target"]')).toHaveCount(1)
-    await expect(host.locator('[data-card-kind="civilian"]')).toHaveCount(2)
+    await expect(host.locator('[data-card-kind="target"]')).toHaveCount(0)
+    await expect(host.locator('[data-card-kind="civilian"]')).toHaveCount(3)
     const fixedBefore = await locked.evaluateAll((cards) =>
       cards.map((card) => ({
         id: card.getAttribute('data-card-id'),
@@ -63,7 +63,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
         })),
       ),
     ).toEqual(fixedBefore)
-    await expect(host.locator('.hint-number-value')).toHaveText('1')
+    await expect(host.locator('.hint-number-value')).toHaveText('0')
     await expect(host.locator('[data-card-kind="assassin"]')).toBeDisabled()
     const targets = host.locator('button[data-card-kind="neutral"]')
     const targetId = await targets.first().getAttribute('data-card-id')
@@ -72,23 +72,22 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await checkWidths(host, 'hinting', testInfo)
 
     await host.getByLabel('Your hint').fill('Orbit')
-    await host.getByRole('button', { name: 'Lock in hint · 2' }).click()
+    await host.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await expect(host.getByText('Hint locked in')).toBeVisible()
     await guest.getByLabel('Your hint').fill('Garden')
-    await guest.getByRole('button', { name: 'Lock in hint · 1' }).click()
+    await guest.getByRole('button', { name: 'Lock in hint · 0' }).click()
     await host.getByRole('button', { name: 'Start guessing' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
 
     await guest.locator(`button[data-card-id="${targetId}"]`).click()
     await expect(guest.getByText(/Target found/)).toBeVisible()
-    await expect(guest.locator('.score-value')).toHaveText(['1', '1'])
+    await expect(guest.locator('.score-value')).toHaveText(['2', '2'])
     await expect(
       guest.locator(`button[data-card-id="${targetId}"]`),
     ).toBeDisabled()
     await checkWidths(guest, 'guessing', testInfo)
 
     await guest.setViewportSize({ width: 360, height: 900 })
-    await guest.getByRole('button', { name: 'I’m done guessing' }).click()
     await host.getByRole('button', { name: 'Next hint' }).click()
     await expect(host.getByText('Garden', { exact: true })).toBeVisible()
     await host.getByRole('button', { name: 'I’m done guessing' }).click()

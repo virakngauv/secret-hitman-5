@@ -97,7 +97,6 @@ export function parseSubmitHint(value: unknown): SubmitHintPayload | null {
     !roomCode ||
     !hint ||
     !Array.isArray(targetCardIds) ||
-    targetCardIds.length < 1 ||
     targetCardIds.length > MAX_TARGET_COUNT ||
     targetCardIds.some(
       (cardId) => typeof cardId !== 'string' || !CARD_ID_PATTERN.test(cardId),

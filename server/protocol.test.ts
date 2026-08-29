@@ -313,14 +313,10 @@ describe('Socket.IO Secret Hitman protocol', () => {
     if (!hostHint.board || !guestHint.board) {
       throw new Error('Expected boards for participating players.')
     }
-    const hostTargets = hostHint.board
-      .filter(({ kind }) => kind === 'target' || kind === 'neutral')
-      .sort((a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'))
-      .slice(0, 2)
-      .map(({ id }) => id)
+    const hostEditable = hostHint.board.filter(({ kind }) => kind === 'neutral')
+    const hostTargets = hostEditable.slice(0, 2).map(({ id }) => id)
     const guestTargets = guestHint.board
-      .filter(({ kind }) => kind === 'target' || kind === 'neutral')
-      .sort((a, b) => Number(b.kind === 'target') - Number(a.kind === 'target'))
+      .filter(({ kind }) => kind === 'neutral')
       .slice(0, 3)
       .map(({ id }) => id)
     expect(hostTargets).toHaveLength(2)
@@ -330,7 +326,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       ({ kind, locked }) => kind === 'civilian' && locked,
     )!
     for (const targetCardIds of [
-      hostTargets.slice(1),
+      hostEditable.slice(0, 6).map(({ id }) => id),
       [...hostTargets, lockedCivilian.id],
     ]) {
       expect(
@@ -436,7 +432,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       scored.scoreboard
         .filter(({ participation }) => participation === 'player')
         .map(({ score }) => score),
-    ).toEqual([1, 1])
+    ).toEqual([2, 2])
   })
 
   it.each(['active', 'pass', 'civilian', 'assassin'] as const)(
@@ -457,7 +453,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         const view = server.snapshot(token, roomCode)
         if (view.status !== 'hinting' || !view.board)
           throw new Error('Expected hinting board.')
-        const target = view.board.find(({ kind }) => kind === 'target')!
+        const target = view.board.find(({ kind }) => kind === 'neutral')!
         expect(
           server.submitHint(token, {
             roomCode,
@@ -580,11 +576,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
           roomCode,
           hint: 'Orbit',
           targetCardIds: result.snapshot.board
-            .filter(({ kind }) => kind === 'target' || kind === 'neutral')
-            .sort(
-              (a, b) =>
-                Number(b.kind === 'target') - Number(a.kind === 'target'),
-            )
+            .filter(({ kind }) => kind === 'neutral')
             .slice(0, 3)
             .map(({ id }) => id),
         }),
@@ -618,7 +610,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     const scored = socketServer.gameServer.snapshot(guestToken, roomCode)
     expect(scored).toMatchObject({
       turnId: before.turnId,
-      scoreboard: [{ score: 2 }, { score: 1 }, { score: 1 }, { score: null }],
+      scoreboard: [{ score: 4 }, { score: 2 }, { score: 2 }, { score: null }],
     })
     guest.disconnect()
     const resumedGuest = await connect(guestToken)
@@ -693,11 +685,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
             roomCode,
             hint: 'Orbit',
             targetCardIds: view.board
-              .filter(({ kind }) => kind === 'target' || kind === 'neutral')
-              .sort(
-                (a, b) =>
-                  Number(b.kind === 'target') - Number(a.kind === 'target'),
-              )
+              .filter(({ kind }) => kind === 'neutral')
               .slice(0, 2)
               .map(({ id }) => id),
           }),
@@ -732,7 +720,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       ])
       expect(results.map(({ status }) => status).sort()).toEqual(
         kind === 'assassin'
-          ? ['success', 'success']
+          ? ['forbidden', 'success']
           : ['already_claimed', 'success'],
       )
       const after = socketServer.gameServer.snapshot(hostToken, roomCode)
@@ -747,16 +735,18 @@ describe('Socket.IO Secret Hitman protocol', () => {
         after.scoreboard
           .filter(({ participation }) => participation === 'player')
           .map(({ score }) => score),
-      ).toEqual(
-        kind === 'assassin'
-          ? [-2, -1, -1]
-          : kind === 'civilian'
-            ? [0, 0, 0]
-            : [
-                1,
-                ...results.map(({ status }) => (status === 'success' ? 1 : 0)),
-              ],
-      )
+      ).toEqual([
+        kind === 'target' ? 2 : kind === 'civilian' ? -1 : -3,
+        ...results.map(({ status }) =>
+          status === 'success'
+            ? kind === 'target'
+              ? 2
+              : kind === 'civilian'
+                ? -1
+                : -3
+            : 0,
+        ),
+      ])
       expect(await guest.emitWithAck('game:claim-card', payload)).toEqual(
         results[0],
       )
@@ -775,16 +765,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
         if (snapshot.status !== 'guessing' || snapshot.turnId !== before.turnId)
           continue
         const visibleCard = snapshot.board.find(({ id }) => id === card.id)
-        expect(visibleCard).toMatchObject(
-          kind === 'assassin'
-            ? {
-                revealedKind: null,
-                claimedBy: [],
-                selectedByYou: false,
-                disabled: true,
-              }
-            : { revealedKind: kind, claimedBy: winnerNames, disabled: true },
-        )
+        expect(visibleCard).toMatchObject({
+          revealedKind: kind,
+          claimedBy: winnerNames,
+          disabled: true,
+        })
       }
     },
   )

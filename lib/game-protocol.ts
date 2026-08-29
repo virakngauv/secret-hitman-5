@@ -1,8 +1,8 @@
-export const GAME_PROTOCOL_VERSION = 5 as const
+export const GAME_PROTOCOL_VERSION = 6 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
-export const MAX_TARGET_COUNT = BOARD_CARD_COUNT - 3
+export const MAX_TARGET_COUNT = 5
 
 export type RoomPhase = 'lobby' | 'hinting' | 'guessing' | 'finished'
 export type PlayerRole = 'host' | 'player'

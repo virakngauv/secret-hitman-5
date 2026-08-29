@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  MAX_TARGET_COUNT,
   MAX_STARTING_PLAYERS,
   type CardKind,
   type ClaimCardPayload,
@@ -53,6 +54,7 @@ type GameState = {
   playerOrder: string[]
   turnIndex: number
   turnId: string
+  turnCompleted: boolean
 }
 
 export type GameRoomOptions = {
@@ -253,6 +255,7 @@ export class GameRoom {
       playerOrder: players.map(({ playerId }) => playerId),
       turnIndex: 0,
       turnId: randomUUID(),
+      turnCompleted: false,
     }
     this.phase = 'hinting'
     this.commandResults.clear()
@@ -279,23 +282,18 @@ export class GameRoom {
 
     const targetIds = new Set(payload.targetCardIds)
     const selectableIds = new Set(
-      seat.board
-        .filter(({ kind, locked }) => !locked || kind === 'target')
-        .map(({ id }) => id),
+      seat.board.filter(({ locked }) => !locked).map(({ id }) => id),
     )
     if (
       targetIds.size !== payload.targetCardIds.length ||
-      targetIds.size < 1 ||
+      targetIds.size > MAX_TARGET_COUNT ||
       [...targetIds].some((cardId) => !selectableIds.has(cardId)) ||
-      seat.board.some(
-        ({ id, kind, locked }) =>
-          locked && kind === 'target' && !targetIds.has(id),
-      )
+      seat.board.some(({ id, locked }) => locked && targetIds.has(id))
     ) {
       return {
         status: 'invalid',
         message:
-          'Keep the locked target selected and leave locked civilians and the assassin unchanged.',
+          'Select up to five editable words and leave locked civilians and the assassin unchanged.',
       }
     }
 
@@ -348,6 +346,10 @@ export class GameRoom {
     const previous = this.commandResults.get(token)?.get(payload.commandId)
     if (previous) return previous
 
+    if (this.requireGame().turnCompleted) {
+      return { status: 'forbidden', message: 'This board is already complete.' }
+    }
+
     const clueGiver = this.currentClueGiver()
     if (
       member.playerId === clueGiver.playerId ||
@@ -368,7 +370,7 @@ export class GameRoom {
         message: 'You already selected that card.',
       })
     }
-    if (card.kind !== 'assassin' && card.claimers.length > 0) {
+    if (card.claimers.length > 0) {
       return this.remember(token, payload.commandId, {
         status: 'already_claimed',
         message: 'Another player already claimed that card.',
@@ -377,22 +379,20 @@ export class GameRoom {
 
     card.claimers.push({ playerId: member.playerId, name: member.name })
     if (card.kind === 'target') {
-      seat.score += 1
-      if (clueGiver.game) clueGiver.game.score += 1
+      seat.score += 2
+      if (clueGiver.game) clueGiver.game.score += 2
     } else if (card.kind === 'civilian') {
-      seat.turnState = 'done'
-    } else {
       seat.score -= 1
       if (clueGiver.game) clueGiver.game.score -= 1
       seat.turnState = 'done'
+    } else {
+      seat.score -= 3
+      if (clueGiver.game) clueGiver.game.score -= 3
+      this.completeCurrentTurn()
     }
 
     if (this.allTargetsClaimed()) {
-      for (const player of this.gamePlayers()) {
-        if (player.playerId !== clueGiver.playerId && player.game) {
-          player.game.turnState = 'done'
-        }
-      }
+      this.completeCurrentTurn()
     }
 
     this.touch(now)
@@ -456,6 +456,7 @@ export class GameRoom {
     } else {
       game.turnIndex += 1
       game.turnId = randomUUID()
+      game.turnCompleted = false
       this.prepareCurrentTurn()
     }
     this.commandResults.clear()
@@ -515,6 +516,7 @@ export class GameRoom {
       throw new Error('Current clue giver is missing a hint.')
     const revealAll =
       this.phase === 'finished' ||
+      this.requireGame().turnCompleted ||
       member === clueGiver ||
       member.game?.turnState === 'done'
     const board = clueSeat.board.map((card) => {
@@ -712,6 +714,14 @@ export class GameRoom {
     return (
       targets.length > 0 && targets.every(({ claimers }) => claimers.length > 0)
     )
+  }
+
+  private completeCurrentTurn() {
+    this.requireGame().turnCompleted = true
+    const clueGiver = this.currentClueGiver()
+    for (const player of this.gamePlayers()) {
+      if (player !== clueGiver && player.game) player.game.turnState = 'done'
+    }
   }
 
   private findMember(token: string) {
