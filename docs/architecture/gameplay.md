@@ -42,7 +42,7 @@ Room revisions are removed completely, not retained as a second identity mechani
 - Board initialization: uses the existing private initial seed and start time without a room counter. Default initial seeds already contain random entropy. Explicit fixed test seeds remain reproducible and do not control public turn identities.
 - Tests and smoke script: assert actual state, ownership, scores, and restored turn identity instead of treating counter increments as evidence of correctness.
 
-Protocol version 6 combines explicit turn identity with the unified locked-role, target-count, scoring, and board-completion contract. Deploy the frontend and game server together; older clients must reload to reconnect. No compatibility shim accepts revision-only commands.
+Protocol version 7 combines explicit turn identity with the unified locked-role, target-count, scoring, board-completion, and reversible hint-lock contracts. Deploy the frontend and game server together; older clients must reload to reconnect. No compatibility shim accepts revision-only commands.
 
 ## Host advancement
 
@@ -68,4 +68,4 @@ Moving to a server-issued HttpOnly cookie requires a coordinated session protoco
 
 ## Fixed clue-building roles
 
-Each 12-word board receives three locked civilians and one locked assassin. The server selects distinct positions using a separate seeded shuffle at board creation; rerenders, refreshes, and reconnects reuse the stored assignments. The eight remaining words stay editable. Player-submitted target IDs must contain one through five distinct editable cards and exclude locked roles; invalid requests leave the board and ready status unchanged. A player who leaves before submitting receives an internal zero-target `PASS` fallback so the room can continue. Unselected cards become civilians. Only the clue-maker receives their private hinting board and lock metadata. Guessing snapshots do not expose locks.
+Each 12-word board receives three locked civilians and one locked assassin. The server selects distinct positions using a separate seeded shuffle at board creation; rerenders, refreshes, and reconnects reuse the stored assignments. The eight remaining words stay editable. Player-submitted target IDs must contain one through five distinct editable cards and exclude locked roles; invalid requests leave the board and ready status unchanged. A player who leaves before submitting receives an internal zero-target `PASS` fallback so the room can continue. Unselected editable non-assassin cards become civilians while the hint is submitted. The clue-maker keeps a private, read-only view of their submitted hint and board and may unlock it while hinting remains open; unlocking preserves the hint and selected targets, presents unselected editable cards as available again, and clears readiness until the hint is resubmitted. Only the clue-maker receives their private hinting board, hint, and lock metadata. Guessing snapshots do not expose locks.

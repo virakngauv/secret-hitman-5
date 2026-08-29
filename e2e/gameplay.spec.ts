@@ -224,6 +224,27 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'Start game' }).click()
 
       await makeHint(host, 'Orbit', 2)
+      await host.reload()
+      await expect(host.getByLabel('Your hint')).toHaveValue('Orbit')
+      await expect(host.getByLabel('Your hint')).toHaveAttribute('readonly')
+      await expect(host.locator('button[data-card-kind="target"]')).toHaveCount(
+        2,
+      )
+      await expect(
+        host.locator('button[data-card-kind="civilian"]'),
+      ).toHaveCount(9)
+      await host.getByRole('button', { name: 'Unlock / Edit hint' }).click()
+      await expect(host.getByLabel('Your hint')).toBeEditable()
+      await expect(host.getByLabel('Your hint')).toHaveValue('Orbit')
+      await expect(
+        host.locator('button[data-card-kind="neutral"]'),
+      ).toHaveCount(6)
+      await expect(guest.getByText('Choosing')).toHaveCount(2)
+      await host.getByLabel('Your hint').fill('Galaxy')
+      await host.locator('button[data-card-kind="target"]').first().click()
+      await host.locator('button[data-card-kind="neutral"]').first().click()
+      await host.getByRole('button', { name: 'Lock in hint · 2' }).click()
+      await expect(host.getByText('Hint locked in')).toBeVisible()
       await makeHint(guest, 'Garden', 3)
       await expect(host.getByText('2/2')).toBeVisible()
 
@@ -238,7 +259,7 @@ test.describe('Secret Hitman single round', () => {
       ).toBeVisible()
 
       await host.getByRole('button', { name: 'Start guessing' }).click()
-      await expect(host.getByText('Orbit', { exact: true })).toBeVisible()
+      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
       await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
 
       const targetId = await host
@@ -260,7 +281,7 @@ test.describe('Secret Hitman single round', () => {
       await expect(nextHint).toBeDisabled()
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
       await expect(nextHint).toBeEnabled()
-      await expect(host.getByText('Orbit', { exact: true })).toBeVisible()
+      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(host.getByText('Garden', { exact: true })).toBeVisible()
       await expect(

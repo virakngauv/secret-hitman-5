@@ -156,9 +156,8 @@ export class GameRoom {
     } else if (member.game) {
       if (this.phase === 'hinting' && !member.game.hintSubmitted) {
         member.game.hint = 'PASS'
-        member.game.targetCount = member.game.board.filter(
-          ({ kind }) => kind === 'target',
-        ).length
+        applyTargets(member.game.board, [])
+        member.game.targetCount = 0
         member.game.hintSubmitted = true
       }
       if (this.phase === 'guessing') member.game.turnState = 'done'
@@ -304,6 +303,25 @@ export class GameRoom {
     seat.hint = payload.hint
     seat.targetCount = targetIds.size
     seat.hintSubmitted = true
+    this.touch(now)
+    return { status: 'success' }
+  }
+
+  unlockHint(token: string, now = Date.now()): CommandResult {
+    const member = this.findActiveMember(token)
+    const seat = member?.game
+    if (!member || !seat || this.phase !== 'hinting') {
+      return {
+        status: 'forbidden',
+        message:
+          'Only starting players can unlock a hint during clue creation.',
+      }
+    }
+    if (!seat.hintSubmitted) {
+      return { status: 'invalid', message: 'Your hint is already editable.' }
+    }
+
+    seat.hintSubmitted = false
     this.touch(now)
     return { status: 'success' }
   }
@@ -503,9 +521,13 @@ export class GameRoom {
           member.game?.board.map(({ id, word, kind, locked }) => ({
             id,
             word,
-            kind: locked ? kind : 'neutral',
+            kind:
+              locked || member.game?.hintSubmitted || kind === 'target'
+                ? kind
+                : 'neutral',
             locked,
           })) ?? null,
+        hint: member.game?.hint ?? null,
         hintSubmitted: member.game?.hintSubmitted ?? false,
       }
     }

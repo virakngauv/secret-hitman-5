@@ -23,6 +23,7 @@ type FinishedView = Extract<RoomSnapshot, { status: 'finished' }>
 export function HintPhaseScreen({
   view,
   onSubmitHint,
+  onUnlockHint,
   onStartGuessing,
 }: {
   view: HintingView
@@ -30,16 +31,25 @@ export function HintPhaseScreen({
     hint: string,
     targetCardIds: string[],
   ) => Promise<CommandResult>
+  onUnlockHint: () => Promise<CommandResult>
   onStartGuessing: () => Promise<CommandResult>
 }) {
-  const [hint, setHint] = useState('')
-  const [editableSelected, setSelected] = useState<Set<string>>(() => new Set())
+  const [hint, setHint] = useState(view.hint ?? '')
+  const [editableSelected, setSelected] = useState<Set<string>>(
+    () =>
+      new Set(
+        view.board
+          ?.filter((card) => !card.locked && card.kind === 'target')
+          .map(({ id }) => id),
+      ),
+  )
   const selected = new Set(
     view.board
       ?.filter((card) => !card.locked && editableSelected.has(card.id))
       .map(({ id }) => id),
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUnlocking, setIsUnlocking] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
@@ -69,6 +79,14 @@ export function HintPhaseScreen({
     setIsSubmitting(false)
   }
 
+  const unlock = async () => {
+    setIsUnlocking(true)
+    setError(null)
+    const result = await onUnlockHint()
+    if (result.status !== 'success') setError(result.message)
+    setIsUnlocking(false)
+  }
+
   const startGuessing = async () => {
     setIsStarting(true)
     setError(null)
@@ -91,11 +109,6 @@ export function HintPhaseScreen({
               title="You joined as a spectator"
               body="The round is already underway. You’ll follow every hint and guess, but won’t enter the scorecard."
             />
-          ) : view.hintSubmitted ? (
-            <WaitingCard
-              title="Hint locked in"
-              body="Nice. Your targets are private until your turn. We’ll move on when everyone is ready and the host starts guessing."
-            />
           ) : (
             <>
               <div className="mb-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem] sm:items-end">
@@ -110,6 +123,8 @@ export function HintPhaseScreen({
                     maxLength={40}
                     placeholder="e.g. orbit"
                     autoComplete="off"
+                    readOnly={view.hintSubmitted}
+                    aria-describedby="hint-editing-status"
                     className="mt-2 h-13 rounded-2xl text-lg"
                   />
                 </div>
@@ -119,8 +134,13 @@ export function HintPhaseScreen({
                 </div>
               </div>
 
-              <p className="mb-3 text-sm text-[var(--muted-foreground)]">
-                Select one to five words this hint should point to.
+              <p
+                id="hint-editing-status"
+                className="mb-3 text-sm text-[var(--muted-foreground)]"
+              >
+                {view.hintSubmitted
+                  ? 'Hint locked in. Your board and targets stay private until your turn.'
+                  : 'Select one to five words this hint should point to.'}
               </p>
               <div className="word-grid" aria-label="Your twelve word board">
                 {view.board.map((card) => {
@@ -150,6 +170,7 @@ export function HintPhaseScreen({
                       onClick={() => toggleCard(card.id)}
                       disabled={
                         card.locked ||
+                        view.hintSubmitted ||
                         isSubmitting ||
                         (!isSelected && selected.size >= MAX_TARGET_COUNT)
                       }
@@ -177,21 +198,35 @@ export function HintPhaseScreen({
               </div>
 
               <p className="form-message" role={error ? 'alert' : 'status'}>
-                {error ?? 'You can change your selection until you lock it in.'}
+                {error ??
+                  (view.hintSubmitted
+                    ? 'Unlock your hint to revise the clue or target selection.'
+                    : 'You can change your selection until you lock it in.')}
               </p>
-              <Button
-                className="mt-2 h-12 w-full sm:w-auto"
-                onClick={() => void submit()}
-                disabled={
-                  isSubmitting ||
-                  selected.size < MIN_TARGET_COUNT ||
-                  !hint.trim()
-                }
-              >
-                {isSubmitting
-                  ? 'Locking in…'
-                  : `Lock in hint · ${selected.size}`}
-              </Button>
+              {view.hintSubmitted ? (
+                <Button
+                  variant="outline"
+                  className="mt-2 h-12 w-full sm:w-auto"
+                  onClick={() => void unlock()}
+                  disabled={isUnlocking}
+                >
+                  {isUnlocking ? 'Unlocking…' : 'Unlock / Edit hint'}
+                </Button>
+              ) : (
+                <Button
+                  className="mt-2 h-12 w-full sm:w-auto"
+                  onClick={() => void submit()}
+                  disabled={
+                    isSubmitting ||
+                    selected.size < MIN_TARGET_COUNT ||
+                    !hint.trim()
+                  }
+                >
+                  {isSubmitting
+                    ? 'Locking in…'
+                    : `Lock in hint · ${selected.size}`}
+                </Button>
+              )}
             </>
           )}
         </section>

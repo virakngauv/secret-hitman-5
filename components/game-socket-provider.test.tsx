@@ -106,6 +106,25 @@ function MembershipProbe({
   )
 }
 
+function UnlockHintProbe({ roomCode }: { roomCode: string }) {
+  const { unlockHint } = useGameSocket()
+  const [resultStatus, setResultStatus] = useState('pending')
+  return (
+    <>
+      <div data-testid="unlock-status">{resultStatus}</div>
+      <button
+        type="button"
+        onClick={async () => {
+          const result = await unlockHint(roomCode)
+          setResultStatus(result.status)
+        }}
+      >
+        Unlock hint
+      </button>
+    </>
+  )
+}
+
 describe('GameSocketProvider', () => {
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'development')
@@ -123,6 +142,22 @@ describe('GameSocketProvider', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+  })
+
+  it('sends the authenticated unlock-hint command for the current room', async () => {
+    const user = userEvent.setup()
+    render(
+      <GameSocketProvider>
+        <UnlockHintProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Unlock hint' }))
+
+    expect(mocks.emitWithAck).toHaveBeenCalledWith('game:unlock-hint', {
+      roomCode: 'bcdf2',
+    })
+    expect(screen.getByTestId('unlock-status')).toHaveTextContent('success')
   })
 
   it.each(['create', 'join', 'leave'] as const)(
