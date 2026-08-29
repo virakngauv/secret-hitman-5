@@ -34,6 +34,7 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
     { playerId: 'player-2', name: 'Grace', submitted: false },
   ],
   allHintsSubmitted: false,
+  hint: null,
   hintSubmitted: false,
   board: [
     { id: 'p0-card-0', word: 'MOON', kind: 'neutral', locked: false },
@@ -55,7 +56,12 @@ describe('HintPhaseScreen', () => {
   it('keeps fixed roles disabled and requires at least one editable target', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
-    const props = { view: hintingView, onSubmitHint, onStartGuessing: vi.fn() }
+    const props = {
+      view: hintingView,
+      onSubmitHint,
+      onUnlockHint: vi.fn(),
+      onStartGuessing: vi.fn(),
+    }
     const first = render(<HintPhaseScreen {...props} />)
     for (const name of [
       /civilian.*locked.*rocket/i,
@@ -97,6 +103,7 @@ describe('HintPhaseScreen', () => {
       <HintPhaseScreen
         view={hintingView}
         onSubmitHint={onSubmitHint}
+        onUnlockHint={vi.fn()}
         onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
       />,
     )
@@ -130,6 +137,7 @@ describe('HintPhaseScreen', () => {
       <HintPhaseScreen
         view={hintingView}
         onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -144,6 +152,82 @@ describe('HintPhaseScreen', () => {
     expect(editable[0]).toBeEnabled()
     await user.click(editable[0])
     expect(editable[5]).toBeEnabled()
+  })
+
+  it('keeps a locked hint and board visible, then preserves edits through unlock and relock', async () => {
+    const user = userEvent.setup()
+    const onUnlockHint = vi.fn().mockResolvedValue({ status: 'success' })
+    const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
+    const lockedBoard = hintingView.board!.map((card, index) =>
+      card.locked
+        ? card
+        : {
+            ...card,
+            kind: index < 2 ? ('target' as const) : ('civilian' as const),
+          },
+    )
+    const lockedView = {
+      ...hintingView,
+      hint: 'Orbit',
+      hintSubmitted: true,
+      hintStatuses: hintingView.hintStatuses.map((status) =>
+        status.playerId === hintingView.player.playerId
+          ? { ...status, submitted: true }
+          : status,
+      ),
+      board: lockedBoard,
+    }
+    const props = {
+      onSubmitHint,
+      onUnlockHint,
+      onStartGuessing: vi.fn(),
+    }
+    const view = render(<HintPhaseScreen view={lockedView} {...props} />)
+
+    expect(screen.getByLabelText('Your hint')).toHaveValue('Orbit')
+    expect(screen.getByLabelText('Your hint')).toHaveAttribute('readonly')
+    expect(screen.getByText('Hint locked in.', { exact: false })).toBeVisible()
+    expect(screen.getByRole('button', { name: /target.*moon/i })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /target.*satellite/i }),
+    ).toBeDisabled()
+    expect(screen.getByText('1/2')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Unlock / Edit hint' }))
+    expect(onUnlockHint).toHaveBeenCalledOnce()
+
+    const unlockedView = {
+      ...lockedView,
+      hintSubmitted: false,
+      hintStatuses: hintingView.hintStatuses,
+      board: lockedBoard.map((card) =>
+        !card.locked && card.kind === 'civilian'
+          ? { ...card, kind: 'neutral' as const }
+          : card,
+      ),
+    }
+    view.rerender(<HintPhaseScreen view={unlockedView} {...props} />)
+
+    const hintInput = screen.getByLabelText('Your hint')
+    expect(hintInput).not.toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: /target.*moon/i })).toBeEnabled()
+    expect(
+      screen.getByRole('button', { name: /target.*satellite/i }),
+    ).toBeEnabled()
+    expect(
+      screen.getByRole('button', { name: /assassin.*poison/i }),
+    ).toBeDisabled()
+    expect(screen.getByText('0/2')).toBeVisible()
+
+    await user.clear(hintInput)
+    await user.type(hintInput, 'Galaxy')
+    await user.click(screen.getByRole('button', { name: /target.*moon/i }))
+    await user.click(screen.getByRole('button', { name: /available.*word 1/i }))
+    await user.click(screen.getByRole('button', { name: 'Lock in hint · 2' }))
+    expect(onSubmitHint).toHaveBeenCalledWith('Galaxy', [
+      'p0-card-1',
+      'p0-card-6',
+    ])
   })
 })
 

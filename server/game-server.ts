@@ -101,6 +101,10 @@ export class GameServer {
     )
   }
 
+  unlockHint(token: string, roomCode: string, now = Date.now()) {
+    return this.withRoom(roomCode, (room) => room.unlockHint(token, now))
+  }
+
   startGuessing(token: string, roomCode: string, now = Date.now()) {
     return this.withRoom(roomCode, (room) => room.startGuessing(token, now))
   }

@@ -45,6 +45,7 @@ type GameSocketContextValue = {
   removePlayer: (roomCode: string, playerId: string) => Promise<CommandResult>
   startGame: (roomCode: string) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
+  unlockHint: (roomCode: string) => Promise<CommandResult>
   startGuessing: (roomCode: string) => Promise<CommandResult>
   claimCard: (
     payload: ClaimCardPayload,
@@ -295,6 +296,13 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       ),
     [],
   )
+  const unlockHint = useCallback(
+    async (roomCode: string): Promise<CommandResult> =>
+      await runCommand(socketRef.current, (socket) =>
+        socket.emitWithAck('game:unlock-hint', { roomCode }),
+      ),
+    [],
+  )
   const startGuessing = useCallback(
     async (roomCode: string): Promise<CommandResult> =>
       await runCommand(socketRef.current, (socket) =>
@@ -338,6 +346,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       removePlayer,
       startGame,
       submitHint,
+      unlockHint,
       startGuessing,
       claimCard,
       finishGuessing,
@@ -357,6 +366,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       startGame,
       startGuessing,
       submitHint,
+      unlockHint,
       watchRoom,
     ],
   )
