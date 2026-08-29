@@ -92,29 +92,60 @@ export default function RulesPage() {
             <h2 id="scoring" className="mb-3 text-2xl font-black">
               4. Count the points
             </h2>
-            <dl className="space-y-4">
-              <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Target · +2 each</dt>
-                <dd>
-                  The successful picker earns 2 points, and the clue writer
-                  earns 2 points.
-                </dd>
-              </div>
-              <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Civilian · −1 each</dt>
-                <dd>
-                  The picker and clue writer each lose 1 point. Only that picker
-                  stops guessing on this board.
-                </dd>
-              </div>
-              <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Assassin · −3 each</dt>
-                <dd>
-                  The first picker to find it and the clue writer each lose 3
-                  points. The board ends and is revealed to everyone.
-                </dd>
-              </div>
-            </dl>
+            <p className="mb-4">
+              <strong>Each</strong> means the picker and clue master receive the
+              same score change.
+            </p>
+            <table className="rules-role-table">
+              <caption>Role scoring and effects</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Role</th>
+                  <th scope="col">Points</th>
+                  <th scope="col">Effect</th>
+                  <th scope="col">Locked tiles</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Target</th>
+                  <td data-label="Points">
+                    <strong>+2 each</strong>
+                  </td>
+                  <td data-label="Effect">Keep going.</td>
+                  <td data-label="Locked tiles">
+                    No target tiles start locked; the clue master can select at
+                    most <strong>5 targets total</strong>.
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Civilian</th>
+                  <td data-label="Points">
+                    <strong>−1 each</strong>
+                  </td>
+                  <td data-label="Effect">
+                    The player who selected it stops guessing.
+                  </td>
+                  <td data-label="Locked tiles">
+                    <strong>3</strong> randomly selected civilian tiles start
+                    locked.
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Assassin</th>
+                  <td data-label="Points">
+                    <strong>−3 each</strong>
+                  </td>
+                  <td data-label="Effect">
+                    The board ends globally for everyone.
+                  </td>
+                  <td data-label="Locked tiles">
+                    <strong>1</strong> randomly selected assassin tile starts
+                    locked.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
             <p className="mt-4">
               Scores can go below zero. Points carry over between clues.
             </p>

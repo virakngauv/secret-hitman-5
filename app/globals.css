@@ -597,6 +597,135 @@ button.word-card:focus-visible {
   font-weight: 800;
 }
 
+.rules-role-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.rules-role-table caption {
+  margin-bottom: 0.625rem;
+  text-align: left;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.rules-role-table th,
+.rules-role-table td {
+  padding: 0.75rem;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.rules-role-table th {
+  font-weight: 800;
+}
+
+.rules-role-table thead th {
+  background: color-mix(in oklab, var(--accent) 12%, var(--card));
+}
+
+.rules-role-table th:last-child,
+.rules-role-table td:last-child {
+  border-right: 0;
+}
+
+.rules-role-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.rules-role-table thead th:nth-child(1) {
+  width: 16%;
+}
+
+.rules-role-table thead th:nth-child(2) {
+  width: 16%;
+}
+
+.rules-role-table thead th:nth-child(3) {
+  width: 28%;
+}
+
+.rules-role-table thead th:nth-child(4) {
+  width: 40%;
+}
+
+@media (max-width: 39.9375rem) {
+  .rules-role-table {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .rules-role-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .rules-role-table tbody,
+  .rules-role-table tr,
+  .rules-role-table th,
+  .rules-role-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .rules-role-table tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .rules-role-table tr {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: var(--background);
+  }
+
+  .rules-role-table tbody th {
+    border-right: 0;
+    background: color-mix(in oklab, var(--accent) 12%, var(--card));
+    font-size: 1rem;
+  }
+
+  .rules-role-table td {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 0.4fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    border-right: 0;
+  }
+
+  .rules-role-table td::before {
+    content: attr(data-label);
+    font-weight: 800;
+  }
+
+  .rules-role-table tbody tr:last-child > * {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rules-role-table tbody tr > *:last-child {
+    border-bottom: 0;
+  }
+}
+
 /* Keep two columns below 360px so narrow phones retain readable card content. */
 @media (min-width: 22.5rem) {
   .word-grid {
