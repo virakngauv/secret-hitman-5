@@ -42,7 +42,7 @@ Room revisions are removed completely, not retained as a second identity mechani
 - Board initialization: uses the existing private initial seed and start time without a room counter. Default initial seeds already contain random entropy. Explicit fixed test seeds remain reproducible and do not control public turn identities.
 - Tests and smoke script: assert actual state, ownership, scores, and restored turn identity instead of treating counter increments as evidence of correctness.
 
-Protocol version 6 combines explicit turn identity with the unified locked-role, target-count, scoring, and board-completion contract. Deploy the frontend and game server together; older clients must reload to reconnect. No compatibility shim accepts revision-only commands.
+Protocol version 7 combines explicit turn identity with the unified locked-role, target-count, scoring, board-completion, and reversible hint-lock contracts. Deploy the frontend and game server together; older clients must reload to reconnect. No compatibility shim accepts revision-only commands.
 
 ## Host advancement
 
