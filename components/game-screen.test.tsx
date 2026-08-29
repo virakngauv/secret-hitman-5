@@ -209,8 +209,10 @@ describe('GuessingScreen messages', () => {
 
 describe('FinishedScreen', () => {
   it.each([
-    { scores: [8, 8, 5, 5, 1], places: [1, 1, 3, 3, 5] },
-    { scores: [8, 5, 1], places: [1, 2, 3] },
+    { scores: [100, 90, 80, 70, 60], places: [1, 2, 3, 4, 5] },
+    { scores: [100, 100, 90], places: [1, 1, 2] },
+    { scores: [100, 90, 90, 80], places: [1, 2, 2, 3] },
+    { scores: [100, 100, 100], places: [1, 1, 1] },
   ])(
     'ranks final scores $scores consistently, including ties',
     ({ scores, places }) => {
@@ -256,11 +258,25 @@ describe('FinishedScreen', () => {
             selector: '.score-value',
           }),
         ).toBeInTheDocument()
-        expect(
-          within(row).getByText(
-            places[index] === 1 ? 'Top score' : `Place ${places[index]}`,
-          ),
-        ).toBeInTheDocument()
+        const placeLabel =
+          places[index] < 4
+            ? `${['First', 'Second', 'Third'][places[index] - 1]} place`
+            : `Place ${places[index]}`
+        const placement = within(row).getByText(placeLabel, {
+          exact: false,
+          selector: '.score-placement',
+        })
+        expect(placement).toHaveTextContent(
+          places[index] < 4
+            ? `${['🥇', '🥈', '🥉'][places[index] - 1]} ${placeLabel}`
+            : placeLabel,
+        )
+        expect(placement).toBeVisible()
+        if (places[index] < 4) {
+          expect(
+            within(placement).getByText(['🥇', '🥈', '🥉'][places[index] - 1]),
+          ).toHaveAttribute('aria-hidden', 'true')
+        }
         if (places[index] === 1) expect(row).toHaveClass('score-row-winner')
         else expect(row).not.toHaveClass('score-row-winner')
       })
