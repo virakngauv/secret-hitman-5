@@ -100,8 +100,11 @@ describe('parseHint', () => {
     })
   })
 
-  it('accepts zero through five targets and rejects larger selections', () => {
-    for (let count = 0; count <= 5; count += 1) {
+  it('accepts one through five targets and rejects empty or larger selections', () => {
+    expect(
+      parseSubmitHint({ roomCode: 'bcdf2', hint: 'Orbit', targetCardIds: [] }),
+    ).toBeNull()
+    for (let count = 1; count <= 5; count += 1) {
       const targetCardIds = Array.from(
         { length: count },
         (_, index) => `p1-card-${index}`,

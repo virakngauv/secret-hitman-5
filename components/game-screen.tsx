@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   MAX_TARGET_COUNT,
+  MIN_TARGET_COUNT,
   type CardKind,
   type CommandResult,
   type RoomSnapshot,
@@ -57,6 +58,8 @@ export function HintPhaseScreen({
 
   const submit = async () => {
     if (!hint.trim()) return setError('Write a one-word or short phrase hint.')
+    if (selected.size < MIN_TARGET_COUNT)
+      return setError('Select at least one word for your hint.')
     setIsSubmitting(true)
     setError(null)
     const result = await onSubmitHint(hint.trim(), [...selected])
@@ -77,7 +80,7 @@ export function HintPhaseScreen({
       roomCode={view.roomCode}
       eyebrow="Phase 1 · Make your hint"
       title="Build one clue. Pick your targets."
-      subtitle="Three civilians and the assassin are locked. Select up to five targets, or submit a zero-target clue."
+      subtitle="Three civilians and the assassin are locked. Select one to five editable targets."
     >
       <div className="game-layout">
         <section className="game-panel min-w-0">
@@ -115,7 +118,7 @@ export function HintPhaseScreen({
               </div>
 
               <p className="mb-3 text-sm text-[var(--muted-foreground)]">
-                Select up to five words this hint should point to.
+                Select one to five words this hint should point to.
               </p>
               <div className="word-grid" aria-label="Your twelve word board">
                 {view.board.map((card) => {
@@ -178,7 +181,11 @@ export function HintPhaseScreen({
               <Button
                 className="mt-2 h-12 w-full sm:w-auto"
                 onClick={() => void submit()}
-                disabled={isSubmitting || !hint.trim()}
+                disabled={
+                  isSubmitting ||
+                  selected.size < MIN_TARGET_COUNT ||
+                  !hint.trim()
+                }
               >
                 {isSubmitting
                   ? 'Locking in…'

@@ -1,6 +1,7 @@
 import {
   GAME_PROTOCOL_VERSION,
   MAX_TARGET_COUNT,
+  MIN_TARGET_COUNT,
   type ClaimCardPayload,
   type CreateRoomPayload,
   type FinishGuessingPayload,
@@ -97,6 +98,7 @@ export function parseSubmitHint(value: unknown): SubmitHintPayload | null {
     !roomCode ||
     !hint ||
     !Array.isArray(targetCardIds) ||
+    targetCardIds.length < MIN_TARGET_COUNT ||
     targetCardIds.length > MAX_TARGET_COUNT ||
     targetCardIds.some(
       (cardId) => typeof cardId !== 'string' || !CARD_ID_PATTERN.test(cardId),

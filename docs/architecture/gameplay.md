@@ -5,7 +5,7 @@ lobby
   └─ host starts with 2–12 players
        ↓
 hinting
-  ├─ each starting player selects 0–5 targets from eight editable words around three locked civilians and a locked assassin
+  ├─ each starting player selects 1–5 targets from eight editable words around three locked civilians and a locked assassin
   ├─ the selection count becomes the hint number
   └─ after all hints are submitted, the host manually selects “Start guessing”
        ↓
@@ -68,4 +68,4 @@ Moving to a server-issued HttpOnly cookie requires a coordinated session protoco
 
 ## Fixed clue-building roles
 
-Each 12-word board receives three locked civilians and one locked assassin. The server selects distinct positions using a separate seeded shuffle at board creation; rerenders, refreshes, and reconnects reuse the stored assignments. The eight remaining words stay editable. Submitted target IDs may contain zero through five distinct editable cards and must exclude locked roles; invalid requests leave the board and ready status unchanged. Unselected cards become civilians. Only the clue-maker receives their private hinting board and lock metadata. Guessing snapshots do not expose locks.
+Each 12-word board receives three locked civilians and one locked assassin. The server selects distinct positions using a separate seeded shuffle at board creation; rerenders, refreshes, and reconnects reuse the stored assignments. The eight remaining words stay editable. Player-submitted target IDs must contain one through five distinct editable cards and exclude locked roles; invalid requests leave the board and ready status unchanged. A player who leaves before submitting receives an internal zero-target `PASS` fallback so the room can continue. Unselected cards become civilians. Only the clue-maker receives their private hinting board and lock metadata. Guessing snapshots do not expose locks.

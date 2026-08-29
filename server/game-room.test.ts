@@ -126,6 +126,7 @@ describe('GameRoom single-round flow', () => {
       ({ kind }) => kind === 'civilian' || kind === 'assassin',
     )
     for (const targetCardIds of [
+      [],
       [neutral.id, neutral.id],
       [neutral.id, 'not-a-card'],
       ...forbidden.map(({ id }) => [neutral.id, id]),
@@ -214,7 +215,7 @@ describe('GameRoom single-round flow', () => {
     ).toHaveLength(6)
   })
 
-  it.each([0, 1, 2, 3, 4, 5])(
+  it.each([1, 2, 3, 4, 5])(
     'accepts a hint with %i selected targets',
     (count) => {
       const room = createRoom()

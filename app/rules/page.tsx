@@ -47,7 +47,7 @@ export default function RulesPage() {
             <p>
               You receive a private board of 12 words. Three civilians and the
               assassin are randomly locked: you cannot change their roles. The
-              other eight words are editable. Select zero to five of them as
+              other eight words are editable. Select one to five of them as
               targets; every unselected non-assassin word becomes a civilian.
             </p>
             <p className="mt-3">

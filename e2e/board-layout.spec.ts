@@ -75,7 +75,8 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await host.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await expect(host.getByText('Hint locked in')).toBeVisible()
     await guest.getByLabel('Your hint').fill('Garden')
-    await guest.getByRole('button', { name: 'Lock in hint · 0' }).click()
+    await guest.locator('button[data-card-kind="neutral"]').first().click()
+    await guest.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await host.getByRole('button', { name: 'Start guessing' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
 

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import {
   MAX_TARGET_COUNT,
   MAX_STARTING_PLAYERS,
+  MIN_TARGET_COUNT,
   type CardKind,
   type ClaimCardPayload,
   type CommandResult,
@@ -286,6 +287,7 @@ export class GameRoom {
     )
     if (
       targetIds.size !== payload.targetCardIds.length ||
+      targetIds.size < MIN_TARGET_COUNT ||
       targetIds.size > MAX_TARGET_COUNT ||
       [...targetIds].some((cardId) => !selectableIds.has(cardId)) ||
       seat.board.some(({ id, locked }) => locked && targetIds.has(id))
@@ -293,7 +295,7 @@ export class GameRoom {
       return {
         status: 'invalid',
         message:
-          'Select up to five editable words and leave locked civilians and the assassin unchanged.',
+          'Select one to five editable words and leave locked civilians and the assassin unchanged.',
       }
     }
 
