@@ -59,6 +59,7 @@ describe('HintPhaseScreen', () => {
       <HintPhaseScreen
         view={hintingView}
         onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
