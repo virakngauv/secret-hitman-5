@@ -864,13 +864,14 @@ describe('Socket.IO Secret Hitman protocol', () => {
     const replayedHinting = await replayedHost.emitWithAck('session:resume', {
       roomCode,
     })
-    const guestHinting = socketServer.gameServer.snapshot(guestToken, roomCode)
+    const guestHinting = await guest.emitWithAck('session:resume', { roomCode })
     if (
       replayedHinting.status !== 'success' ||
       replayedHinting.snapshot?.status !== 'hinting' ||
       !replayedHinting.snapshot.board ||
-      guestHinting.status !== 'hinting' ||
-      !guestHinting.board
+      guestHinting.status !== 'success' ||
+      guestHinting.snapshot?.status !== 'hinting' ||
+      !guestHinting.snapshot.board
     ) {
       throw new Error('Expected both private hinting boards.')
     }
@@ -879,7 +880,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       .filter(({ kind }) => kind === 'neutral')
       .slice(0, 2)
       .map(({ id }) => id)
-    const guestTargets = guestHinting.board
+    const guestTargets = guestHinting.snapshot.board
       .filter(({ kind }) => kind === 'neutral')
       .slice(0, 2)
       .map(({ id }) => id)
