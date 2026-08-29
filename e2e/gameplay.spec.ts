@@ -8,7 +8,7 @@ import {
 
 test.describe('Secret Hitman single round', () => {
   for (const ending of ['pass', 'civilian', 'assassin'] as const) {
-    test(`reveals only the finished picker after ${ending}, including reloads`, async ({
+    test(`preserves ${ending} completion and visibility across reloads`, async ({
       browser,
     }, testInfo) => {
       test.setTimeout(90_000)
@@ -69,8 +69,13 @@ test.describe('Secret Hitman single round', () => {
             )
             .click()
         }
+        if (ending === 'assassin') {
+          await expect(
+            guest.getByText(/Assassin. You and the clue-giver/),
+          ).toBeVisible()
+        }
         await expect(
-          guest.getByText(/Your board is fully revealed; active pickers/),
+          guest.getByText(/Guessing is done for this hint/),
         ).toBeVisible()
         await expect(
           guest.locator('button[data-card-kind="hidden"]'),
@@ -88,17 +93,34 @@ test.describe('Secret Hitman single round', () => {
         for (const viewer of [third, spectator]) {
           await expect(
             viewer.locator('button[data-card-kind="hidden"]'),
-          ).toHaveCount(ending === 'civilian' ? 11 : 12)
+          ).toHaveCount(
+            ending === 'assassin' ? 0 : ending === 'civilian' ? 11 : 12,
+          )
           await expect(
             viewer.locator(`button[data-card-id="${assassinId}"]`),
-          ).toHaveAttribute('data-card-kind', 'hidden')
-          await expect(
-            viewer.locator(`button[data-card-id="${assassinId}"]`),
-          ).not.toContainText('Grace')
+          ).toHaveAttribute(
+            'data-card-kind',
+            ending === 'assassin' ? 'assassin' : 'hidden',
+          )
+          if (ending === 'assassin') {
+            await expect(
+              viewer.locator(`button[data-card-id="${assassinId}"]`),
+            ).toContainText('Grace')
+          } else {
+            await expect(
+              viewer.locator(`button[data-card-id="${assassinId}"]`),
+            ).not.toContainText('Grace')
+          }
         }
-        await expect(
-          third.locator(`button[data-card-id="${assassinId}"]`),
-        ).toBeEnabled()
+        if (ending === 'assassin') {
+          await expect(
+            third.locator(`button[data-card-id="${assassinId}"]`),
+          ).toBeDisabled()
+        } else {
+          await expect(
+            third.locator(`button[data-card-id="${assassinId}"]`),
+          ).toBeEnabled()
+        }
         await guest.reload()
         await third.reload()
         await expect(guest.locator('button[data-card-id]')).toHaveCount(12)
@@ -110,10 +132,19 @@ test.describe('Secret Hitman single round', () => {
         )
         await expect(
           third.locator(`button[data-card-id="${assassinId}"]`),
-        ).toHaveAttribute('data-card-kind', 'hidden')
-        await expect(
-          third.locator(`button[data-card-id="${assassinId}"]`),
-        ).toBeEnabled()
+        ).toHaveAttribute(
+          'data-card-kind',
+          ending === 'assassin' ? 'assassin' : 'hidden',
+        )
+        if (ending === 'assassin') {
+          await expect(
+            third.locator(`button[data-card-id="${assassinId}"]`),
+          ).toBeDisabled()
+        } else {
+          await expect(
+            third.locator(`button[data-card-id="${assassinId}"]`),
+          ).toBeEnabled()
+        }
         await guest.screenshot({
           path: testInfo.outputPath('finished-picker.png'),
           fullPage: true,
@@ -122,24 +153,10 @@ test.describe('Secret Hitman single round', () => {
           path: testInfo.outputPath('active-picker.png'),
           fullPage: true,
         })
-        await third.locator(`button[data-card-id="${targetId}"]`).click()
-        await expect(third.getByText(/Target found/)).toBeVisible()
-        for (const viewer of [guest, third, spectator]) {
-          await expect(
-            viewer.locator(`button[data-card-id="${targetId}"]`),
-          ).toContainText('Linus')
-          await expect(
-            viewer.locator(`button[data-card-id="${targetId}"]`),
-          ).toBeDisabled()
-        }
         if (ending === 'assassin') {
-          await third.locator(`button[data-card-id="${assassinId}"]`).click()
-          await expect(
-            third.getByText(/Assassin. You and the clue-giver/),
-          ).toBeVisible()
           for (const [name, score] of [
-            ['Ada', '-1'],
-            ['Grace', '-1'],
+            ['Ada', '-3'],
+            ['Grace', '-3'],
             ['Linus', '0'],
           ]) {
             await expect(
@@ -149,12 +166,31 @@ test.describe('Secret Hitman single round', () => {
                 .locator('.score-value'),
             ).toHaveText(score)
           }
+          for (const viewer of [guest, third, spectator]) {
+            await expect(
+              viewer.locator('button[data-card-kind="hidden"]'),
+            ).toHaveCount(0)
+            await expect(
+              viewer.locator('button[data-card-id]:enabled'),
+            ).toHaveCount(0)
+            await expect(
+              viewer.locator(`button[data-card-id="${assassinId}"]`),
+            ).toContainText('Grace')
+          }
           await expect(
-            guest.locator(`button[data-card-id="${assassinId}"]`),
-          ).toContainText('Grace, Linus')
-          await expect(
-            spectator.locator(`button[data-card-id="${assassinId}"]`),
-          ).toHaveAttribute('data-card-kind', 'hidden')
+            host.getByRole('button', { name: 'Next hint' }),
+          ).toBeEnabled()
+        } else {
+          await third.locator(`button[data-card-id="${targetId}"]`).click()
+          await expect(third.getByText(/Target found/)).toBeVisible()
+          for (const viewer of [guest, third, spectator]) {
+            await expect(
+              viewer.locator(`button[data-card-id="${targetId}"]`),
+            ).toContainText('Linus')
+            await expect(
+              viewer.locator(`button[data-card-id="${targetId}"]`),
+            ).toBeDisabled()
+          }
         }
       } finally {
         await Promise.all(contexts.map((context) => context.close()))
@@ -212,7 +248,7 @@ test.describe('Secret Hitman single round', () => {
       expect(targetId).toBeTruthy()
       await guest.locator(`button[data-card-id="${targetId}"]`).click()
       await expect(guest.getByText(/Target found/)).toBeVisible()
-      await expect(guest.locator('.score-value')).toHaveText(['1', '1'])
+      await expect(guest.locator('.score-value')).toHaveText(['2', '2'])
 
       const nextHint = host.getByRole('button', { name: 'Next hint' })
       await expect(nextHint).toBeDisabled()

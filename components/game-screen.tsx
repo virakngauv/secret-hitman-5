@@ -6,6 +6,8 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  MAX_TARGET_COUNT,
+  MIN_TARGET_COUNT,
   type CardKind,
   type CommandResult,
   type RoomSnapshot,
@@ -30,7 +32,12 @@ export function HintPhaseScreen({
   onStartGuessing: () => Promise<CommandResult>
 }) {
   const [hint, setHint] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [editableSelected, setSelected] = useState<Set<string>>(() => new Set())
+  const selected = new Set(
+    view.board
+      ?.filter((card) => !card.locked && editableSelected.has(card.id))
+      .map(({ id }) => id),
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,10 +47,11 @@ export function HintPhaseScreen({
   ).length
 
   const toggleCard = (cardId: string) => {
+    if (view.board?.find(({ id }) => id === cardId)?.locked) return
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(cardId)) next.delete(cardId)
-      else next.add(cardId)
+      else if (next.size < MAX_TARGET_COUNT) next.add(cardId)
       return next
     })
     setError(null)
@@ -51,7 +59,7 @@ export function HintPhaseScreen({
 
   const submit = async () => {
     if (!hint.trim()) return setError('Write a one-word or short phrase hint.')
-    if (selected.size === 0)
+    if (selected.size < MIN_TARGET_COUNT)
       return setError('Select at least one word for your hint.')
     setIsSubmitting(true)
     setError(null)
@@ -73,7 +81,7 @@ export function HintPhaseScreen({
       roomCode={view.roomCode}
       eyebrow="Phase 1 · Make your hint"
       title="Build one clue. Pick your targets."
-      subtitle="The assassin is locked. Your clue number updates from the words you select."
+      subtitle="Three civilians and the assassin are locked. Select one to five editable targets."
     >
       <div className="game-layout">
         <section className="game-panel min-w-0">
@@ -111,7 +119,7 @@ export function HintPhaseScreen({
               </div>
 
               <p className="mb-3 text-sm text-[var(--muted-foreground)]">
-                Select every word this hint should point to.
+                Select one to five words this hint should point to.
               </p>
               <div className="word-grid" aria-label="Your twelve word board">
                 {view.board.map((card) => {
@@ -123,22 +131,45 @@ export function HintPhaseScreen({
                       type="button"
                       data-card-id={card.id}
                       data-card-kind={card.kind}
+                      data-card-locked={card.locked}
+                      aria-label={`${isAssassin ? 'Assassin' : isSelected ? 'Target' : card.kind === 'civilian' ? 'Civilian' : 'Available'}${card.locked ? ' · Locked' : ''} · ${card.word}`}
                       className={cn(
                         'word-card',
                         isSelected && 'word-card-target',
                         isAssassin && 'word-card-assassin',
+                        card.kind === 'civilian' && 'word-card-civilian',
                       )}
                       onClick={() => toggleCard(card.id)}
-                      disabled={isAssassin || isSubmitting}
+                      disabled={
+                        card.locked ||
+                        isSubmitting ||
+                        (!isSelected && selected.size >= MAX_TARGET_COUNT)
+                      }
                       aria-pressed={isSelected}
                     >
                       <span className="word-card-index">
                         {isAssassin
-                          ? 'ASSASSIN · LOCKED'
+                          ? 'ASSASSIN'
                           : isSelected
                             ? 'TARGET'
-                            : 'AVAILABLE'}
+                            : card.kind === 'civilian'
+                              ? 'CIVILIAN'
+                              : 'AVAILABLE'}
                       </span>
+                      {card.locked && (
+                        <svg
+                          className="word-card-lock"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <rect x="5" y="10" width="14" height="11" rx="2" />
+                          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                        </svg>
+                      )}
                       <span className="word-card-word">{card.word}</span>
                     </button>
                   )
@@ -151,7 +182,11 @@ export function HintPhaseScreen({
               <Button
                 className="mt-2 h-12 w-full sm:w-auto"
                 onClick={() => void submit()}
-                disabled={isSubmitting || selected.size === 0 || !hint.trim()}
+                disabled={
+                  isSubmitting ||
+                  selected.size < MIN_TARGET_COUNT ||
+                  !hint.trim()
+                }
               >
                 {isSubmitting
                   ? 'Locking in…'
@@ -244,10 +279,10 @@ export function GuessingScreen({
     if (result.status !== 'success') return setFeedback(result.message)
     setFeedback(
       result.kind === 'target'
-        ? 'Target found. Keep going or stop while you’re ahead.'
+        ? 'Target found. You and the clue-giver each gain 2 points.'
         : result.kind === 'civilian'
-          ? 'Civilian. Your guessing is done for this hint.'
-          : 'Assassin. You and the clue-giver each lose a point.',
+          ? 'Civilian. You and the clue-giver each lose 1 point; your guessing is done.'
+          : 'Assassin. You and the clue-giver each lose 3 points; this board is complete.',
     )
   }
 
@@ -278,8 +313,8 @@ export function GuessingScreen({
           : view.player.participation === 'spectator'
             ? 'Spectator mode · follow the guesses without changing the board.'
             : view.canGuess
-              ? 'Choose carefully. A civilian ends your turn; the assassin costs two points total.'
-              : 'Your guessing is done for this hint. Your board is fully revealed; active pickers still see hidden cards.'
+              ? 'Choose carefully. A civilian costs 1 point each; the assassin costs 3 points each and ends the board.'
+              : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
       }
     >
       <section className="clue-banner" aria-label="Current hint">

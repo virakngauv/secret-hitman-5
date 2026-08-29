@@ -36,18 +36,60 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
   allHintsSubmitted: false,
   hintSubmitted: false,
   board: [
-    { id: 'p0-card-0', word: 'MOON', kind: 'neutral' },
-    { id: 'p0-card-1', word: 'SATELLITE', kind: 'neutral' },
-    { id: 'p0-card-2', word: 'POISON', kind: 'assassin' },
-    ...Array.from({ length: 9 }, (_, index) => ({
-      id: `p0-card-${index + 3}`,
+    { id: 'p0-card-0', word: 'MOON', kind: 'neutral', locked: false },
+    { id: 'p0-card-1', word: 'SATELLITE', kind: 'neutral', locked: false },
+    { id: 'p0-card-2', word: 'POISON', kind: 'assassin', locked: true },
+    { id: 'p0-card-3', word: 'ROCKET', kind: 'civilian', locked: true },
+    { id: 'p0-card-4', word: 'RIVER', kind: 'civilian', locked: true },
+    { id: 'p0-card-5', word: 'FOREST', kind: 'civilian', locked: true },
+    ...Array.from({ length: 6 }, (_, index) => ({
+      id: `p0-card-${index + 6}`,
       word: `WORD ${index + 1}`,
       kind: 'neutral' as const,
+      locked: false,
     })),
   ],
 }
 
 describe('HintPhaseScreen', () => {
+  it('keeps fixed roles disabled and requires at least one editable target', async () => {
+    const user = userEvent.setup()
+    const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
+    const props = { view: hintingView, onSubmitHint, onStartGuessing: vi.fn() }
+    const first = render(<HintPhaseScreen {...props} />)
+    for (const name of [
+      /civilian.*locked.*rocket/i,
+      /civilian.*locked.*river/i,
+      /civilian.*locked.*forest/i,
+      /assassin.*locked.*poison/i,
+    ]) {
+      const card = screen.getByRole('button', { name })
+      expect(card).toBeDisabled()
+      expect(card.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+      await user.click(card)
+    }
+    await user.click(screen.getByRole('button', { name: /available.*moon/i }))
+    expect(
+      screen.getByText('1', { selector: '.hint-number-value' }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /target.*moon/i }))
+    expect(
+      screen.getByText('0', { selector: '.hint-number-value' }),
+    ).toBeInTheDocument()
+    first.unmount()
+    render(<HintPhaseScreen {...props} />)
+    expect(
+      screen.getByRole('button', { name: /civilian.*locked.*rocket/i }),
+    ).toHaveAttribute('aria-pressed', 'false')
+    await user.type(screen.getByLabelText('Your hint'), 'space')
+    expect(
+      screen.getByRole('button', { name: 'Lock in hint · 0' }),
+    ).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /available.*moon/i }))
+    await user.click(screen.getByRole('button', { name: 'Lock in hint · 1' }))
+    expect(onSubmitHint).toHaveBeenCalledWith('space', ['p0-card-0'])
+  })
+
   it('auto-counts selected cards, freezes the assassin, and submits the derived targets', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
@@ -80,6 +122,28 @@ describe('HintPhaseScreen', () => {
       'p0-card-0',
       'p0-card-1',
     ])
+  })
+
+  it('caps target selection at five while keeping selected cards editable', async () => {
+    const user = userEvent.setup()
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+    const editable = screen
+      .getAllByRole('button', { name: /available/i })
+      .slice(0, 6)
+    for (const card of editable.slice(0, 5)) await user.click(card)
+    expect(
+      screen.getByText('5', { selector: '.hint-number-value' }),
+    ).toBeVisible()
+    expect(editable[5]).toBeDisabled()
+    expect(editable[0]).toBeEnabled()
+    await user.click(editable[0])
+    expect(editable[5]).toBeEnabled()
   })
 })
 

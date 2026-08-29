@@ -99,6 +99,31 @@ describe('parseHint', () => {
       targetCardIds: ['p1-card-1'],
     })
   })
+
+  it('accepts one through five targets and rejects empty or larger selections', () => {
+    expect(
+      parseSubmitHint({ roomCode: 'bcdf2', hint: 'Orbit', targetCardIds: [] }),
+    ).toBeNull()
+    for (let count = 1; count <= 5; count += 1) {
+      const targetCardIds = Array.from(
+        { length: count },
+        (_, index) => `p1-card-${index}`,
+      )
+      expect(
+        parseSubmitHint({ roomCode: 'bcdf2', hint: 'Orbit', targetCardIds }),
+      ).toEqual({ roomCode: 'bcdf2', hint: 'Orbit', targetCardIds })
+    }
+    expect(
+      parseSubmitHint({
+        roomCode: 'bcdf2',
+        hint: 'Orbit',
+        targetCardIds: Array.from(
+          { length: 6 },
+          (_, index) => `p1-card-${index}`,
+        ),
+      }),
+    ).toBeNull()
+  })
 })
 
 describe('parsePlayerName', () => {

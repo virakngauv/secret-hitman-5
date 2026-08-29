@@ -1,8 +1,9 @@
-export const GAME_PROTOCOL_VERSION = 4 as const
+export const GAME_PROTOCOL_VERSION = 6 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
-export const MAX_TARGET_COUNT = BOARD_CARD_COUNT - 1
+export const MIN_TARGET_COUNT = 1
+export const MAX_TARGET_COUNT = 5
 
 export type RoomPhase = 'lobby' | 'hinting' | 'guessing' | 'finished'
 export type PlayerRole = 'host' | 'player'
@@ -30,7 +31,8 @@ export type HintStatus = {
 export type HintCardSnapshot = {
   id: string
   word: string
-  kind: 'neutral' | 'assassin'
+  kind: 'neutral' | CardKind
+  locked: boolean
 }
 
 export type GuessCardSnapshot = {
