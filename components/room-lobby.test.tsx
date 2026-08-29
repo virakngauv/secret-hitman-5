@@ -140,21 +140,26 @@ describe('RoomLobby invite prompt', () => {
     render(<RoomLobby roomCode="bcdf2" />)
 
     expect(screen.getByRole('status')).toHaveTextContent(message)
-    expect(
-      screen.getByRole('button', { name: 'Start the single round' }),
-    ).toBeDisabled()
+    expect(screen.getByRole('main')).not.toHaveTextContent(
+      /\b(?:timers?|rounds?)\b/i,
+    )
+    expect(screen.getByRole('button', { name: 'Start game' })).toBeDisabled()
   })
 
   it('shows the ready message and enables starting when enough players join', () => {
     mocks.view = readyLobby()
     render(<RoomLobby roomCode="bcdf2" />)
 
+    expect(
+      screen.getByRole('heading', { name: 'Assemble the room.' }),
+    ).toBeVisible()
+    expect(screen.getByRole('main')).not.toHaveTextContent(
+      /Everyone who is here when the host starts|Late arrivals can still watch as spectators/i,
+    )
     expect(screen.getByRole('status')).toHaveTextContent(
       'Ready when the host is.',
     )
-    expect(
-      screen.getByRole('button', { name: 'Start the single round' }),
-    ).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Start game' })).toBeEnabled()
   })
 
   it('shows a server error instead of the normal prompt after starting fails', async () => {
@@ -166,9 +171,7 @@ describe('RoomLobby invite prompt', () => {
     })
     render(<RoomLobby roomCode="bcdf2" />)
 
-    await user.click(
-      screen.getByRole('button', { name: 'Start the single round' }),
-    )
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
 
     expect(mocks.startGame).toHaveBeenCalledWith('bcdf2')
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -187,9 +190,7 @@ describe('RoomLobby invite prompt', () => {
       message: 'Too many commands.',
     })
     render(<RoomLobby roomCode="bcdf2" />)
-    await user.click(
-      screen.getByRole('button', { name: 'Start the single round' }),
-    )
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Too many commands.',
     )

@@ -215,7 +215,7 @@ export function HintPhaseScreen({
             <div className="host-control">
               <p className="host-control-label">Host control</p>
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                No timer. Start when all hints are locked.
+                Start when all hints are locked.
               </p>
               <Button
                 className="mt-4 w-full"
@@ -371,10 +371,7 @@ export function GuessingScreen({
         </section>
 
         <aside className="game-panel game-sidebar">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="sidebar-title">Scorecard</h2>
-            <span className="phase-count">1 round</span>
-          </div>
+          <h2 className="sidebar-title">Scorecard</h2>
           <ol className="mt-4 grid gap-2">
             {players.map((player) => {
               const turnState = view.turnPlayers.find(
@@ -447,7 +444,7 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
   return (
     <GamePageShell
       roomCode={view.roomCode}
-      eyebrow="Single round complete"
+      eyebrow="Game complete"
       title={`${winnerNames} ${view.winners.length === 1 ? 'wins' : 'win'}`}
       subtitle="Every player gave one hint. Final scores are locked."
     >
