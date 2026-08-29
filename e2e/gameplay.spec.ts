@@ -155,8 +155,8 @@ test.describe('Secret Hitman single round', () => {
         })
         if (ending === 'assassin') {
           for (const [name, score] of [
-            ['Ada', '-3'],
-            ['Grace', '-3'],
+            ['Ada', '-5'],
+            ['Grace', '-5'],
             ['Linus', '0'],
           ]) {
             await expect(
@@ -248,7 +248,7 @@ test.describe('Secret Hitman single round', () => {
       expect(targetId).toBeTruthy()
       await guest.locator(`button[data-card-id="${targetId}"]`).click()
       await expect(guest.getByText(/Target found/)).toBeVisible()
-      await expect(guest.locator('.score-value')).toHaveText(['2', '2'])
+      await expect(guest.locator('.score-value')).toHaveText(['3', '3'])
 
       const nextHint = host.getByRole('button', { name: 'Next hint' })
       await expect(nextHint).toBeDisabled()

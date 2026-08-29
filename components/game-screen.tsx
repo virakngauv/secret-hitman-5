@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  CARD_SCORE,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
   type CardKind,
@@ -125,6 +126,13 @@ export function HintPhaseScreen({
                 {view.board.map((card) => {
                   const isAssassin = card.kind === 'assassin'
                   const isSelected = selected.has(card.id)
+                  const roleLabel = isAssassin
+                    ? `Assassin (${formatScore(CARD_SCORE.assassin)})`
+                    : isSelected
+                      ? `Target (${formatScore(CARD_SCORE.target)})`
+                      : card.kind === 'civilian'
+                        ? `Civilian (${formatScore(CARD_SCORE.civilian)})`
+                        : `Available (${formatScore(CARD_SCORE.civilian)})`
                   return (
                     <button
                       key={card.id}
@@ -132,7 +140,7 @@ export function HintPhaseScreen({
                       data-card-id={card.id}
                       data-card-kind={card.kind}
                       data-card-locked={card.locked}
-                      aria-label={`${isAssassin ? 'Assassin' : isSelected ? 'Target' : card.kind === 'civilian' ? 'Civilian' : 'Available'}${card.locked ? ' · Locked' : ''} · ${card.word}`}
+                      aria-label={`${roleLabel}${card.locked ? ' · Locked' : ''} · ${card.word}`}
                       className={cn(
                         'word-card',
                         isSelected && 'word-card-target',
@@ -147,15 +155,7 @@ export function HintPhaseScreen({
                       }
                       aria-pressed={isSelected}
                     >
-                      <span className="word-card-index">
-                        {isAssassin
-                          ? 'ASSASSIN'
-                          : isSelected
-                            ? 'TARGET'
-                            : card.kind === 'civilian'
-                              ? 'CIVILIAN'
-                              : 'AVAILABLE'}
-                      </span>
+                      <span className="word-card-index">{roleLabel}</span>
                       {card.locked && (
                         <svg
                           className="word-card-lock"
@@ -279,10 +279,10 @@ export function GuessingScreen({
     if (result.status !== 'success') return setFeedback(result.message)
     setFeedback(
       result.kind === 'target'
-        ? 'Target found. You and the clue-giver each gain 2 points.'
+        ? 'Target found. You and the clue-giver each gain 3 points.'
         : result.kind === 'civilian'
           ? 'Civilian. You and the clue-giver each lose 1 point; your guessing is done.'
-          : 'Assassin. You and the clue-giver each lose 3 points; this board is complete.',
+          : 'Assassin. You and the clue-giver each lose 5 points; this board is complete.',
     )
   }
 
@@ -313,7 +313,7 @@ export function GuessingScreen({
           : view.player.participation === 'spectator'
             ? 'Spectator mode · follow the guesses without changing the board.'
             : view.canGuess
-              ? 'Choose carefully. A civilian costs 1 point each; the assassin costs 3 points each and ends the board.'
+              ? 'Choose carefully. A civilian costs 1 point each; the assassin costs 5 points each and ends the board.'
               : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
       }
     >
@@ -442,6 +442,10 @@ export function GuessingScreen({
       </div>
     </GamePageShell>
   )
+}
+
+function formatScore(score: number) {
+  return score > 0 ? `+${score}` : `−${Math.abs(score)}`
 }
 
 export function FinishedScreen({ view }: { view: FinishedView }) {

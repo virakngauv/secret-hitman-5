@@ -10,6 +10,12 @@ export type PlayerRole = 'host' | 'player'
 export type Participation = 'player' | 'spectator'
 export type CardKind = 'target' | 'civilian' | 'assassin'
 
+export const CARD_SCORE = {
+  target: 3,
+  civilian: -1,
+  assassin: -5,
+} as const satisfies Record<CardKind, number>
+
 export type PlayerIdentity = {
   playerId: string
   name: string

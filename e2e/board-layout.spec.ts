@@ -41,6 +41,15 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(locked).toHaveCount(4)
     await expect(host.locator('[data-card-kind="target"]')).toHaveCount(0)
     await expect(host.locator('[data-card-kind="civilian"]')).toHaveCount(3)
+    await expect(
+      host.getByRole('button', { name: /Available \(−1\)/i }).first(),
+    ).toBeVisible()
+    await expect(
+      host.getByRole('button', { name: /Civilian \(−1\).*Locked/i }).first(),
+    ).toBeVisible()
+    await expect(
+      host.getByRole('button', { name: /Assassin \(−5\).*Locked/i }),
+    ).toBeVisible()
     const fixedBefore = await locked.evaluateAll((cards) =>
       cards.map((card) => ({
         id: card.getAttribute('data-card-id'),
@@ -69,6 +78,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const targetId = await targets.first().getAttribute('data-card-id')
     await targets.nth(0).click()
     await expect(targets.nth(0)).toHaveAttribute('aria-pressed', 'true')
+    await expect(targets.nth(0)).toHaveAccessibleName(/Target \(\+3\)/i)
     await checkWidths(host, 'hinting', testInfo)
 
     await host.getByLabel('Your hint').fill('Orbit')
@@ -82,7 +92,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
 
     await guest.locator(`button[data-card-id="${targetId}"]`).click()
     await expect(guest.getByText(/Target found/)).toBeVisible()
-    await expect(guest.locator('.score-value')).toHaveText(['2', '2'])
+    await expect(guest.locator('.score-value')).toHaveText(['3', '3'])
     await expect(
       guest.locator(`button[data-card-id="${targetId}"]`),
     ).toBeDisabled()

@@ -20,7 +20,9 @@ for (const viewport of [
       '4. Count the points',
       '5. Finish the game',
     ])
-    await expect(page.getByText('Assassin · −3 each')).toBeVisible()
+    await expect(page.getByText('Target · +3 each')).toBeVisible()
+    await expect(page.getByText('Civilian · −1 each')).toBeVisible()
+    await expect(page.getByText('Assassin · −5 each')).toBeVisible()
     await expect(
       page.getByRole('button', { name: /sign in|join/i }),
     ).toHaveCount(0)

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  CARD_SCORE,
   MAX_TARGET_COUNT,
   MAX_STARTING_PLAYERS,
   MIN_TARGET_COUNT,
@@ -380,16 +381,13 @@ export class GameRoom {
     }
 
     card.claimers.push({ playerId: member.playerId, name: member.name })
-    if (card.kind === 'target') {
-      seat.score += 2
-      if (clueGiver.game) clueGiver.game.score += 2
-    } else if (card.kind === 'civilian') {
-      seat.score -= 1
-      if (clueGiver.game) clueGiver.game.score -= 1
+    const scoreDelta = CARD_SCORE[card.kind]
+    seat.score += scoreDelta
+    if (clueGiver.game) clueGiver.game.score += scoreDelta
+
+    if (card.kind === 'civilian') {
       seat.turnState = 'done'
-    } else {
-      seat.score -= 3
-      if (clueGiver.game) clueGiver.game.score -= 3
+    } else if (card.kind === 'assassin') {
       this.completeCurrentTurn()
     }
 

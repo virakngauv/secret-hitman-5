@@ -270,7 +270,7 @@ describe('GameRoom single-round flow', () => {
       expect(room.lastMeaningfulActivityAt).toBe(activity)
     }
     expect(guessing(room).scoreboard.map(({ score }) => score)).toEqual([
-      4, 2, 2,
+      6, 3, 3,
     ])
   })
 
@@ -661,9 +661,9 @@ describe('GameRoom single-round flow', () => {
       ])
       expect(after.scoreboard.map(({ score }) => score)).toEqual(
         kind === 'assassin'
-          ? [-3, -3, 0]
+          ? [-5, -5, 0]
           : kind === 'target'
-            ? [2, 2, 0]
+            ? [3, 3, 0]
             : [-1, -1, 0],
       )
       expect(room.claimCard(guestToken, payload)).toEqual({
@@ -887,7 +887,7 @@ describe('GameRoom single-round flow', () => {
       guessing(room)
         .scoreboard.filter(({ participation }) => participation === 'player')
         .map(({ score }) => score),
-    ).toEqual([2, 2])
+    ).toEqual([3, 3])
 
     const afterTarget = guessing(room, guestToken)
     const civilian = guessing(room, hostToken).board.find(
@@ -906,7 +906,7 @@ describe('GameRoom single-round flow', () => {
       guessing(room, guestToken)
         .scoreboard.filter(({ participation }) => participation === 'player')
         .map(({ score }) => score),
-    ).toEqual([1, 1])
+    ).toEqual([2, 2])
   })
 
   it('globally completes and reveals the board on the first assassin claim', () => {
@@ -940,7 +940,7 @@ describe('GameRoom single-round flow', () => {
     const scores = thirdView.scoreboard.filter(
       ({ participation }) => participation === 'player',
     )
-    expect(scores.map(({ score }) => score)).toEqual([-3, -3, 0])
+    expect(scores.map(({ score }) => score)).toEqual([-5, -5, 0])
     expect(
       room.claimCard(thirdToken, {
         roomCode: room.code,

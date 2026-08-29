@@ -52,6 +52,40 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
 }
 
 describe('HintPhaseScreen', () => {
+  it('shows the score beside every clue-board role and state', async () => {
+    const user = userEvent.setup()
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', {
+        name: /available \(−1\).*moon/i,
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /civilian \(−1\).*locked.*rocket/i,
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /assassin \(−5\).*locked.*poison/i,
+      }),
+    ).toBeVisible()
+
+    await user.click(
+      screen.getByRole('button', { name: /available \(−1\).*moon/i }),
+    )
+    expect(
+      screen.getByRole('button', { name: /target \(\+3\).*moon/i }),
+    ).toBeVisible()
+  })
+
   it('keeps fixed roles disabled and requires at least one editable target', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })

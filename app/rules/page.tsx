@@ -94,10 +94,10 @@ export default function RulesPage() {
             </h2>
             <dl className="space-y-4">
               <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Target · +2 each</dt>
+                <dt className="font-bold">Target · +3 each</dt>
                 <dd>
-                  The successful picker earns 2 points, and the clue writer
-                  earns 2 points.
+                  The successful picker earns 3 points, and the clue writer
+                  earns 3 points.
                 </dd>
               </div>
               <div className="bg-background rounded-xl border p-4">
@@ -108,9 +108,9 @@ export default function RulesPage() {
                 </dd>
               </div>
               <div className="bg-background rounded-xl border p-4">
-                <dt className="font-bold">Assassin · −3 each</dt>
+                <dt className="font-bold">Assassin · −5 each</dt>
                 <dd>
-                  The first picker to find it and the clue writer each lose 3
+                  The first picker to find it and the clue writer each lose 5
                   points. The board ends and is revealed to everyone.
                 </dd>
               </div>

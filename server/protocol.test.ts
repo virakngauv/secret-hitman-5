@@ -432,7 +432,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       scored.scoreboard
         .filter(({ participation }) => participation === 'player')
         .map(({ score }) => score),
-    ).toEqual([2, 2])
+    ).toEqual([3, 3])
   })
 
   it.each(['active', 'pass', 'civilian', 'assassin'] as const)(
@@ -610,7 +610,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     const scored = socketServer.gameServer.snapshot(guestToken, roomCode)
     expect(scored).toMatchObject({
       turnId: before.turnId,
-      scoreboard: [{ score: 4 }, { score: 2 }, { score: 2 }, { score: null }],
+      scoreboard: [{ score: 6 }, { score: 3 }, { score: 3 }, { score: null }],
     })
     guest.disconnect()
     const resumedGuest = await connect(guestToken)
@@ -736,14 +736,14 @@ describe('Socket.IO Secret Hitman protocol', () => {
           .filter(({ participation }) => participation === 'player')
           .map(({ score }) => score),
       ).toEqual([
-        kind === 'target' ? 2 : kind === 'civilian' ? -1 : -3,
+        kind === 'target' ? 3 : kind === 'civilian' ? -1 : -5,
         ...results.map(({ status }) =>
           status === 'success'
             ? kind === 'target'
-              ? 2
+              ? 3
               : kind === 'civilian'
                 ? -1
-                : -3
+                : -5
             : 0,
         ),
       ])
