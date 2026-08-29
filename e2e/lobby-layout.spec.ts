@@ -9,8 +9,10 @@ for (const viewport of [
   }, testInfo) => {
     await page.setViewportSize(viewport)
     await page.goto('/create')
+    const create = page.getByRole('button', { name: 'Create', exact: true })
+    await expect(create).toBeEnabled()
     await page.getByLabel('Name').fill(`Ada ${viewport.width}`)
-    await page.getByRole('button', { name: 'Create', exact: true }).click()
+    await create.click()
 
     const heading = page.getByRole('heading', { name: 'Assemble the room.' })
     await expect(heading).toBeVisible()
