@@ -327,10 +327,10 @@ export function GuessingScreen({
     if (result.status !== 'success') return setFeedback(result.message)
     setFeedback(
       result.kind === 'target'
-        ? 'Target found. You and the clue-giver each gain 3 points.'
+        ? `Target found. You and the clue-giver each gain ${CARD_SCORE.target} points.`
         : result.kind === 'civilian'
-          ? 'Civilian. You and the clue-giver each lose 1 point; your guessing is done.'
-          : 'Assassin. You and the clue-giver each lose 5 points; this board is complete.',
+          ? `Civilian. You and the clue-giver each lose ${Math.abs(CARD_SCORE.civilian)} point; your guessing is done.`
+          : `Assassin. You and the clue-giver each lose ${Math.abs(CARD_SCORE.assassin)} points; this board is complete.`,
     )
   }
 
@@ -361,7 +361,7 @@ export function GuessingScreen({
           : view.player.participation === 'spectator'
             ? 'Spectator mode · follow the guesses without changing the board.'
             : view.canGuess
-              ? 'Choose carefully. A civilian costs 1 point each; the assassin costs 5 points each and ends the board.'
+              ? `Choose carefully. A civilian costs ${Math.abs(CARD_SCORE.civilian)} point each; the assassin costs ${Math.abs(CARD_SCORE.assassin)} points each and ends the board.`
               : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
       }
     >
