@@ -91,6 +91,7 @@ describe('RoomLobby invite prompt', () => {
       clueGiverName: 'Grace',
       hint: 'Orbit',
       hintNumber: 2,
+      boardCompleted: false,
       board: [
         {
           id: 'p1-card-0',

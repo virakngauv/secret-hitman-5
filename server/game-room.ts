@@ -605,6 +605,7 @@ export class GameRoom {
       clueGiverName: clueGiver.name,
       hint: clueSeat.hint,
       hintNumber: clueSeat.targetCount,
+      boardCompleted: this.requireGame().turnCompleted,
       board,
       turnPlayers: this.gamePlayers().map((player) => ({
         playerId: player.playerId,

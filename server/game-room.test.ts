@@ -579,6 +579,8 @@ describe('GameRoom single-round flow', () => {
 
   it('enables advancement when racing claims find every target without requiring passes', () => {
     const room = startTwoPlayerGame(true)
+    const spectatorToken = 'd'.repeat(32)
+    room.join(spectatorToken, 'Spectator')
     const before = guessing(room)
     const targets = before.board.filter(
       ({ revealedKind }) => revealedKind === 'target',
@@ -596,6 +598,7 @@ describe('GameRoom single-round flow', () => {
         kind: 'target',
       })
       const after = guessing(room)
+      expect(after.boardCompleted).toBe(index === targets.length - 1)
       expect(after.canAdvanceTurn).toBe(index === targets.length - 1)
       expect(room.claimCard(token, payload)).toEqual({
         status: 'success',
@@ -604,9 +607,37 @@ describe('GameRoom single-round flow', () => {
       expect(guessing(room)).toEqual(after)
     }
     expect(guessing(room).turnNumber).toBe(1)
-    for (const token of [guestToken, thirdToken]) {
-      expect(guessing(room, token).canGuess).toBe(false)
+    for (const token of [hostToken, guestToken, thirdToken, spectatorToken]) {
+      const completed = guessing(room, token)
+      expect(completed.boardCompleted).toBe(true)
+      expect(completed.canGuess).toBe(false)
+      expect(
+        completed.board.every(
+          ({ revealedKind, disabled }) => revealedKind !== null && disabled,
+        ),
+      ).toBe(true)
+      expect(
+        completed.board
+          .filter(({ claimedBy }) => claimedBy.length > 0)
+          .flatMap(({ claimedBy }) => claimedBy)
+          .sort(),
+      ).toEqual(['Grace', 'Linus'])
     }
+    const completed = guessing(room, thirdToken)
+    const unselected = completed.board.find(
+      ({ claimedBy }) => claimedBy.length === 0,
+    )!
+    expect(
+      room.claimCard(thirdToken, {
+        roomCode: room.code,
+        turnId: completed.turnId,
+        cardId: unselected.id,
+        commandId: 'after-target-completion',
+      }),
+    ).toMatchObject({
+      status: 'forbidden',
+      message: 'This board is already complete.',
+    })
     expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
   })
 

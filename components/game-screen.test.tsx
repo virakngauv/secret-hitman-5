@@ -280,6 +280,7 @@ describe('GuessingScreen messages', () => {
       clueGiverName: 'Grace',
       hint: 'Orbit',
       hintNumber: 2,
+      boardCompleted: false,
       board: [
         {
           id: 'target',
@@ -362,6 +363,64 @@ describe('GuessingScreen messages', () => {
     ).not.toHaveTextContent(/[+−]\d/)
   })
 
+  it('announces a completed board and identifies cards nobody selected', () => {
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: hintingView.player,
+      members: hintingView.members,
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-2',
+      clueGiverName: 'Grace',
+      hint: 'Orbit',
+      hintNumber: 1,
+      boardCompleted: true,
+      board: [
+        {
+          id: 'claimed-target',
+          word: 'MOON',
+          revealedKind: 'target',
+          claimedBy: ['Ada'],
+          selectedByYou: true,
+          disabled: true,
+        },
+        {
+          id: 'unselected-assassin',
+          word: 'POISON',
+          revealedKind: 'assassin',
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: true,
+        },
+      ],
+      turnPlayers: [],
+      scoreboard: [],
+      canGuess: false,
+      canMarkDone: false,
+      canAdvanceTurn: true,
+    }
+
+    render(
+      <GuessingScreen
+        view={view}
+        onClaimCard={vi.fn()}
+        onFinishGuessing={vi.fn()}
+        onAdvanceTurn={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'Board complete. Every role and accepted pick is now revealed.',
+      ),
+    ).toBeVisible()
+    const board = screen.getByLabelText('Completed and fully revealed board')
+    expect(within(board).getByText('Ada')).toBeVisible()
+    expect(within(board).getByText('Unselected')).toBeVisible()
+  })
+
   it.each([1, 2])(
     'keeps the host action disabled until the server permits advancement on turn %s',
     async (turnNumber) => {
@@ -379,6 +438,7 @@ describe('GuessingScreen messages', () => {
         clueGiverName: 'Grace',
         hint: 'Garden',
         hintNumber: 2,
+        boardCompleted: false,
         board: [],
         turnPlayers: [],
         scoreboard: [],
@@ -447,6 +507,7 @@ describe('GuessingScreen messages', () => {
         clueGiverName: 'Grace',
         hint: 'Orbit',
         hintNumber: 2,
+        boardCompleted: false,
         board: [],
         turnPlayers: [],
         scoreboard: [],
@@ -533,6 +594,7 @@ describe('FinishedScreen', () => {
     ).toBeVisible()
     expect(within(board).queryByText('−5')).not.toBeInTheDocument()
     expect(within(board).getByText('ASSASSIN')).toBeVisible()
+    expect(within(board).getByText('Unselected')).toBeVisible()
   })
 
   it.each([

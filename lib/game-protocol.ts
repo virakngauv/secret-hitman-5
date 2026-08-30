@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 7 as const
+export const GAME_PROTOCOL_VERSION = 8 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -84,6 +84,7 @@ export type RoomSnapshot =
       clueGiverName: string
       hint: string
       hintNumber: number
+      boardCompleted: boolean
       board: GuessCardSnapshot[]
       turnPlayers: TurnPlayerSnapshot[]
       scoreboard: ScoreboardEntry[]

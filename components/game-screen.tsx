@@ -354,13 +354,15 @@ export function GuessingScreen({
       eyebrow={`Turn ${view.turnNumber} of ${view.totalTurns}`}
       title={`${view.clueGiverName} is the clue-giver`}
       subtitle={
-        isClueGiver
-          ? 'Your board is fully revealed. Watch the room work through your clue.'
-          : view.player.participation === 'spectator'
-            ? 'Spectator mode · follow the guesses without changing the board.'
-            : view.canGuess
-              ? `Choose carefully. A civilian costs ${Math.abs(CARD_SCORE.civilian)} point each; the assassin costs ${Math.abs(CARD_SCORE.assassin)} points each and ends the board.`
-              : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
+        view.boardCompleted
+          ? 'Board complete. Every role and accepted pick is now revealed.'
+          : isClueGiver
+            ? 'Your board is fully revealed. Watch the room work through your clue.'
+            : view.player.participation === 'spectator'
+              ? 'Spectator mode · follow the guesses without changing the board.'
+              : view.canGuess
+                ? `Choose carefully. A civilian costs ${Math.abs(CARD_SCORE.civilian)} point each; the assassin costs ${Math.abs(CARD_SCORE.assassin)} points each and ends the board.`
+                : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
       }
     >
       <section className="clue-banner" aria-label="Current hint">
@@ -378,7 +380,14 @@ export function GuessingScreen({
 
       <div className="game-layout mt-5">
         <section className="game-panel min-w-0">
-          <div className="word-grid" aria-label="Current guessing board">
+          <div
+            className="word-grid"
+            aria-label={
+              view.boardCompleted
+                ? 'Completed and fully revealed board'
+                : 'Current guessing board'
+            }
+          >
             {view.board.map((card) => (
               <button
                 key={card.id}
@@ -408,7 +417,11 @@ export function GuessingScreen({
                 )}
                 <span className="word-card-word">{card.word}</span>
                 <span className="word-card-claimers">
-                  {card.claimedBy.length ? card.claimedBy.join(', ') : ' '}
+                  {card.claimedBy.length
+                    ? card.claimedBy.join(', ')
+                    : view.boardCompleted
+                      ? 'Unselected'
+                      : ' '}
                 </span>
               </button>
             ))}
@@ -561,7 +574,7 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
                 )}
                 <span className="word-card-word">{card.word}</span>
                 <span className="word-card-claimers">
-                  {card.claimedBy.join(', ') || ' '}
+                  {card.claimedBy.join(', ') || 'Unselected'}
                 </span>
               </div>
             ))}
