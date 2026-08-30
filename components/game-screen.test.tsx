@@ -69,7 +69,7 @@ describe('HintPhaseScreen', () => {
     })
     expect(available).toBeVisible()
     expect(
-      within(available).getByText('−1', { selector: 'em.word-card-score' }),
+      within(available).getByText('−1', { selector: 'span.word-card-score' }),
     ).toBeVisible()
     expect(
       screen.getByRole('button', {

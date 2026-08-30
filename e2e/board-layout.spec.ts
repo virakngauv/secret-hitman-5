@@ -45,13 +45,27 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
       .getByRole('button', { name: /Available −1/i })
       .first()
     await expect(available).toBeVisible()
-    await expect(available.locator('.word-card-index')).toHaveText(
-      'Available −1',
-    )
+    await expect(available.locator('.word-card-index')).toHaveText('Available')
+    await expect(available.locator('.word-card-score')).toHaveText('−1')
     await expect(available.locator('.word-card-score')).toHaveCSS(
       'font-style',
-      'italic',
+      'normal',
     )
+    await expect(available.locator('.word-card-score')).toHaveCSS(
+      'position',
+      'absolute',
+    )
+    const availableBox = await available.boundingBox()
+    const scoreBox = await available.locator('.word-card-score').boundingBox()
+    if (!availableBox || !scoreBox) throw new Error('Score box is not visible')
+    const rightInset =
+      availableBox.x + availableBox.width - scoreBox.x - scoreBox.width
+    const bottomInset =
+      availableBox.y + availableBox.height - scoreBox.y - scoreBox.height
+    expect(rightInset).toBeGreaterThanOrEqual(0)
+    expect(rightInset).toBeLessThan(16)
+    expect(bottomInset).toBeGreaterThanOrEqual(0)
+    expect(bottomInset).toBeLessThan(16)
     await expect(
       host.getByRole('button', { name: /Civilian −1.*Locked/i }).first(),
     ).toBeVisible()
@@ -201,6 +215,9 @@ async function assertCardContentFits(page: Page) {
         issues.push(`Card ${index} is smaller than a 44px tap target`)
       }
       const contents = [...card.querySelectorAll<HTMLElement>(':scope > span')]
+      const flowContents = contents.filter(
+        (content) => getComputedStyle(content).position !== 'absolute',
+      )
       const lock = card
         .querySelector('.word-card-lock')
         ?.getBoundingClientRect()
@@ -239,12 +256,12 @@ async function assertCardContentFits(page: Page) {
       }
       for (
         let contentIndex = 1;
-        contentIndex < contents.length;
+        contentIndex < flowContents.length;
         contentIndex += 1
       ) {
         if (
-          contents[contentIndex - 1].getBoundingClientRect().bottom >
-          contents[contentIndex].getBoundingClientRect().top + 1
+          flowContents[contentIndex - 1].getBoundingClientRect().bottom >
+          flowContents[contentIndex].getBoundingClientRect().top + 1
         ) {
           issues.push(`Card ${index}: labels or words overlap`)
         }

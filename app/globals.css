@@ -321,10 +321,17 @@ button.word-card:focus-visible {
 }
 
 .word-card-score {
-  font-style: italic;
-  font-weight: 700;
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.65rem;
+  color: currentColor;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
   letter-spacing: 0.03em;
-  opacity: 0.78;
+  opacity: 0.72;
 }
 
 .word-card[data-card-locked='true'] .word-card-index {

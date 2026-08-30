@@ -186,10 +186,8 @@ export function HintPhaseScreen({
                       }
                       aria-pressed={isSelected}
                     >
-                      <span className="word-card-index">
-                        <span>{roleName}</span>{' '}
-                        <em className="word-card-score">{roleScore}</em>
-                      </span>
+                      <span className="word-card-index">{roleName}</span>
+                      <span className="word-card-score">{roleScore}</span>
                       {card.locked && (
                         <svg
                           className="word-card-lock"
