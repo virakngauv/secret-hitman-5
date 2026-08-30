@@ -324,7 +324,7 @@ button.word-card:focus-visible {
   position: absolute;
   right: 0.7rem;
   bottom: 0.65rem;
-  color: currentColor;
+  color: currentcolor;
   font-family: var(--font-mono);
   font-size: 0.65rem;
   font-style: normal;
