@@ -202,7 +202,7 @@ export function HintPhaseScreen({
                           <path d="M8 10V7a4 4 0 0 1 8 0v3" />
                         </svg>
                       )}
-                      <span className="word-card-word">{card.word}</span>
+                      <CardWord word={card.word} />
                     </button>
                   )
                 })}
@@ -415,14 +415,11 @@ export function GuessingScreen({
                     {formatScore(CARD_SCORE[card.revealedKind])}
                   </span>
                 )}
-                <span className="word-card-word">{card.word}</span>
-                <span className="word-card-claimers">
-                  {card.claimedBy.length
-                    ? card.claimedBy.join(', ')
-                    : view.boardCompleted
-                      ? 'Unselected'
-                      : ' '}
-                </span>
+                <CardWord word={card.word} />
+                <CardAttribution
+                  names={card.claimedBy}
+                  showUnselected={view.boardCompleted}
+                />
               </button>
             ))}
           </div>
@@ -515,6 +512,58 @@ function formatScore(score: number) {
   return score > 0 ? `+${score}` : `−${Math.abs(score)}`
 }
 
+function CardWord({ word }: { word: string }) {
+  const longestSegment = Math.max(
+    ...word
+      .trim()
+      .split(/\s+/u)
+      .map((segment) => segment.length),
+  )
+
+  return (
+    <span
+      className={cn(
+        'word-card-word',
+        longestSegment >= 8 && 'word-card-word-compact',
+        longestSegment >= 16 && 'word-card-word-break',
+      )}
+    >
+      {word}
+    </span>
+  )
+}
+
+function CardAttribution({
+  names,
+  showUnselected = false,
+}: {
+  names: string[]
+  showUnselected?: boolean
+}) {
+  const pickerNames = names.join(', ')
+
+  if (pickerNames) {
+    return (
+      <span
+        className="word-card-claimers word-card-picker-attribution"
+        aria-label={`Selected by ${pickerNames}`}
+      >
+        {pickerNames}
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className="word-card-claimers"
+      aria-label={showUnselected ? 'Not selected' : undefined}
+      aria-hidden={showUnselected ? undefined : true}
+    >
+      {showUnselected ? 'Unselected' : ' '}
+    </span>
+  )
+}
+
 export function FinishedScreen({ view }: { view: FinishedView }) {
   const players = [...view.scoreboard]
     .filter(({ participation }) => participation === 'player')
@@ -572,10 +621,8 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
                     {formatScore(CARD_SCORE[card.revealedKind])}
                   </span>
                 )}
-                <span className="word-card-word">{card.word}</span>
-                <span className="word-card-claimers">
-                  {card.claimedBy.join(', ') || 'Unselected'}
-                </span>
+                <CardWord word={card.word} />
+                <CardAttribution names={card.claimedBy} showUnselected />
               </div>
             ))}
           </div>

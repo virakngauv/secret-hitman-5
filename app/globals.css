@@ -286,7 +286,7 @@ input {
   border: 1px solid var(--border);
   border-radius: 1rem;
   background: var(--card);
-  padding: 0.8rem;
+  padding: 0.4rem;
   color: var(--foreground);
   text-align: left;
   transition:
@@ -323,8 +323,8 @@ button.word-card:focus-visible {
 
 .word-card-score {
   position: absolute;
-  right: 0.7rem;
-  bottom: 0.65rem;
+  right: 0.55rem;
+  bottom: 0.55rem;
   color: currentcolor;
   font-family: var(--font-mono);
   font-size: 0.65rem;
@@ -336,14 +336,14 @@ button.word-card:focus-visible {
 }
 
 .word-card[data-card-locked='true'] .word-card-index {
-  max-width: calc(100% - 0.85rem);
+  max-width: calc(100% - 1.25rem);
   overflow-wrap: anywhere;
 }
 
 .word-card-lock {
   position: absolute;
-  top: 0.7rem;
-  right: 0.6rem;
+  top: 0.55rem;
+  right: 0.5rem;
   width: 0.8rem;
   height: 0.8rem;
 }
@@ -352,7 +352,7 @@ button.word-card:focus-visible {
   grid-row: 2;
   justify-self: center;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   font-size: clamp(0.9rem, 2vw, 1.16rem);
   font-weight: 950;
   letter-spacing: -0.025em;
@@ -360,9 +360,20 @@ button.word-card:focus-visible {
   text-align: center;
 }
 
+/* 0.72rem is the bounded minimum for long, unbroken board words. */
+.word-card-word-compact {
+  font-size: clamp(0.72rem, 2vw, 1rem);
+  letter-spacing: -0.035em;
+}
+
+.word-card-word-break {
+  overflow-wrap: anywhere;
+}
+
 .word-card-claimers {
   grid-row: 3;
   align-self: end;
+  min-width: 0;
   min-height: 1em;
   max-width: 100%;
   overflow: hidden;
@@ -373,13 +384,20 @@ button.word-card:focus-visible {
   white-space: nowrap;
 }
 
+.word-card-picker-attribution {
+  font-size: clamp(0.72rem, 2.4vw, 0.8rem);
+  font-style: italic;
+  font-weight: 750;
+  line-height: 1.05;
+}
+
 .word-card-has-score .word-card-claimers {
-  max-width: calc(100% - 2rem);
+  max-width: calc(100% - 2.25rem);
   line-height: 1;
 }
 
 .word-card-has-score .word-card-score {
-  bottom: 0.8rem;
+  bottom: 0.4rem;
 }
 
 .word-card-target {
@@ -764,7 +782,11 @@ button.word-card:focus-visible {
 
   .word-card {
     min-height: 8.4rem;
-    padding: 0.95rem;
+    padding: 0.8rem;
+  }
+
+  .word-card-has-score .word-card-score {
+    bottom: 0.8rem;
   }
 
   .clue-banner {

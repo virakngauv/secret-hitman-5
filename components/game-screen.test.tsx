@@ -53,6 +53,38 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
 }
 
 describe('HintPhaseScreen', () => {
+  it('fits long words individually while allowing phrases to wrap naturally', () => {
+    const words = ['TELESCOPE', 'NEW YORK', 'COUNTERREVOLUTIONARIES']
+    const view = {
+      ...hintingView,
+      board: hintingView.board!.map((card, index) => ({
+        ...card,
+        word: words[index] ?? card.word,
+      })),
+    }
+
+    render(
+      <HintPhaseScreen
+        view={view}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('TELESCOPE')).toHaveClass('word-card-word-compact')
+    expect(screen.getByText('TELESCOPE')).not.toHaveClass(
+      'word-card-word-break',
+    )
+    expect(screen.getByText('NEW YORK')).not.toHaveClass(
+      'word-card-word-compact',
+    )
+    expect(screen.getByText('COUNTERREVOLUTIONARIES')).toHaveClass(
+      'word-card-word-compact',
+      'word-card-word-break',
+    )
+  })
+
   it('shows the score beside every clue-board role and state', async () => {
     const user = userEvent.setup()
     render(
@@ -361,6 +393,19 @@ describe('GuessingScreen messages', () => {
     expect(
       screen.getByRole('button', { name: /classified.*star/i }),
     ).not.toHaveTextContent(/[+−]\d/)
+
+    for (const { role, name } of [
+      { role: 'target', name: 'Ada' },
+      { role: 'civilian', name: 'Grace' },
+      { role: 'assassin', name: 'Grace' },
+    ]) {
+      const card = screen.getByRole('button', {
+        name: new RegExp(`${role}.*selected by ${name}`, 'i'),
+      })
+      const attribution = within(card).getByLabelText(`Selected by ${name}`)
+      expect(attribution).toHaveClass('word-card-picker-attribution')
+      expect(attribution).toHaveTextContent(name)
+    }
   })
 
   it('announces a completed board and identifies cards nobody selected', () => {
@@ -594,7 +639,12 @@ describe('FinishedScreen', () => {
     ).toBeVisible()
     expect(within(board).queryByText('−5')).not.toBeInTheDocument()
     expect(within(board).getByText('ASSASSIN')).toBeVisible()
-    expect(within(board).getByText('Unselected')).toBeVisible()
+    expect(within(board).getByLabelText('Selected by Ada')).toHaveClass(
+      'word-card-picker-attribution',
+    )
+    expect(within(board).getByLabelText('Not selected')).toHaveTextContent(
+      'Unselected',
+    )
   })
 
   it.each([

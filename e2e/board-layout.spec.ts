@@ -1,11 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
-import { SECRET_HITMAN_WORDS } from '../lib/words'
-
 const widths = [320, 359, 360, 361, 375, 390, 414, 639, 640, 928, 1216, 1280]
-const longestWord = [...SECRET_HITMAN_WORDS].sort(
-  (left, right) => right.length - left.length,
-)[0]
+const longPickerName = 'Grace Hopper With An Extraordinarily Long Picker N'
 
 test('boards remain readable through hinting, guessing, and final reveal at mobile and desktop widths', async ({
   browser,
@@ -31,9 +27,9 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     ).toBeVisible()
     const roomCode = new URL(host.url()).pathname.slice(1)
     await guest.goto(`/${roomCode}`)
-    await guest.getByLabel('Name').fill('Grace Layout')
+    await guest.getByLabel('Name').fill(longPickerName)
     await guest.getByRole('button', { name: 'Join', exact: true }).click()
-    await expect(host.getByText('Grace Layout', { exact: true })).toBeVisible()
+    await expect(host.getByText(longPickerName, { exact: true })).toBeVisible()
     await host.getByRole('button', { name: 'Start game' }).click()
 
     await expect(host.getByLabel('Your twelve word board')).toBeVisible()
@@ -131,6 +127,14 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const claimerBox = await revealedTarget
       .locator('.word-card-claimers')
       .boundingBox()
+    await expect(revealedTarget.locator('.word-card-claimers')).toHaveCSS(
+      'font-style',
+      'italic',
+    )
+    await expect(revealedTarget.locator('.word-card-claimers')).toHaveAttribute(
+      'aria-label',
+      `Selected by ${longPickerName}`,
+    )
     const revealedScoreBox = await revealedScore.boundingBox()
     if (!roleBox || !claimerBox || !revealedScoreBox) {
       throw new Error('Revealed card labels are not visible')
@@ -201,17 +205,45 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
       // without changing game state, roles, or interactions.
       const originalWords = await grid
         .locator('.word-card-word')
-        .allTextContents()
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            className: element.className,
+            text: element.textContent,
+          })),
+        )
       try {
-        for (const [label, word] of [
-          ['long-words', longestWord],
-          ['wrapped-words', 'COUNTERREVOLUTIONARIES'],
+        for (const { className, label, word } of [
+          {
+            className: 'word-card-word word-card-word-compact',
+            label: 'telescope',
+            word: 'TELESCOPE',
+          },
+          {
+            className: 'word-card-word word-card-word-compact',
+            label: 'longest-deck-word',
+            word: 'MILLIONAIRE',
+          },
+          {
+            className: 'word-card-word',
+            label: 'new-york',
+            word: 'NEW YORK',
+          },
+          {
+            className:
+              'word-card-word word-card-word-compact word-card-word-break',
+            label: 'break-fallback',
+            word: 'COUNTERREVOLUTIONARIES',
+          },
         ]) {
-          await grid
-            .locator('.word-card-word')
-            .evaluateAll((elements, word) => {
-              for (const element of elements) element.textContent = word
-            }, word)
+          await grid.locator('.word-card-word').evaluateAll(
+            (elements, fixture) => {
+              for (const element of elements) {
+                element.setAttribute('class', fixture.className)
+                element.textContent = fixture.word
+              }
+            },
+            { className, word },
+          )
           await assertCardContentFits(page)
           if ([320, 359, 360, 390, 640, 1280].includes(width)) {
             await grid.screenshot({
@@ -220,11 +252,14 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
           }
         }
       } finally {
-        await grid.locator('.word-card-word').evaluateAll((elements, words) => {
-          elements.forEach((element, index) => {
-            element.textContent = words[index]
-          })
-        }, originalWords)
+        await grid
+          .locator('.word-card-word')
+          .evaluateAll((elements, originals) => {
+            elements.forEach((element, index) => {
+              element.setAttribute('class', originals[index].className)
+              element.textContent = originals[index].text
+            })
+          }, originalWords)
       }
     })
   }
@@ -293,7 +328,10 @@ async function assertCardContentFits(page: Page) {
           (!content.classList.contains('word-card-claimers') &&
             content.scrollWidth > content.clientWidth + 1)
         ) {
-          issues.push(`Card ${index}: ${content.className} overflows`)
+          issues.push(
+            `Card ${index} (${content.textContent}): ${content.className} overflows ` +
+              `(${content.scrollWidth}/${content.clientWidth})`,
+          )
         }
       }
       for (
