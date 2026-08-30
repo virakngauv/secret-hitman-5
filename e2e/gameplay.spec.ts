@@ -47,7 +47,7 @@ test.describe('Secret Hitman single round', () => {
             cards.map((card) => card.getAttribute('data-card-id')),
           )
         const [targetId, finalTargetId] = targetIds
-        if (!targetId || !finalTargetId) {
+        if (targetIds.length !== 2 || !targetId || !finalTargetId) {
           throw new Error('Expected two target cards.')
         }
         const civilianId = await host
