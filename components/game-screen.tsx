@@ -378,7 +378,14 @@ export function GuessingScreen({
 
       <div className="game-layout mt-5">
         <section className="game-panel min-w-0">
-          <div className="word-grid" aria-label="Current guessing board">
+          <div
+            className="word-grid"
+            aria-label={
+              view.boardCompleted
+                ? 'Completed and fully revealed board'
+                : 'Current guessing board'
+            }
+          >
             {view.board.map((card) => (
               <button
                 key={card.id}
@@ -408,7 +415,7 @@ export function GuessingScreen({
                 )}
                 <span className="word-card-word">{card.word}</span>
                 <span className="word-card-claimers">
-                  {card.claimedBy.length ? card.claimedBy.join(', ') : ' '}
+                  {card.claimedBy.join(', ') || ' '}
                 </span>
               </button>
             ))}

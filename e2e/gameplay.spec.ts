@@ -7,7 +7,7 @@ import {
 } from '@playwright/test'
 
 test.describe('Secret Hitman single round', () => {
-  for (const ending of ['pass', 'civilian', 'assassin'] as const) {
+  for (const ending of ['pass', 'civilian', 'targets', 'assassin'] as const) {
     test(`preserves ${ending} completion and visibility across reloads`, async ({
       browser,
     }, testInfo) => {
@@ -41,10 +41,15 @@ test.describe('Secret Hitman single round', () => {
         const assassinId = await host
           .locator('button[data-card-kind="assassin"]')
           .getAttribute('data-card-id')
-        const targetId = await host
+        const targetIds = await host
           .locator('button[data-card-kind="target"]')
-          .first()
-          .getAttribute('data-card-id')
+          .evaluateAll((cards) =>
+            cards.map((card) => card.getAttribute('data-card-id')),
+          )
+        const [targetId, finalTargetId] = targetIds
+        if (targetIds.length !== 2 || !targetId || !finalTargetId) {
+          throw new Error('Expected two target cards.')
+        }
         const civilianId = await host
           .locator('button[data-card-kind="civilian"]')
           .first()
@@ -62,6 +67,9 @@ test.describe('Secret Hitman single round', () => {
         ).toHaveCount(12)
         if (ending === 'pass') {
           await guest.getByRole('button', { name: 'I’m done guessing' }).click()
+        } else if (ending === 'targets') {
+          await guest.locator(`button[data-card-id="${targetId}"]`).click()
+          await third.locator(`button[data-card-id="${finalTargetId}"]`).click()
         } else {
           await guest
             .locator(
@@ -94,13 +102,19 @@ test.describe('Secret Hitman single round', () => {
           await expect(
             viewer.locator('button[data-card-kind="hidden"]'),
           ).toHaveCount(
-            ending === 'assassin' ? 0 : ending === 'civilian' ? 11 : 12,
+            ending === 'assassin' || ending === 'targets'
+              ? 0
+              : ending === 'civilian'
+                ? 11
+                : 12,
           )
           await expect(
             viewer.locator(`button[data-card-id="${assassinId}"]`),
           ).toHaveAttribute(
             'data-card-kind',
-            ending === 'assassin' ? 'assassin' : 'hidden',
+            ending === 'assassin' || ending === 'targets'
+              ? 'assassin'
+              : 'hidden',
           )
           if (ending === 'assassin') {
             await expect(
@@ -112,7 +126,7 @@ test.describe('Secret Hitman single round', () => {
             ).not.toContainText('Grace')
           }
         }
-        if (ending === 'assassin') {
+        if (ending === 'assassin' || ending === 'targets') {
           await expect(
             third.locator(`button[data-card-id="${assassinId}"]`),
           ).toBeDisabled()
@@ -134,9 +148,9 @@ test.describe('Secret Hitman single round', () => {
           third.locator(`button[data-card-id="${assassinId}"]`),
         ).toHaveAttribute(
           'data-card-kind',
-          ending === 'assassin' ? 'assassin' : 'hidden',
+          ending === 'assassin' || ending === 'targets' ? 'assassin' : 'hidden',
         )
-        if (ending === 'assassin') {
+        if (ending === 'assassin' || ending === 'targets') {
           await expect(
             third.locator(`button[data-card-id="${assassinId}"]`),
           ).toBeDisabled()
@@ -176,6 +190,28 @@ test.describe('Secret Hitman single round', () => {
             await expect(
               viewer.locator(`button[data-card-id="${assassinId}"]`),
             ).toContainText('Grace')
+          }
+          await expect(
+            host.getByRole('button', { name: 'Next hint' }),
+          ).toBeEnabled()
+        } else if (ending === 'targets') {
+          for (const viewer of [guest, third, spectator]) {
+            await expect(
+              viewer.getByLabel('Completed and fully revealed board'),
+            ).toBeVisible()
+            await expect(
+              viewer.locator('button[data-card-kind="hidden"]'),
+            ).toHaveCount(0)
+            await expect(
+              viewer.locator('button[data-card-id]:enabled'),
+            ).toHaveCount(0)
+            await expect(
+              viewer.locator(`button[data-card-id="${targetId}"]`),
+            ).toContainText('Grace')
+            await expect(
+              viewer.locator(`button[data-card-id="${finalTargetId}"]`),
+            ).toContainText('Linus')
+            await expect(viewer.getByText('Unselected')).toHaveCount(0)
           }
           await expect(
             host.getByRole('button', { name: 'Next hint' }),
