@@ -166,7 +166,7 @@ describe('HintPhaseScreen', () => {
     ])
   })
 
-  it('caps target selection at five while keeping selected cards editable', async () => {
+  it('derives reversible civilians at five targets and restores them below the cap', async () => {
     const user = userEvent.setup()
     render(
       <HintPhaseScreen
@@ -176,17 +176,135 @@ describe('HintPhaseScreen', () => {
         onStartGuessing={vi.fn()}
       />,
     )
-    const editable = screen
-      .getAllByRole('button', { name: /available/i })
-      .slice(0, 6)
-    for (const card of editable.slice(0, 5)) await user.click(card)
+    const editableIds = hintingView
+      .board!.filter(({ locked }) => !locked)
+      .map(({ id }) => id)
+    const editableCard = (id: string) =>
+      document.querySelector<HTMLButtonElement>(`button[data-card-id="${id}"]`)!
+    for (const id of editableIds.slice(0, 4)) {
+      await user.click(editableCard(id))
+    }
+    expect(screen.getAllByRole('button', { name: /available/i })).toHaveLength(
+      4,
+    )
+    await user.click(editableCard(editableIds[4]!))
     expect(
       screen.getByText('5', { selector: '.hint-number-value' }),
     ).toBeVisible()
-    expect(editable[5]).toBeDisabled()
-    expect(editable[0]).toBeEnabled()
-    await user.click(editable[0])
-    expect(editable[5]).toBeEnabled()
+    const derived = screen.getAllByRole('button', {
+      name: /civilian −1.*reversible when a target is deselected/i,
+    })
+    expect(derived).toHaveLength(3)
+    for (const card of derived) {
+      expect(card).toBeDisabled()
+      expect(card).toHaveAttribute('data-card-derived-civilian', 'true')
+      expect(card).toHaveAttribute('data-card-kind', 'civilian')
+      expect(card).toHaveClass('word-card-civilian-derived')
+      expect(card).not.toHaveClass('word-card-civilian')
+      expect(card.querySelector('.word-card-index')).toHaveTextContent(
+        'Civilian · reversible',
+      )
+      expect(card.querySelector('.word-card-lock')).not.toBeInTheDocument()
+    }
+    const lockedCivilians = screen.getAllByRole('button', {
+      name: /civilian −1.*locked/i,
+    })
+    expect(lockedCivilians).toHaveLength(3)
+    for (const card of lockedCivilians) {
+      expect(card).toHaveClass('word-card-civilian')
+      expect(card).not.toHaveClass('word-card-civilian-derived')
+      expect(card.querySelector('.word-card-lock')).toBeVisible()
+    }
+
+    const selected = editableCard(editableIds[0]!)
+    expect(selected).toBeEnabled()
+    await user.click(selected)
+    expect(
+      screen.getByText('4', { selector: '.hint-number-value' }),
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('button', {
+        name: /reversible when a target is deselected/i,
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getAllByRole('button', { name: /available −1/i }),
+    ).toHaveLength(4)
+
+    await user.click(editableCard(editableIds[5]!))
+    expect(
+      screen.getAllByRole('button', {
+        name: /civilian −1.*reversible when a target is deselected/i,
+      }),
+    ).toHaveLength(3)
+  })
+
+  it('reconstructs max-target civilians through submit, unlock, and reconnect', async () => {
+    const user = userEvent.setup()
+    const targetIds = hintingView
+      .board!.filter(({ locked }) => !locked)
+      .slice(0, 5)
+      .map(({ id }) => id)
+    const submittedBoard = hintingView.board!.map((card) =>
+      card.locked
+        ? card
+        : {
+            ...card,
+            kind: targetIds.includes(card.id)
+              ? ('target' as const)
+              : ('civilian' as const),
+          },
+    )
+    const submittedView = {
+      ...hintingView,
+      hint: 'Orbit',
+      hintSubmitted: true,
+      board: submittedBoard,
+    }
+    const props = {
+      onSubmitHint: vi.fn(),
+      onUnlockHint: vi.fn().mockResolvedValue({ status: 'success' }),
+      onStartGuessing: vi.fn(),
+    }
+    const view = render(<HintPhaseScreen view={submittedView} {...props} />)
+
+    expect(screen.getAllByRole('button', { name: /target \+3/i })).toHaveLength(
+      5,
+    )
+    expect(
+      screen.getAllByRole('button', {
+        name: /civilian −1.*reversible when a target is deselected/i,
+      }),
+    ).toHaveLength(3)
+    await user.click(screen.getByRole('button', { name: 'Unlock / Edit hint' }))
+    expect(props.onUnlockHint).toHaveBeenCalledOnce()
+
+    const unlockedView = {
+      ...submittedView,
+      hintSubmitted: false,
+      board: submittedBoard.map((card) =>
+        !card.locked && card.kind === 'civilian'
+          ? { ...card, kind: 'neutral' as const }
+          : card,
+      ),
+    }
+    view.rerender(<HintPhaseScreen view={unlockedView} {...props} />)
+    const firstTarget = document.querySelector<HTMLButtonElement>(
+      `button[data-card-id="${targetIds[0]}"]`,
+    )!
+    expect(firstTarget).toBeEnabled()
+    await user.click(firstTarget)
+    expect(
+      screen.getAllByRole('button', { name: /available −1/i }),
+    ).toHaveLength(4)
+
+    view.unmount()
+    render(<HintPhaseScreen view={unlockedView} {...props} />)
+    expect(
+      screen.getAllByRole('button', {
+        name: /civilian −1.*reversible when a target is deselected/i,
+      }),
+    ).toHaveLength(3)
   })
 
   it('keeps a locked hint and board visible, then preserves edits through unlock and relock', async () => {
