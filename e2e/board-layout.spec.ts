@@ -118,6 +118,33 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(
       guest.locator(`button[data-card-id="${targetId}"]`),
     ).toBeDisabled()
+    const revealedTarget = guest.locator(`button[data-card-id="${targetId}"]`)
+    const revealedScore = revealedTarget.locator('.word-card-score')
+    await expect(revealedScore).toHaveText('+3')
+    const roleBox = await revealedTarget
+      .locator('.word-card-index')
+      .boundingBox()
+    const claimerBox = await revealedTarget
+      .locator('.word-card-claimers')
+      .boundingBox()
+    const revealedScoreBox = await revealedScore.boundingBox()
+    if (!roleBox || !claimerBox || !revealedScoreBox) {
+      throw new Error('Revealed card labels are not visible')
+    }
+    expect(Math.abs(claimerBox.x - roleBox.x)).toBeLessThanOrEqual(1)
+    expect(claimerBox.x + claimerBox.width).toBeLessThanOrEqual(
+      revealedScoreBox.x,
+    )
+    expect(
+      Math.abs(
+        claimerBox.y +
+          claimerBox.height -
+          (revealedScoreBox.y + revealedScoreBox.height),
+      ),
+    ).toBeLessThanOrEqual(1)
+    await expect(
+      guest.locator('button[data-card-kind="hidden"] .word-card-score'),
+    ).toHaveCount(0)
     await checkWidths(guest, 'guessing', testInfo)
 
     await guest.setViewportSize({ width: 360, height: 900 })
@@ -125,7 +152,14 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(host.getByText('Garden', { exact: true })).toBeVisible()
     await host.getByRole('button', { name: 'I’m done guessing' }).click()
     await host.getByRole('button', { name: 'Finish the game' }).click()
-    await expect(guest.getByLabel('Fully revealed final board')).toBeVisible()
+    const finalBoard = guest.getByLabel('Fully revealed final board')
+    await expect(finalBoard).toBeVisible()
+    await expect(finalBoard.locator('.word-card-score')).toHaveCount(0)
+    await expect(
+      finalBoard.locator(
+        '.word-card:not(.word-card-has-score) .word-card-score',
+      ),
+    ).toHaveCount(0)
     await checkWidths(guest, 'finished', testInfo)
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()])

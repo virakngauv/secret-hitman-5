@@ -387,6 +387,9 @@ export function GuessingScreen({
                 data-card-kind={card.revealedKind ?? 'hidden'}
                 className={cn(
                   'word-card word-card-guess',
+                  card.revealedKind &&
+                    card.claimedBy.length > 0 &&
+                    'word-card-has-score',
                   card.revealedKind === 'target' && 'word-card-target',
                   card.revealedKind === 'civilian' && 'word-card-civilian',
                   card.revealedKind === 'assassin' && 'word-card-assassin',
@@ -398,6 +401,11 @@ export function GuessingScreen({
                   {card.revealedKind?.toUpperCase() ??
                     (busyCard === card.id ? 'CHECKING…' : 'CLASSIFIED')}
                 </span>
+                {card.revealedKind && card.claimedBy.length > 0 && (
+                  <span className="word-card-score">
+                    {formatScore(CARD_SCORE[card.revealedKind])}
+                  </span>
+                )}
                 <span className="word-card-word">{card.word}</span>
                 <span className="word-card-claimers">
                   {card.claimedBy.length ? card.claimedBy.join(', ') : ' '}
@@ -532,6 +540,9 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
               <div
                 className={cn(
                   'word-card',
+                  card.revealedKind &&
+                    card.claimedBy.length > 0 &&
+                    'word-card-has-score',
                   card.revealedKind === 'target' && 'word-card-target',
                   card.revealedKind === 'civilian' && 'word-card-civilian',
                   card.revealedKind === 'assassin' && 'word-card-assassin',
@@ -543,6 +554,11 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
                 <span className="word-card-index">
                   {card.revealedKind?.toUpperCase()}
                 </span>
+                {card.revealedKind && card.claimedBy.length > 0 && (
+                  <span className="word-card-score">
+                    {formatScore(CARD_SCORE[card.revealedKind])}
+                  </span>
+                )}
                 <span className="word-card-word">{card.word}</span>
                 <span className="word-card-claimers">
                   {card.claimedBy.join(', ') || ' '}
