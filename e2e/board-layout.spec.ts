@@ -96,11 +96,58 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     ).toEqual(fixedBefore)
     await expect(host.locator('.hint-number-value')).toHaveText('0')
     await expect(host.locator('[data-card-kind="assassin"]')).toBeDisabled()
-    const targets = host.locator('button[data-card-kind="neutral"]')
-    const targetId = await targets.first().getAttribute('data-card-id')
-    await targets.nth(0).click()
-    await expect(targets.nth(0)).toHaveAttribute('aria-pressed', 'true')
-    await expect(targets.nth(0)).toHaveAccessibleName(/Target \+3/i)
+    const editableIds = await host
+      .locator('button[data-card-kind="neutral"]')
+      .evaluateAll((cards) =>
+        cards.map((card) => card.getAttribute('data-card-id')!),
+      )
+    const targetIds = editableIds.slice(0, 5)
+    for (const id of targetIds) {
+      await host.locator(`button[data-card-id="${id}"]`).click()
+    }
+    await expect(host.locator('.hint-number-value')).toHaveText('5')
+    const derivedCivilians = host.locator(
+      'button[data-card-derived-civilian="true"]',
+    )
+    await expect(derivedCivilians).toHaveCount(3)
+    await expect(derivedCivilians.first()).toHaveAccessibleName(
+      /Civilian −1.*Reversible when a target is deselected/i,
+    )
+    await expect(
+      derivedCivilians.first().locator('.word-card-index'),
+    ).toHaveText('Civilian')
+    await expect(
+      derivedCivilians.first().locator('.word-card-lock'),
+    ).toHaveCount(0)
+    await expect(derivedCivilians.first()).toHaveCSS('border-style', 'solid')
+    const lockedCivilian = host
+      .locator('button.word-card-civilian[data-card-locked="true"]')
+      .first()
+    expect(
+      await derivedCivilians
+        .first()
+        .evaluate((card) => getComputedStyle(card).backgroundColor),
+    ).toBe(
+      await lockedCivilian.evaluate(
+        (card) => getComputedStyle(card).backgroundColor,
+      ),
+    )
+
+    await host.locator(`button[data-card-id="${targetIds[0]}"]`).click()
+    await expect(derivedCivilians).toHaveCount(0)
+    await expect(
+      host.getByRole('button', { name: /Available −1/i }),
+    ).toHaveCount(4)
+    await host.locator(`button[data-card-id="${targetIds[0]}"]`).click()
+    await expect(derivedCivilians).toHaveCount(3)
+    for (const id of targetIds.slice(1)) {
+      await host.locator(`button[data-card-id="${id}"]`).click()
+    }
+    const targetId = targetIds[0]
+    const target = host.locator(`button[data-card-id="${targetId}"]`)
+    await expect(host.locator('.hint-number-value')).toHaveText('1')
+    await expect(target).toHaveAttribute('aria-pressed', 'true')
+    await expect(target).toHaveAccessibleName(/Target \+3/i)
     await checkWidths(host, 'hinting', testInfo)
 
     await host.getByLabel('Your hint').fill('Orbit')
