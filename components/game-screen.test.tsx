@@ -199,10 +199,9 @@ describe('HintPhaseScreen', () => {
       expect(card).toBeDisabled()
       expect(card).toHaveAttribute('data-card-derived-civilian', 'true')
       expect(card).toHaveAttribute('data-card-kind', 'civilian')
-      expect(card).toHaveClass('word-card-civilian-derived')
-      expect(card).not.toHaveClass('word-card-civilian')
+      expect(card).toHaveClass('word-card-civilian')
       expect(card.querySelector('.word-card-index')).toHaveTextContent(
-        'Civilian · reversible',
+        'Civilian',
       )
       expect(card.querySelector('.word-card-lock')).not.toBeInTheDocument()
     }
@@ -212,7 +211,6 @@ describe('HintPhaseScreen', () => {
     expect(lockedCivilians).toHaveLength(3)
     for (const card of lockedCivilians) {
       expect(card).toHaveClass('word-card-civilian')
-      expect(card).not.toHaveClass('word-card-civilian-derived')
       expect(card.querySelector('.word-card-lock')).toBeVisible()
     }
 

@@ -115,11 +115,11 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     )
     await expect(
       derivedCivilians.first().locator('.word-card-index'),
-    ).toHaveText('Civilian · reversible')
+    ).toHaveText('Civilian')
     await expect(
       derivedCivilians.first().locator('.word-card-lock'),
     ).toHaveCount(0)
-    await expect(derivedCivilians.first()).toHaveCSS('border-style', 'dashed')
+    await expect(derivedCivilians.first()).toHaveCSS('border-style', 'solid')
     const lockedCivilian = host
       .locator('button.word-card-civilian[data-card-locked="true"]')
       .first()
@@ -127,7 +127,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
       await derivedCivilians
         .first()
         .evaluate((card) => getComputedStyle(card).backgroundColor),
-    ).not.toBe(
+    ).toBe(
       await lockedCivilian.evaluate(
         (card) => getComputedStyle(card).backgroundColor,
       ),

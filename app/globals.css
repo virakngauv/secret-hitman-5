@@ -397,19 +397,6 @@ button.word-card:focus-visible {
   color: oklch(0.36 0.02 70);
 }
 
-.word-card-civilian-derived {
-  border-style: dashed;
-  border-color: color-mix(in oklab, var(--civilian) 38%, var(--border));
-  background: color-mix(in oklab, var(--civilian) 22%, var(--card));
-  color: oklch(0.4 0.018 70);
-}
-
-.word-card-civilian-derived .word-card-index {
-  max-width: calc(100% - 1rem);
-  overflow-wrap: anywhere;
-  line-height: 1.2;
-}
-
 .word-card-assassin {
   border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
   background: var(--accent-soft);

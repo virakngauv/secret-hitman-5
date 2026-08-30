@@ -187,10 +187,8 @@ export function HintPhaseScreen({
                         'word-card',
                         isSelected && 'word-card-target',
                         isAssassin && 'word-card-assassin',
-                        card.kind === 'civilian' &&
-                          !isDerivedCivilian &&
+                        (card.kind === 'civilian' || isDerivedCivilian) &&
                           'word-card-civilian',
-                        isDerivedCivilian && 'word-card-civilian-derived',
                       )}
                       onClick={() => toggleCard(card.id)}
                       disabled={
@@ -201,9 +199,7 @@ export function HintPhaseScreen({
                       }
                       aria-pressed={isSelected}
                     >
-                      <span className="word-card-index">
-                        {isDerivedCivilian ? 'Civilian · reversible' : roleName}
-                      </span>
+                      <span className="word-card-index">{roleName}</span>
                       <span className="word-card-score">{roleScore}</span>
                       {card.locked && (
                         <svg
