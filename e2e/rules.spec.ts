@@ -42,13 +42,13 @@ for (const viewport of [
       'Assassin',
     ])
     await expect(roleTable.getByRole('row').nth(1)).toContainText(
-      'Target+2 eachKeep going.No target tiles start locked; the clue master can select at most 5 targets total.',
+      'Target+3 eachKeep going.No target tiles start locked; the clue master can select at most 5 targets total.',
     )
     await expect(roleTable.getByRole('row').nth(2)).toContainText(
       'Civilian−1 eachThe player who selected it stops guessing.3 randomly selected civilian tiles start locked.',
     )
     await expect(roleTable.getByRole('row').nth(3)).toContainText(
-      'Assassin−3 eachThe board ends globally for everyone.1 randomly selected assassin tile starts locked.',
+      'Assassin−5 eachThe board ends globally for everyone.1 randomly selected assassin tile starts locked.',
     )
     await expect(
       page.getByRole('button', { name: /sign in|join/i }),

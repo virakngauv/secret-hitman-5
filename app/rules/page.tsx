@@ -110,7 +110,7 @@ export default function RulesPage() {
                 <tr>
                   <th scope="row">Target</th>
                   <td data-label="Points">
-                    <strong>+2 each</strong>
+                    <strong>+3 each</strong>
                   </td>
                   <td data-label="Effect">Keep going.</td>
                   <td data-label="Locked tiles">
@@ -134,7 +134,7 @@ export default function RulesPage() {
                 <tr>
                   <th scope="row">Assassin</th>
                   <td data-label="Points">
-                    <strong>−3 each</strong>
+                    <strong>−5 each</strong>
                   </td>
                   <td data-label="Effect">
                     The board ends globally for everyone.

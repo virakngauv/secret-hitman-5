@@ -53,6 +53,41 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
 }
 
 describe('HintPhaseScreen', () => {
+  it('shows the score beside every clue-board role and state', async () => {
+    const user = userEvent.setup()
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const available = screen.getByRole('button', {
+      name: /available −1.*moon/i,
+    })
+    expect(available).toBeVisible()
+    expect(
+      within(available).getByText('−1', { selector: 'span.word-card-score' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /civilian −1.*locked.*rocket/i,
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /assassin −5.*locked.*poison/i,
+      }),
+    ).toBeVisible()
+
+    await user.click(available)
+    expect(
+      screen.getByRole('button', { name: /target \+3.*moon/i }),
+    ).toBeVisible()
+  })
+
   it('keeps fixed roles disabled and requires at least one editable target', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
@@ -232,6 +267,101 @@ describe('HintPhaseScreen', () => {
 })
 
 describe('GuessingScreen messages', () => {
+  it('shows scores for claimed cards without exposing unclaimed values', () => {
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: hintingView.player,
+      members: hintingView.members,
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-2',
+      clueGiverName: 'Grace',
+      hint: 'Orbit',
+      hintNumber: 2,
+      board: [
+        {
+          id: 'target',
+          word: 'MOON',
+          revealedKind: 'target',
+          claimedBy: ['Ada'],
+          selectedByYou: false,
+          disabled: true,
+        },
+        {
+          id: 'civilian',
+          word: 'RIVER',
+          revealedKind: 'civilian',
+          claimedBy: ['Grace'],
+          selectedByYou: false,
+          disabled: true,
+        },
+        {
+          id: 'assassin',
+          word: 'POISON',
+          revealedKind: 'assassin',
+          claimedBy: ['Grace'],
+          selectedByYou: false,
+          disabled: true,
+        },
+        {
+          id: 'unclaimed-target',
+          word: 'ROCKET',
+          revealedKind: 'target',
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: false,
+        },
+        {
+          id: 'hidden',
+          word: 'STAR',
+          revealedKind: null,
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: false,
+        },
+      ],
+      turnPlayers: [],
+      scoreboard: [],
+      canGuess: true,
+      canMarkDone: true,
+      canAdvanceTurn: false,
+    }
+
+    render(
+      <GuessingScreen
+        view={view}
+        onClaimCard={vi.fn()}
+        onFinishGuessing={vi.fn()}
+        onAdvanceTurn={vi.fn()}
+      />,
+    )
+
+    expect(
+      within(screen.getByRole('button', { name: /target.*moon/i })).getByText(
+        '+3',
+        { selector: '.word-card-score' },
+      ),
+    ).toBeVisible()
+    expect(
+      within(
+        screen.getByRole('button', { name: /civilian.*river/i }),
+      ).getByText('−1', { selector: '.word-card-score' }),
+    ).toBeVisible()
+    expect(
+      within(
+        screen.getByRole('button', { name: /assassin.*poison/i }),
+      ).getByText('−5', { selector: '.word-card-score' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /target.*rocket/i }),
+    ).not.toHaveTextContent(/[+−]\d/)
+    expect(
+      screen.getByRole('button', { name: /classified.*star/i }),
+    ).not.toHaveTextContent(/[+−]\d/)
+  })
+
   it.each([1, 2])(
     'keeps the host action disabled until the server permits advancement on turn %s',
     async (turnNumber) => {
@@ -356,6 +486,55 @@ describe('GuessingScreen messages', () => {
 })
 
 describe('FinishedScreen', () => {
+  it('shows point values only on claimed final-board cards', () => {
+    const player = {
+      playerId: 'player-1',
+      name: 'Ada',
+      role: 'host' as const,
+      participation: 'player' as const,
+      position: 0,
+      score: 3,
+    }
+    const view: Extract<RoomSnapshot, { status: 'finished' }> = {
+      status: 'finished',
+      roomCode: 'bcdf2',
+      player,
+      members: [player],
+      scoreboard: [player],
+      winners: [player],
+      lastClueGiverName: 'Ada',
+      lastHint: 'orbit',
+      lastHintNumber: 1,
+      board: [
+        {
+          id: 'claimed-target',
+          word: 'MOON',
+          revealedKind: 'target',
+          claimedBy: ['Ada'],
+          selectedByYou: false,
+          disabled: true,
+        },
+        {
+          id: 'unclaimed-assassin',
+          word: 'POISON',
+          revealedKind: 'assassin',
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: true,
+        },
+      ],
+    }
+
+    render(<FinishedScreen view={view} />)
+
+    const board = screen.getByLabelText('Fully revealed final board')
+    expect(
+      within(board).getByText('+3', { selector: '.word-card-score' }),
+    ).toBeVisible()
+    expect(within(board).queryByText('−5')).not.toBeInTheDocument()
+    expect(within(board).getByText('ASSASSIN')).toBeVisible()
+  })
+
   it.each([
     { scores: [100, 90, 80, 70, 60], places: [1, 2, 3, 4, 5] },
     { scores: [100, 100, 90], places: [1, 1, 2] },

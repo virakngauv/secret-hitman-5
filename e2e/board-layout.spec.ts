@@ -41,6 +41,37 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(locked).toHaveCount(4)
     await expect(host.locator('[data-card-kind="target"]')).toHaveCount(0)
     await expect(host.locator('[data-card-kind="civilian"]')).toHaveCount(3)
+    const available = host
+      .getByRole('button', { name: /Available −1/i })
+      .first()
+    await expect(available).toBeVisible()
+    await expect(available.locator('.word-card-index')).toHaveText('Available')
+    await expect(available.locator('.word-card-score')).toHaveText('−1')
+    await expect(available.locator('.word-card-score')).toHaveCSS(
+      'font-style',
+      'normal',
+    )
+    await expect(available.locator('.word-card-score')).toHaveCSS(
+      'position',
+      'absolute',
+    )
+    const availableBox = await available.boundingBox()
+    const scoreBox = await available.locator('.word-card-score').boundingBox()
+    if (!availableBox || !scoreBox) throw new Error('Score box is not visible')
+    const rightInset =
+      availableBox.x + availableBox.width - scoreBox.x - scoreBox.width
+    const bottomInset =
+      availableBox.y + availableBox.height - scoreBox.y - scoreBox.height
+    expect(rightInset).toBeGreaterThanOrEqual(0)
+    expect(rightInset).toBeLessThan(16)
+    expect(bottomInset).toBeGreaterThanOrEqual(0)
+    expect(bottomInset).toBeLessThan(16)
+    await expect(
+      host.getByRole('button', { name: /Civilian −1.*Locked/i }).first(),
+    ).toBeVisible()
+    await expect(
+      host.getByRole('button', { name: /Assassin −5.*Locked/i }),
+    ).toBeVisible()
     const fixedBefore = await locked.evaluateAll((cards) =>
       cards.map((card) => ({
         id: card.getAttribute('data-card-id'),
@@ -69,31 +100,74 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const targetId = await targets.first().getAttribute('data-card-id')
     await targets.nth(0).click()
     await expect(targets.nth(0)).toHaveAttribute('aria-pressed', 'true')
+    await expect(targets.nth(0)).toHaveAccessibleName(/Target \+3/i)
     await checkWidths(host, 'hinting', testInfo)
 
     await host.getByLabel('Your hint').fill('Orbit')
     await host.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await expect(host.getByText('Hint locked in')).toBeVisible()
     await guest.getByLabel('Your hint').fill('Garden')
-    await guest.locator('button[data-card-kind="neutral"]').first().click()
+    const guestTarget = guest
+      .locator('button[data-card-kind="neutral"]')
+      .first()
+    const guestTargetId = await guestTarget.getAttribute('data-card-id')
+    await guestTarget.click()
     await guest.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await host.getByRole('button', { name: 'Start guessing' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
 
     await guest.locator(`button[data-card-id="${targetId}"]`).click()
     await expect(guest.getByText(/Target found/)).toBeVisible()
-    await expect(guest.locator('.score-value')).toHaveText(['2', '2'])
+    await expect(guest.locator('.score-value')).toHaveText(['3', '3'])
     await expect(
       guest.locator(`button[data-card-id="${targetId}"]`),
     ).toBeDisabled()
+    const revealedTarget = guest.locator(`button[data-card-id="${targetId}"]`)
+    const revealedScore = revealedTarget.locator('.word-card-score')
+    await expect(revealedScore).toHaveText('+3')
+    const roleBox = await revealedTarget
+      .locator('.word-card-index')
+      .boundingBox()
+    const claimerBox = await revealedTarget
+      .locator('.word-card-claimers')
+      .boundingBox()
+    const revealedScoreBox = await revealedScore.boundingBox()
+    if (!roleBox || !claimerBox || !revealedScoreBox) {
+      throw new Error('Revealed card labels are not visible')
+    }
+    expect(Math.abs(claimerBox.x - roleBox.x)).toBeLessThanOrEqual(1)
+    expect(claimerBox.x + claimerBox.width).toBeLessThanOrEqual(
+      revealedScoreBox.x,
+    )
+    expect(
+      Math.abs(
+        claimerBox.y +
+          claimerBox.height -
+          (revealedScoreBox.y + revealedScoreBox.height),
+      ),
+    ).toBeLessThanOrEqual(1)
+    await expect(
+      guest.locator('button[data-card-kind="hidden"] .word-card-score'),
+    ).toHaveCount(0)
     await checkWidths(guest, 'guessing', testInfo)
 
     await guest.setViewportSize({ width: 360, height: 900 })
     await host.getByRole('button', { name: 'Next hint' }).click()
     await expect(host.getByText('Garden', { exact: true })).toBeVisible()
-    await host.getByRole('button', { name: 'I’m done guessing' }).click()
+    await host.locator(`button[data-card-id="${guestTargetId}"]`).click()
+    await expect(host.getByText(/Target found/)).toBeVisible()
     await host.getByRole('button', { name: 'Finish the game' }).click()
-    await expect(guest.getByLabel('Fully revealed final board')).toBeVisible()
+    const finalBoard = guest.getByLabel('Fully revealed final board')
+    await expect(finalBoard).toBeVisible()
+    await expect(finalBoard.locator('.word-card-score')).toHaveCount(1)
+    await expect(
+      finalBoard.locator('[data-card-kind="target"] .word-card-score'),
+    ).toHaveText('+3')
+    await expect(
+      finalBoard.locator(
+        '.word-card:not(.word-card-has-score) .word-card-score',
+      ),
+    ).toHaveCount(0)
     await checkWidths(guest, 'finished', testInfo)
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()])
@@ -182,7 +256,10 @@ async function assertCardContentFits(page: Page) {
       if (box.width < 44 || box.height < 44) {
         issues.push(`Card ${index} is smaller than a 44px tap target`)
       }
-      const contents = [...card.querySelectorAll<HTMLElement>('span')]
+      const contents = [...card.querySelectorAll<HTMLElement>(':scope > span')]
+      const flowContents = contents.filter(
+        (content) => getComputedStyle(content).position !== 'absolute',
+      )
       const lock = card
         .querySelector('.word-card-lock')
         ?.getBoundingClientRect()
@@ -221,12 +298,12 @@ async function assertCardContentFits(page: Page) {
       }
       for (
         let contentIndex = 1;
-        contentIndex < contents.length;
+        contentIndex < flowContents.length;
         contentIndex += 1
       ) {
         if (
-          contents[contentIndex - 1].getBoundingClientRect().bottom >
-          contents[contentIndex].getBoundingClientRect().top + 1
+          flowContents[contentIndex - 1].getBoundingClientRect().bottom >
+          flowContents[contentIndex].getBoundingClientRect().top + 1
         ) {
           issues.push(`Card ${index}: labels or words overlap`)
         }

@@ -316,8 +316,23 @@ button.word-card:focus-visible {
   color: var(--muted-foreground);
   font-family: var(--font-mono);
   font-size: 0.55rem;
+  text-transform: uppercase;
   font-weight: 900;
   letter-spacing: 0.09em;
+}
+
+.word-card-score {
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.65rem;
+  color: currentcolor;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  opacity: 0.72;
 }
 
 .word-card[data-card-locked='true'] .word-card-index {
@@ -356,6 +371,15 @@ button.word-card:focus-visible {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.word-card-has-score .word-card-claimers {
+  max-width: calc(100% - 2rem);
+  line-height: 1;
+}
+
+.word-card-has-score .word-card-score {
+  bottom: 0.8rem;
 }
 
 .word-card-target {

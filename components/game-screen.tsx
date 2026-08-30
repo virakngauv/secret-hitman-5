@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  CARD_SCORE,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
   type CardKind,
@@ -145,6 +146,23 @@ export function HintPhaseScreen({
                 {view.board.map((card) => {
                   const isAssassin = card.kind === 'assassin'
                   const isSelected = selected.has(card.id)
+                  const roleName = isAssassin
+                    ? 'Assassin'
+                    : isSelected
+                      ? 'Target'
+                      : card.kind === 'civilian'
+                        ? 'Civilian'
+                        : 'Available'
+                  const roleScore = formatScore(
+                    CARD_SCORE[
+                      isAssassin
+                        ? 'assassin'
+                        : isSelected
+                          ? 'target'
+                          : 'civilian'
+                    ],
+                  )
+                  const roleLabel = `${roleName} ${roleScore}`
                   return (
                     <button
                       key={card.id}
@@ -152,7 +170,7 @@ export function HintPhaseScreen({
                       data-card-id={card.id}
                       data-card-kind={card.kind}
                       data-card-locked={card.locked}
-                      aria-label={`${isAssassin ? 'Assassin' : isSelected ? 'Target' : card.kind === 'civilian' ? 'Civilian' : 'Available'}${card.locked ? ' · Locked' : ''} · ${card.word}`}
+                      aria-label={`${roleLabel}${card.locked ? ' · Locked' : ''} · ${card.word}`}
                       className={cn(
                         'word-card',
                         isSelected && 'word-card-target',
@@ -168,15 +186,8 @@ export function HintPhaseScreen({
                       }
                       aria-pressed={isSelected}
                     >
-                      <span className="word-card-index">
-                        {isAssassin
-                          ? 'ASSASSIN'
-                          : isSelected
-                            ? 'TARGET'
-                            : card.kind === 'civilian'
-                              ? 'CIVILIAN'
-                              : 'AVAILABLE'}
-                      </span>
+                      <span className="word-card-index">{roleName}</span>
+                      <span className="word-card-score">{roleScore}</span>
                       {card.locked && (
                         <svg
                           className="word-card-lock"
@@ -314,10 +325,10 @@ export function GuessingScreen({
     if (result.status !== 'success') return setFeedback(result.message)
     setFeedback(
       result.kind === 'target'
-        ? 'Target found. You and the clue-giver each gain 2 points.'
+        ? `Target found. You and the clue-giver each gain ${CARD_SCORE.target} points.`
         : result.kind === 'civilian'
-          ? 'Civilian. You and the clue-giver each lose 1 point; your guessing is done.'
-          : 'Assassin. You and the clue-giver each lose 3 points; this board is complete.',
+          ? `Civilian. You and the clue-giver each lose ${Math.abs(CARD_SCORE.civilian)} point; your guessing is done.`
+          : `Assassin. You and the clue-giver each lose ${Math.abs(CARD_SCORE.assassin)} points; this board is complete.`,
     )
   }
 
@@ -348,7 +359,7 @@ export function GuessingScreen({
           : view.player.participation === 'spectator'
             ? 'Spectator mode · follow the guesses without changing the board.'
             : view.canGuess
-              ? 'Choose carefully. A civilian costs 1 point each; the assassin costs 3 points each and ends the board.'
+              ? `Choose carefully. A civilian costs ${Math.abs(CARD_SCORE.civilian)} point each; the assassin costs ${Math.abs(CARD_SCORE.assassin)} points each and ends the board.`
               : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
       }
     >
@@ -376,6 +387,9 @@ export function GuessingScreen({
                 data-card-kind={card.revealedKind ?? 'hidden'}
                 className={cn(
                   'word-card word-card-guess',
+                  card.revealedKind &&
+                    card.claimedBy.length > 0 &&
+                    'word-card-has-score',
                   card.revealedKind === 'target' && 'word-card-target',
                   card.revealedKind === 'civilian' && 'word-card-civilian',
                   card.revealedKind === 'assassin' && 'word-card-assassin',
@@ -387,6 +401,11 @@ export function GuessingScreen({
                   {card.revealedKind?.toUpperCase() ??
                     (busyCard === card.id ? 'CHECKING…' : 'CLASSIFIED')}
                 </span>
+                {card.revealedKind && card.claimedBy.length > 0 && (
+                  <span className="word-card-score">
+                    {formatScore(CARD_SCORE[card.revealedKind])}
+                  </span>
+                )}
                 <span className="word-card-word">{card.word}</span>
                 <span className="word-card-claimers">
                   {card.claimedBy.length ? card.claimedBy.join(', ') : ' '}
@@ -479,6 +498,10 @@ export function GuessingScreen({
   )
 }
 
+function formatScore(score: number) {
+  return score > 0 ? `+${score}` : `−${Math.abs(score)}`
+}
+
 export function FinishedScreen({ view }: { view: FinishedView }) {
   const players = [...view.scoreboard]
     .filter(({ participation }) => participation === 'player')
@@ -517,6 +540,9 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
               <div
                 className={cn(
                   'word-card',
+                  card.revealedKind &&
+                    card.claimedBy.length > 0 &&
+                    'word-card-has-score',
                   card.revealedKind === 'target' && 'word-card-target',
                   card.revealedKind === 'civilian' && 'word-card-civilian',
                   card.revealedKind === 'assassin' && 'word-card-assassin',
@@ -528,6 +554,11 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
                 <span className="word-card-index">
                   {card.revealedKind?.toUpperCase()}
                 </span>
+                {card.revealedKind && card.claimedBy.length > 0 && (
+                  <span className="word-card-score">
+                    {formatScore(CARD_SCORE[card.revealedKind])}
+                  </span>
+                )}
                 <span className="word-card-word">{card.word}</span>
                 <span className="word-card-claimers">
                   {card.claimedBy.join(', ') || ' '}
