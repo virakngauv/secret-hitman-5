@@ -217,7 +217,7 @@ test.describe('Secret Hitman single round', () => {
             ).toContainText('Linus')
             await expect(
               viewer.locator('.word-card-claimers', { hasText: 'Unselected' }),
-            ).toHaveCount(10)
+            ).toHaveCount(0)
           }
           await expect(
             host.getByRole('button', { name: 'Next hint' }),

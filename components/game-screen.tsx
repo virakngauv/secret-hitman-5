@@ -416,10 +416,7 @@ export function GuessingScreen({
                   </span>
                 )}
                 <CardWord word={card.word} />
-                <CardAttribution
-                  names={card.claimedBy}
-                  showUnselected={view.boardCompleted}
-                />
+                <CardAttribution names={card.claimedBy} />
               </button>
             ))}
           </div>
@@ -524,7 +521,7 @@ function CardWord({ word }: { word: string }) {
     <span
       className={cn(
         'word-card-word',
-        longestSegment >= 8 && 'word-card-word-compact',
+        longestSegment >= 7 && 'word-card-word-compact',
         longestSegment >= 16 && 'word-card-word-break',
       )}
     >
@@ -533,13 +530,7 @@ function CardWord({ word }: { word: string }) {
   )
 }
 
-function CardAttribution({
-  names,
-  showUnselected = false,
-}: {
-  names: string[]
-  showUnselected?: boolean
-}) {
+function CardAttribution({ names }: { names: string[] }) {
   const pickerNames = names.join(', ')
 
   if (pickerNames) {
@@ -554,12 +545,8 @@ function CardAttribution({
   }
 
   return (
-    <span
-      className="word-card-claimers"
-      aria-label={showUnselected ? 'Not selected' : undefined}
-      aria-hidden={showUnselected ? undefined : true}
-    >
-      {showUnselected ? 'Unselected' : ' '}
+    <span className="word-card-claimers" aria-hidden="true">
+      {' '}
     </span>
   )
 }
@@ -622,7 +609,7 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
                   </span>
                 )}
                 <CardWord word={card.word} />
-                <CardAttribution names={card.claimedBy} showUnselected />
+                <CardAttribution names={card.claimedBy} />
               </div>
             ))}
           </div>

@@ -42,6 +42,14 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
       .first()
     await expect(available).toBeVisible()
     await expect(available.locator('.word-card-index')).toHaveText('Available')
+    await expect(available.locator('.word-card-index')).toHaveCSS(
+      'margin-top',
+      '3.2px',
+    )
+    await expect(available.locator('.word-card-index')).toHaveCSS(
+      'margin-left',
+      '3.2px',
+    )
     await expect(available.locator('.word-card-score')).toHaveText('−1')
     await expect(available.locator('.word-card-score')).toHaveCSS(
       'font-style',
@@ -78,6 +86,12 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     for (const card of await locked.all()) {
       await expect(card).toBeDisabled()
       await expect(card.locator('.word-card-lock')).toBeVisible()
+      const roleBox = await card.locator('.word-card-index').boundingBox()
+      const lockBox = await card.locator('.word-card-lock').boundingBox()
+      if (!roleBox || !lockBox) {
+        throw new Error('Locked role and lock icon are not visible')
+      }
+      expect(Math.abs(roleBox.y - lockBox.y)).toBeLessThanOrEqual(1)
     }
     await host.reload()
     await expect(host.getByLabel('Your twelve word board')).toBeVisible()
@@ -127,6 +141,9 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const claimerBox = await revealedTarget
       .locator('.word-card-claimers')
       .boundingBox()
+    const wordBox = await revealedTarget
+      .locator('.word-card-word')
+      .boundingBox()
     await expect(revealedTarget.locator('.word-card-claimers')).toHaveCSS(
       'font-style',
       'italic',
@@ -136,9 +153,10 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
       `Selected by ${longPickerName}`,
     )
     const revealedScoreBox = await revealedScore.boundingBox()
-    if (!roleBox || !claimerBox || !revealedScoreBox) {
+    if (!roleBox || !wordBox || !claimerBox || !revealedScoreBox) {
       throw new Error('Revealed card labels are not visible')
     }
+    expect(wordBox.y + wordBox.height).toBeLessThanOrEqual(claimerBox.y + 1)
     expect(Math.abs(claimerBox.x - roleBox.x)).toBeLessThanOrEqual(1)
     expect(claimerBox.x + claimerBox.width).toBeLessThanOrEqual(
       revealedScoreBox.x,
@@ -220,6 +238,11 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
           },
           {
             className: 'word-card-word word-card-word-compact',
+            label: 'snowman',
+            word: 'SNOWMAN',
+          },
+          {
+            className: 'word-card-word word-card-word-compact',
             label: 'longest-deck-word',
             word: 'MILLIONAIRE',
           },
@@ -275,6 +298,8 @@ async function assertCardContentFits(page: Page) {
       const box = card.getBoundingClientRect()
       const word = card.querySelector<HTMLElement>('.word-card-word')!
       const wordBox = word.getBoundingClientRect()
+      const claimer = card.querySelector<HTMLElement>('.word-card-claimers')
+      const claimerBox = claimer?.getBoundingClientRect()
       if (
         Math.abs(
           wordBox.left + wordBox.width / 2 - (box.left + box.width / 2),
@@ -288,6 +313,13 @@ async function assertCardContentFits(page: Page) {
       if (getComputedStyle(word).textAlign !== 'center') {
         issues.push(`Card ${index}: wrapped word lines are not centered`)
       }
+      if (
+        claimer?.textContent?.trim() &&
+        claimerBox &&
+        wordBox.bottom > claimerBox.top + 1
+      ) {
+        issues.push(`Card ${index}: word overlaps picker attribution`)
+      }
       if (box.width < 44 || box.height < 44) {
         issues.push(`Card ${index} is smaller than a 44px tap target`)
       }
@@ -299,12 +331,18 @@ async function assertCardContentFits(page: Page) {
         .querySelector('.word-card-lock')
         ?.getBoundingClientRect()
       if (lock) {
+        const role = card
+          .querySelector('.word-card-index')!
+          .getBoundingClientRect()
         if (
           lock.right > box.right ||
           lock.top < box.top ||
           lock.left < box.left + box.width / 2
         ) {
           issues.push(`Card ${index}: lock is not inside the top-right corner`)
+        }
+        if (Math.abs(role.top - lock.top) > 1) {
+          issues.push(`Card ${index}: role and lock are not vertically aligned`)
         }
         for (const content of contents) {
           const rect = content.getBoundingClientRect()

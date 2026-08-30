@@ -54,7 +54,7 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
 
 describe('HintPhaseScreen', () => {
   it('fits long words individually while allowing phrases to wrap naturally', () => {
-    const words = ['TELESCOPE', 'NEW YORK', 'COUNTERREVOLUTIONARIES']
+    const words = ['TELESCOPE', 'NEW YORK', 'COUNTERREVOLUTIONARIES', 'SNOWMAN']
     const view = {
       ...hintingView,
       board: hintingView.board!.map((card, index) => ({
@@ -83,6 +83,7 @@ describe('HintPhaseScreen', () => {
       'word-card-word-compact',
       'word-card-word-break',
     )
+    expect(screen.getByText('SNOWMAN')).toHaveClass('word-card-word-compact')
   })
 
   it('shows the score beside every clue-board role and state', async () => {
@@ -463,7 +464,7 @@ describe('GuessingScreen messages', () => {
     ).toBeVisible()
     const board = screen.getByLabelText('Completed and fully revealed board')
     expect(within(board).getByText('Ada')).toBeVisible()
-    expect(within(board).getByText('Unselected')).toBeVisible()
+    expect(within(board).queryByText('Unselected')).not.toBeInTheDocument()
   })
 
   it.each([1, 2])(
@@ -642,9 +643,7 @@ describe('FinishedScreen', () => {
     expect(within(board).getByLabelText('Selected by Ada')).toHaveClass(
       'word-card-picker-attribution',
     )
-    expect(within(board).getByLabelText('Not selected')).toHaveTextContent(
-      'Unselected',
-    )
+    expect(within(board).queryByText('Unselected')).not.toBeInTheDocument()
   })
 
   it.each([
