@@ -107,7 +107,11 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await host.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await expect(host.getByText('Hint locked in')).toBeVisible()
     await guest.getByLabel('Your hint').fill('Garden')
-    await guest.locator('button[data-card-kind="neutral"]').first().click()
+    const guestTarget = guest
+      .locator('button[data-card-kind="neutral"]')
+      .first()
+    const guestTargetId = await guestTarget.getAttribute('data-card-id')
+    await guestTarget.click()
     await guest.getByRole('button', { name: 'Lock in hint · 1' }).click()
     await host.getByRole('button', { name: 'Start guessing' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
@@ -150,11 +154,15 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await guest.setViewportSize({ width: 360, height: 900 })
     await host.getByRole('button', { name: 'Next hint' }).click()
     await expect(host.getByText('Garden', { exact: true })).toBeVisible()
-    await host.getByRole('button', { name: 'I’m done guessing' }).click()
+    await host.locator(`button[data-card-id="${guestTargetId}"]`).click()
+    await expect(host.getByText(/Target found/)).toBeVisible()
     await host.getByRole('button', { name: 'Finish the game' }).click()
     const finalBoard = guest.getByLabel('Fully revealed final board')
     await expect(finalBoard).toBeVisible()
-    await expect(finalBoard.locator('.word-card-score')).toHaveCount(0)
+    await expect(finalBoard.locator('.word-card-score')).toHaveCount(1)
+    await expect(
+      finalBoard.locator('[data-card-kind="target"] .word-card-score'),
+    ).toHaveText('+3')
     await expect(
       finalBoard.locator(
         '.word-card:not(.word-card-has-score) .word-card-score',
