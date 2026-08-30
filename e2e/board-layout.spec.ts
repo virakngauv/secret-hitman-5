@@ -41,14 +41,22 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(locked).toHaveCount(4)
     await expect(host.locator('[data-card-kind="target"]')).toHaveCount(0)
     await expect(host.locator('[data-card-kind="civilian"]')).toHaveCount(3)
+    const available = host
+      .getByRole('button', { name: /Available −1/i })
+      .first()
+    await expect(available).toBeVisible()
+    await expect(available.locator('.word-card-index')).toHaveText(
+      'Available −1',
+    )
+    await expect(available.locator('.word-card-score')).toHaveCSS(
+      'font-style',
+      'italic',
+    )
     await expect(
-      host.getByRole('button', { name: /Available \(−1\)/i }).first(),
+      host.getByRole('button', { name: /Civilian −1.*Locked/i }).first(),
     ).toBeVisible()
     await expect(
-      host.getByRole('button', { name: /Civilian \(−1\).*Locked/i }).first(),
-    ).toBeVisible()
-    await expect(
-      host.getByRole('button', { name: /Assassin \(−5\).*Locked/i }),
+      host.getByRole('button', { name: /Assassin −5.*Locked/i }),
     ).toBeVisible()
     const fixedBefore = await locked.evaluateAll((cards) =>
       cards.map((card) => ({
@@ -78,7 +86,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const targetId = await targets.first().getAttribute('data-card-id')
     await targets.nth(0).click()
     await expect(targets.nth(0)).toHaveAttribute('aria-pressed', 'true')
-    await expect(targets.nth(0)).toHaveAccessibleName(/Target \(\+3\)/i)
+    await expect(targets.nth(0)).toHaveAccessibleName(/Target \+3/i)
     await checkWidths(host, 'hinting', testInfo)
 
     await host.getByLabel('Your hint').fill('Orbit')
@@ -192,7 +200,7 @@ async function assertCardContentFits(page: Page) {
       if (box.width < 44 || box.height < 44) {
         issues.push(`Card ${index} is smaller than a 44px tap target`)
       }
-      const contents = [...card.querySelectorAll<HTMLElement>('span')]
+      const contents = [...card.querySelectorAll<HTMLElement>(':scope > span')]
       const lock = card
         .querySelector('.word-card-lock')
         ?.getBoundingClientRect()

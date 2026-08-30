@@ -64,27 +64,27 @@ describe('HintPhaseScreen', () => {
       />,
     )
 
+    const available = screen.getByRole('button', {
+      name: /available −1.*moon/i,
+    })
+    expect(available).toBeVisible()
+    expect(
+      within(available).getByText('−1', { selector: 'em.word-card-score' }),
+    ).toBeVisible()
     expect(
       screen.getByRole('button', {
-        name: /available \(−1\).*moon/i,
+        name: /civilian −1.*locked.*rocket/i,
       }),
     ).toBeVisible()
     expect(
       screen.getByRole('button', {
-        name: /civilian \(−1\).*locked.*rocket/i,
-      }),
-    ).toBeVisible()
-    expect(
-      screen.getByRole('button', {
-        name: /assassin \(−5\).*locked.*poison/i,
+        name: /assassin −5.*locked.*poison/i,
       }),
     ).toBeVisible()
 
-    await user.click(
-      screen.getByRole('button', { name: /available \(−1\).*moon/i }),
-    )
+    await user.click(available)
     expect(
-      screen.getByRole('button', { name: /target \(\+3\).*moon/i }),
+      screen.getByRole('button', { name: /target \+3.*moon/i }),
     ).toBeVisible()
   })
 

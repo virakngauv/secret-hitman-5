@@ -146,13 +146,23 @@ export function HintPhaseScreen({
                 {view.board.map((card) => {
                   const isAssassin = card.kind === 'assassin'
                   const isSelected = selected.has(card.id)
-                  const roleLabel = isAssassin
-                    ? `Assassin (${formatScore(CARD_SCORE.assassin)})`
+                  const roleName = isAssassin
+                    ? 'Assassin'
                     : isSelected
-                      ? `Target (${formatScore(CARD_SCORE.target)})`
+                      ? 'Target'
                       : card.kind === 'civilian'
-                        ? `Civilian (${formatScore(CARD_SCORE.civilian)})`
-                        : `Available (${formatScore(CARD_SCORE.civilian)})`
+                        ? 'Civilian'
+                        : 'Available'
+                  const roleScore = formatScore(
+                    CARD_SCORE[
+                      isAssassin
+                        ? 'assassin'
+                        : isSelected
+                          ? 'target'
+                          : 'civilian'
+                    ],
+                  )
+                  const roleLabel = `${roleName} ${roleScore}`
                   return (
                     <button
                       key={card.id}
@@ -176,7 +186,10 @@ export function HintPhaseScreen({
                       }
                       aria-pressed={isSelected}
                     >
-                      <span className="word-card-index">{roleLabel}</span>
+                      <span className="word-card-index">
+                        <span>{roleName}</span>{' '}
+                        <em className="word-card-score">{roleScore}</em>
+                      </span>
                       {card.locked && (
                         <svg
                           className="word-card-lock"
