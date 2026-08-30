@@ -409,7 +409,7 @@ describe('GuessingScreen messages', () => {
     }
   })
 
-  it('announces a completed board and identifies cards nobody selected', () => {
+  it('identifies accepted picks without labeling untouched cards', () => {
     const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
       status: 'guessing',
       turnId: '00000000-0000-4000-8000-000000000001',
@@ -457,14 +457,14 @@ describe('GuessingScreen messages', () => {
       />,
     )
 
-    expect(
-      screen.getByText(
-        'Board complete. Every role and accepted pick is now revealed.',
-      ),
-    ).toBeVisible()
     const board = screen.getByLabelText('Completed and fully revealed board')
     expect(within(board).getByText('Ada')).toBeVisible()
     expect(within(board).queryByText('Unselected')).not.toBeInTheDocument()
+    expect(
+      within(board)
+        .getByRole('button', { name: /assassin.*poison/i })
+        .querySelector('.word-card-claimers'),
+    ).not.toHaveTextContent(/\S/)
   })
 
   it.each([1, 2])(

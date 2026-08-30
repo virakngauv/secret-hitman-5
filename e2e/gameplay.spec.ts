@@ -47,7 +47,7 @@ test.describe('Secret Hitman single round', () => {
             cards.map((card) => card.getAttribute('data-card-id')),
           )
         const [targetId, finalTargetId] = targetIds
-        if (!targetId || !finalTargetId) {
+        if (targetIds.length !== 2 || !targetId || !finalTargetId) {
           throw new Error('Expected two target cards.')
         }
         const civilianId = await host
@@ -83,11 +83,7 @@ test.describe('Secret Hitman single round', () => {
           ).toBeVisible()
         }
         await expect(
-          guest.getByText(
-            ending === 'assassin' || ending === 'targets'
-              ? /Board complete. Every role and accepted pick is now revealed/
-              : /Guessing is done for this hint/,
-          ),
+          guest.getByText(/Guessing is done for this hint/),
         ).toBeVisible()
         await expect(
           guest.locator('button[data-card-kind="hidden"]'),
@@ -215,9 +211,7 @@ test.describe('Secret Hitman single round', () => {
             await expect(
               viewer.locator(`button[data-card-id="${finalTargetId}"]`),
             ).toContainText('Linus')
-            await expect(
-              viewer.locator('.word-card-claimers', { hasText: 'Unselected' }),
-            ).toHaveCount(0)
+            await expect(viewer.getByText('Unselected')).toHaveCount(0)
           }
           await expect(
             host.getByRole('button', { name: 'Next hint' }),
