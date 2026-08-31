@@ -228,8 +228,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(host.getByText('Garden', { exact: true })).toBeVisible()
     await host.locator(`button[data-card-id="${guestTargetId}"]`).click()
     await expect(host.getByText(/Target found/)).toBeVisible()
-    await host.getByRole('button', { name: 'Finish the game' }).click()
-    const finalBoard = guest.getByLabel('Fully revealed final board')
+    const finalBoard = guest.getByLabel('Completed and fully revealed board')
     await expect(finalBoard).toBeVisible()
     await expect(finalBoard.locator('.word-card-score')).toHaveCount(1)
     await expect(
@@ -240,7 +239,10 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
         '.word-card:not(.word-card-has-score) .word-card-score',
       ),
     ).toHaveCount(0)
-    await checkWidths(guest, 'finished', testInfo)
+    await checkWidths(guest, 'final-board', testInfo)
+    await host.getByRole('button', { name: 'View scoreboard' }).click()
+    await expect(guest.getByText('Final standings')).toBeVisible()
+    await expect(guest.locator('.word-grid')).toHaveCount(0)
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()])
   }

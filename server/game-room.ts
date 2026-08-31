@@ -7,8 +7,10 @@ import {
   MIN_TARGET_COUNT,
   type CardKind,
   type ClaimCardPayload,
+  type CommandFailure,
   type CommandResult,
   type FinishGuessingPayload,
+  type GameCommandPayload,
   type Participation,
   type PlayerIdentity,
   type PlayerRole,
@@ -30,6 +32,9 @@ export const MAX_ROOM_MEMBERS = 32
 // Bound retained identities without ever evicting a room's removal restrictions.
 export const MAX_ROOM_IDENTITIES = 1_024
 const MAX_REMEMBERED_COMMANDS_PER_PLAYER = 100
+type LegacyGamePayload<T extends { gameId: string }> = Omit<T, 'gameId'> & {
+  gameId?: undefined
+}
 
 type Member = {
   playerId: string
@@ -53,6 +58,7 @@ type GameSeat = {
 }
 
 type GameState = {
+  gameId: string
   playerOrder: string[]
   turnIndex: number
   turnId: string
@@ -239,7 +245,8 @@ export class GameRoom {
       }
     }
 
-    const seed = `${this.initialSeed}:${now}`
+    const gameId = randomUUID()
+    const seed = `${this.initialSeed}:${gameId}:${now}`
     players.forEach((member, position) => {
       member.participation = 'player'
       member.game = {
@@ -253,6 +260,7 @@ export class GameRoom {
       }
     })
     this.game = {
+      gameId,
       playerOrder: players.map(({ playerId }) => playerId),
       turnIndex: 0,
       turnId: randomUUID(),
@@ -266,9 +274,11 @@ export class GameRoom {
 
   submitHint(
     token: string,
-    payload: SubmitHintPayload,
+    payload: SubmitHintPayload | LegacyGamePayload<SubmitHintPayload>,
     now = Date.now(),
   ): CommandResult {
+    if (payload.gameId && !this.isCurrentGame(payload.gameId))
+      return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'hinting') {
@@ -307,7 +317,18 @@ export class GameRoom {
     return { status: 'success' }
   }
 
-  unlockHint(token: string, now = Date.now()): CommandResult {
+  unlockHint(
+    token: string,
+    payload: GameCommandPayload | number | undefined = undefined,
+    now = Date.now(),
+  ): CommandResult {
+    if (typeof payload === 'number') now = payload
+    if (
+      payload &&
+      typeof payload !== 'number' &&
+      !this.isCurrentGame(payload.gameId)
+    )
+      return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'hinting') {
@@ -326,7 +347,18 @@ export class GameRoom {
     return { status: 'success' }
   }
 
-  startGuessing(token: string, now = Date.now()): CommandResult {
+  startGuessing(
+    token: string,
+    payload: GameCommandPayload | number | undefined = undefined,
+    now = Date.now(),
+  ): CommandResult {
+    if (typeof payload === 'number') now = payload
+    if (
+      payload &&
+      typeof payload !== 'number' &&
+      !this.isCurrentGame(payload.gameId)
+    )
+      return this.staleGame()
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
@@ -350,9 +382,11 @@ export class GameRoom {
 
   claimCard(
     token: string,
-    payload: ClaimCardPayload,
+    payload: ClaimCardPayload | LegacyGamePayload<ClaimCardPayload>,
     now = Date.now(),
   ): CommandResult<{ kind: CardKind }> {
+    if (payload.gameId && !this.isCurrentGame(payload.gameId))
+      return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'guessing') {
@@ -422,9 +456,11 @@ export class GameRoom {
 
   finishGuessing(
     token: string,
-    payload: FinishGuessingPayload,
+    payload: FinishGuessingPayload | LegacyGamePayload<FinishGuessingPayload>,
     now = Date.now(),
   ): CommandResult {
+    if (payload.gameId && !this.isCurrentGame(payload.gameId))
+      return this.staleGame()
     const member = this.findActiveMember(token)
     if (!member?.game || this.phase !== 'guessing') {
       return { status: 'forbidden', message: 'You are not an active guesser.' }
@@ -447,7 +483,18 @@ export class GameRoom {
     return { status: 'success' }
   }
 
-  advanceTurn(token: string, now = Date.now()): CommandResult {
+  advanceTurn(
+    token: string,
+    payload: GameCommandPayload | number | undefined = undefined,
+    now = Date.now(),
+  ): CommandResult {
+    if (typeof payload === 'number') now = payload
+    if (
+      payload &&
+      typeof payload !== 'number' &&
+      !this.isCurrentGame(payload.gameId)
+    )
+      return this.staleGame()
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
@@ -470,13 +517,79 @@ export class GameRoom {
 
     const game = this.requireGame()
     if (game.turnIndex >= game.playerOrder.length - 1) {
-      this.phase = 'finished'
-    } else {
-      game.turnIndex += 1
-      game.turnId = randomUUID()
-      game.turnCompleted = false
-      this.prepareCurrentTurn()
+      return {
+        status: 'invalid',
+        message: 'Use View scoreboard after the final turn.',
+      }
     }
+    game.turnIndex += 1
+    game.turnId = randomUUID()
+    game.turnCompleted = false
+    this.prepareCurrentTurn()
+    this.commandResults.clear()
+    this.touch(now)
+    return { status: 'success' }
+  }
+
+  showScoreboard(
+    token: string,
+    payload: GameCommandPayload,
+    now = Date.now(),
+  ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
+    const actor = this.findActiveMember(token)
+    if (!actor || actor.role !== 'host') {
+      return {
+        status: 'forbidden',
+        message: 'Only the host can show the scoreboard.',
+      }
+    }
+    if (this.phase !== 'guessing' || !this.isFinalTurn()) {
+      return {
+        status: 'invalid',
+        message: 'The scoreboard is available only after the final turn.',
+      }
+    }
+    if (this.hasActiveGuessers()) {
+      return {
+        status: 'invalid',
+        message: 'Waiting for players to finish guessing.',
+      }
+    }
+
+    this.phase = 'finished'
+    this.commandResults.clear()
+    this.touch(now)
+    return { status: 'success' }
+  }
+
+  returnToLobby(
+    token: string,
+    payload: GameCommandPayload,
+    now = Date.now(),
+  ): CommandResult {
+    const actor = this.findActiveMember(token)
+    if (!actor || actor.role !== 'host') {
+      return {
+        status: 'forbidden',
+        message: 'Only the host can return the room to the lobby.',
+      }
+    }
+    if (this.phase === 'lobby') return { status: 'success' }
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
+    if (this.phase !== 'finished') {
+      return {
+        status: 'invalid',
+        message: 'The room can return to the lobby only from final results.',
+      }
+    }
+
+    for (const member of this.members) {
+      member.participation = 'player'
+      member.game = null
+    }
+    this.game = null
+    this.phase = 'lobby'
     this.commandResults.clear()
     this.touch(now)
     return { status: 'success' }
@@ -510,6 +623,7 @@ export class GameRoom {
     if (this.phase === 'hinting') {
       return {
         status: 'hinting',
+        gameId: this.requireGame().gameId,
         ...base,
         hintStatuses: this.gamePlayers().map((player) => ({
           playerId: player.playerId,
@@ -532,12 +646,27 @@ export class GameRoom {
       }
     }
 
+    if (this.phase === 'finished') {
+      const scoreboard = this.scoreboard()
+      const playerScores = scoreboard.filter(
+        (entry): entry is ScoreboardEntry & { score: number } =>
+          entry.participation === 'player' && entry.score !== null,
+      )
+      const winningScore = Math.max(...playerScores.map(({ score }) => score))
+      return {
+        status: 'finished',
+        gameId: this.requireGame().gameId,
+        ...base,
+        scoreboard,
+        winners: playerScores.filter(({ score }) => score === winningScore),
+      }
+    }
+
     const clueGiver = this.currentClueGiver()
     const clueSeat = clueGiver.game
     if (!clueSeat?.hint)
       throw new Error('Current clue giver is missing a hint.')
     const revealAll =
-      this.phase === 'finished' ||
       this.requireGame().turnCompleted ||
       member === clueGiver ||
       member.game?.turnState === 'done'
@@ -576,28 +705,11 @@ export class GameRoom {
       }
     })
 
-    if (this.phase === 'finished') {
-      const scoreboard = this.scoreboard()
-      const playerScores = scoreboard.filter(
-        (entry): entry is ScoreboardEntry & { score: number } =>
-          entry.participation === 'player' && entry.score !== null,
-      )
-      const winningScore = Math.max(...playerScores.map(({ score }) => score))
-      return {
-        status: 'finished',
-        ...base,
-        scoreboard,
-        winners: playerScores.filter(({ score }) => score === winningScore),
-        lastClueGiverName: clueGiver.name,
-        lastHint: clueSeat.hint,
-        lastHintNumber: clueSeat.targetCount,
-        board,
-      }
-    }
-
     return {
       status: 'guessing',
+      gameId: this.requireGame().gameId,
       turnId: this.requireGame().turnId,
+      isFinalTurn: this.isFinalTurn(),
       ...base,
       turnNumber: this.requireGame().turnIndex + 1,
       totalTurns: this.requireGame().playerOrder.length,
@@ -626,7 +738,14 @@ export class GameRoom {
         Boolean(member.game) &&
         member !== clueGiver &&
         member.game?.turnState === 'guessing',
-      canAdvanceTurn: member.role === 'host' && !this.hasActiveGuessers(),
+      canAdvanceTurn:
+        member.role === 'host' &&
+        !this.isFinalTurn() &&
+        !this.hasActiveGuessers(),
+      canViewScoreboard:
+        member.role === 'host' &&
+        this.isFinalTurn() &&
+        !this.hasActiveGuessers(),
     }
   }
 
@@ -744,6 +863,22 @@ export class GameRoom {
     const clueGiver = this.currentClueGiver()
     for (const player of this.gamePlayers()) {
       if (player !== clueGiver && player.game) player.game.turnState = 'done'
+    }
+  }
+
+  private isFinalTurn() {
+    const game = this.requireGame()
+    return game.turnIndex === game.playerOrder.length - 1
+  }
+
+  private isCurrentGame(gameId: string) {
+    return this.game?.gameId === gameId
+  }
+
+  private staleGame(): CommandFailure {
+    return {
+      status: 'stale',
+      message: 'That command belongs to a previous game.',
     }
   }
 

@@ -188,10 +188,13 @@ describe('Socket.IO Secret Hitman protocol', () => {
         'room:remove-player',
         'game:start',
         'game:submit-hint',
+        'game:unlock-hint',
         'game:start-guessing',
         'game:claim-card',
         'game:finish-guessing',
         'game:advance-turn',
+        'game:show-scoreboard',
+        'game:return-to-lobby',
       ] satisfies (keyof ClientToServerEvents)[])(
         'handles %s without crashing',
         async (event) => {
@@ -332,6 +335,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       expect(
         await host.emitWithAck('game:submit-hint', {
           roomCode,
+          gameId: hostHint.gameId,
           hint: 'Invalid',
           targetCardIds,
         }),
@@ -360,6 +364,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(
       await host.emitWithAck('game:submit-hint', {
         roomCode,
+        gameId: hostHint.gameId,
         hint: 'Orbit',
         targetCardIds: hostTargets,
       }),
@@ -367,11 +372,17 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(
       await guest.emitWithAck('game:submit-hint', {
         roomCode,
+        gameId: guestHint.gameId,
         hint: 'Garden',
         targetCardIds: guestTargets,
       }),
     ).toEqual({ status: 'success' })
-    expect(await host.emitWithAck('game:unlock-hint', { roomCode })).toEqual({
+    expect(
+      await host.emitWithAck('game:unlock-hint', {
+        roomCode,
+        gameId: hostHint.gameId,
+      }),
+    ).toEqual({
       status: 'success',
     })
     expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
@@ -388,11 +399,15 @@ describe('Socket.IO Secret Hitman protocol', () => {
       },
     )
     expect(
-      await host.emitWithAck('game:start-guessing', { roomCode }),
+      await host.emitWithAck('game:start-guessing', {
+        roomCode,
+        gameId: hostHint.gameId,
+      }),
     ).toMatchObject({ status: 'invalid' })
     expect(
       await host.emitWithAck('game:submit-hint', {
         roomCode,
+        gameId: hostHint.gameId,
         hint: 'Galaxy',
         targetCardIds: hostTargets.slice(0, 1),
       }),
@@ -413,17 +428,24 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(
       await spectator.emitWithAck('game:submit-hint', {
         roomCode,
+        gameId: hostHint.gameId,
         hint: 'Cheat',
         targetCardIds: hostTargets,
       }),
     ).toMatchObject({ status: 'forbidden' })
     expect(
-      await spectator.emitWithAck('game:unlock-hint', { roomCode }),
+      await spectator.emitWithAck('game:unlock-hint', {
+        roomCode,
+        gameId: hostHint.gameId,
+      }),
     ).toMatchObject({ status: 'forbidden' })
 
-    expect(await host.emitWithAck('game:start-guessing', { roomCode })).toEqual(
-      { status: 'success' },
-    )
+    expect(
+      await host.emitWithAck('game:start-guessing', {
+        roomCode,
+        gameId: hostHint.gameId,
+      }),
+    ).toEqual({ status: 'success' })
     const hostGuessing = socketServer.gameServer.snapshot(hostToken, roomCode)
     const guestGuessing = socketServer.gameServer.snapshot(guestToken, roomCode)
     if (
@@ -440,6 +462,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(
       await guest.emitWithAck('game:claim-card', {
         roomCode,
+        gameId: guestGuessing.gameId,
         commandId: 'guest-target-command',
         turnId: guestGuessing.turnId,
         cardId: target.id,
@@ -448,6 +471,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(
       await spectator.emitWithAck('game:claim-card', {
         roomCode,
+        gameId: guestGuessing.gameId,
         commandId: 'spectator-command-1',
         turnId: guestGuessing.turnId,
         cardId: target.id,
@@ -486,6 +510,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         expect(
           server.submitHint(token, {
             roomCode,
+            gameId: view.gameId,
             hint: 'Orbit',
             targetCardIds: [target.id],
           }),
@@ -502,6 +527,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         expect(
           await guest.emitWithAck('game:finish-guessing', {
             roomCode,
+            gameId: before.gameId,
             turnId: before.turnId,
           }),
         ).toEqual({ status: 'success' })
@@ -512,6 +538,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         expect(
           await guest.emitWithAck('game:claim-card', {
             roomCode,
+            gameId: before.gameId,
             cardId: card.id,
             turnId: before.turnId,
             commandId: `${ending}-before-reconnect`,
@@ -532,7 +559,10 @@ describe('Socket.IO Secret Hitman protocol', () => {
       await disconnected
       if (ending === 'active') {
         expect(
-          await host.emitWithAck('game:advance-turn', { roomCode }),
+          await host.emitWithAck('game:advance-turn', {
+            roomCode,
+            gameId: before.gameId,
+          }),
         ).toEqual({
           status: 'invalid',
           message: 'Waiting for players to finish guessing.',
@@ -565,6 +595,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         expect(
           await reconnected.emitWithAck('game:finish-guessing', {
             roomCode,
+            gameId: before.gameId,
             turnId: before.turnId,
           }),
         ).toEqual({ status: 'success' })
@@ -603,6 +634,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       expect(
         await client.emitWithAck('game:submit-hint', {
           roomCode,
+          gameId: result.snapshot.gameId,
           hint: 'Orbit',
           targetCardIds: result.snapshot.board
             .filter(({ kind }) => kind === 'neutral')
@@ -611,7 +643,12 @@ describe('Socket.IO Secret Hitman protocol', () => {
         }),
       ).toEqual({ status: 'success' })
     }
-    await host.emitWithAck('game:start-guessing', { roomCode })
+    const ready = socketServer.gameServer.snapshot(hostToken, roomCode)
+    if (ready.status !== 'hinting') throw new Error('Expected hinting.')
+    await host.emitWithAck('game:start-guessing', {
+      roomCode,
+      gameId: ready.gameId,
+    })
     const before = socketServer.gameServer.snapshot(hostToken, roomCode)
     if (before.status !== 'guessing') throw new Error('Expected guessing.')
     const targets = before.board.filter(
@@ -620,6 +657,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
     const payload = {
       roomCode,
+      gameId: before.gameId,
       turnId: before.turnId,
       cardId: targets[0].id,
       commandId: 'concurrent-target',
@@ -657,11 +695,15 @@ describe('Socket.IO Secret Hitman protocol', () => {
       expect(
         await client.emitWithAck('game:finish-guessing', {
           roomCode,
+          gameId: before.gameId,
           turnId: before.turnId,
         }),
       ).toEqual({ status: 'success' })
     }
-    await host.emitWithAck('game:advance-turn', { roomCode })
+    await host.emitWithAck('game:advance-turn', {
+      roomCode,
+      gameId: before.gameId,
+    })
     const next = socketServer.gameServer.snapshot(thirdToken, roomCode)
     if (next.status !== 'guessing') throw new Error('Expected next turn.')
     expect(next.turnId).not.toBe(before.turnId)
@@ -674,6 +716,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(
       await third.emitWithAck('game:finish-guessing', {
         roomCode,
+        gameId: before.gameId,
         turnId: before.turnId,
       }),
     ).toMatchObject({ status: 'stale' })
@@ -712,6 +755,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         expect(
           await client.emitWithAck('game:submit-hint', {
             roomCode,
+            gameId: view.gameId,
             hint: 'Orbit',
             targetCardIds: view.board
               .filter(({ kind }) => kind === 'neutral')
@@ -721,7 +765,12 @@ describe('Socket.IO Secret Hitman protocol', () => {
         ).toEqual({ status: 'success' })
       }
       await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
-      await host.emitWithAck('game:start-guessing', { roomCode })
+      const ready = socketServer.gameServer.snapshot(hostToken, roomCode)
+      if (ready.status !== 'hinting') throw new Error('Expected hinting.')
+      await host.emitWithAck('game:start-guessing', {
+        roomCode,
+        gameId: ready.gameId,
+      })
       const before = socketServer.gameServer.snapshot(hostToken, roomCode)
       if (before.status !== 'guessing') throw new Error('Expected guessing.')
       const card = before.board.find(
@@ -739,6 +788,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       spectator.on('room:snapshot', spectatorSnapshots)
       const payload = {
         roomCode,
+        gameId: before.gameId,
         cardId: card.id,
         turnId: before.turnId,
         commandId: `race-${kind}`,
@@ -802,6 +852,148 @@ describe('Socket.IO Secret Hitman protocol', () => {
       }
     },
   )
+
+  it('synchronizes board-free results and an idempotent lobby reset for every connected member', async () => {
+    const host = await connect(hostToken)
+    const guest = await connect(guestToken)
+    const spectator = await connect(spectatorToken)
+    const created = await host.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Expected room.')
+    const { roomCode } = created
+    await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
+
+    const server = socketServer.gameServer
+    expect(server.startGame(hostToken, roomCode)).toEqual({ status: 'success' })
+    for (const [token, hint] of [
+      [hostToken, 'Orbit'],
+      [guestToken, 'Garden'],
+    ] as const) {
+      const view = server.snapshot(token, roomCode)
+      if (view.status !== 'hinting' || !view.board)
+        throw new Error('Expected hinting board.')
+      expect(
+        server.submitHint(token, {
+          roomCode,
+          gameId: view.gameId,
+          hint,
+          targetCardIds: [
+            view.board.find(({ kind }) => kind === 'neutral')!.id,
+          ],
+        }),
+      ).toEqual({ status: 'success' })
+    }
+    const ready = server.snapshot(hostToken, roomCode)
+    if (ready.status !== 'hinting') throw new Error('Expected hinting.')
+    expect(
+      server.startGuessing(hostToken, {
+        roomCode,
+        gameId: ready.gameId,
+      }),
+    ).toEqual({ status: 'success' })
+    await spectator.emitWithAck('room:join', { roomCode, name: 'Linus' })
+
+    while (true) {
+      const hostView = server.snapshot(hostToken, roomCode)
+      if (hostView.status !== 'guessing') throw new Error('Expected guessing.')
+      for (const token of [hostToken, guestToken]) {
+        const playerView = server.snapshot(token, roomCode)
+        if (playerView.status === 'guessing' && playerView.canMarkDone) {
+          expect(
+            server.finishGuessing(token, {
+              roomCode,
+              gameId: playerView.gameId,
+              turnId: playerView.turnId,
+            }),
+          ).toEqual({ status: 'success' })
+        }
+      }
+      const complete = server.snapshot(hostToken, roomCode)
+      if (complete.status !== 'guessing') throw new Error('Expected guessing.')
+      if (complete.isFinalTurn) break
+      expect(
+        server.advanceTurn(hostToken, {
+          roomCode,
+          gameId: complete.gameId,
+        }),
+      ).toEqual({ status: 'success' })
+    }
+
+    const finalBoard = server.snapshot(hostToken, roomCode)
+    if (finalBoard.status !== 'guessing')
+      throw new Error('Expected final board.')
+    expect(finalBoard.canViewScoreboard).toBe(true)
+    expect(
+      await guest.emitWithAck('game:show-scoreboard', {
+        roomCode,
+        gameId: finalBoard.gameId,
+      }),
+    ).toMatchObject({ status: 'forbidden' })
+
+    const resultSnapshots = [host, guest, spectator].map(
+      (client) =>
+        new Promise<RoomSnapshot>((resolve) =>
+          client.once('room:snapshot', resolve),
+        ),
+    )
+    expect(
+      await host.emitWithAck('game:show-scoreboard', {
+        roomCode,
+        gameId: finalBoard.gameId,
+      }),
+    ).toEqual({ status: 'success' })
+    for (const snapshot of await Promise.all(resultSnapshots)) {
+      expect(snapshot.status).toBe('finished')
+      expect(snapshot).not.toHaveProperty('board')
+    }
+    expect(
+      await guest.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({ status: 'success', snapshot: { status: 'finished' } })
+
+    const lobbySnapshots = [host, guest, spectator].map(
+      (client) =>
+        new Promise<RoomSnapshot>((resolve) =>
+          client.once('room:snapshot', resolve),
+        ),
+    )
+    expect(
+      await host.emitWithAck('game:return-to-lobby', {
+        roomCode,
+        gameId: finalBoard.gameId,
+      }),
+    ).toEqual({ status: 'success' })
+    for (const snapshot of await Promise.all(lobbySnapshots)) {
+      expect(snapshot).toMatchObject({ status: 'lobby', roomCode })
+      if (snapshot.status !== 'lobby') throw new Error('Expected lobby.')
+      expect(
+        snapshot.members.every(
+          ({ participation }) => participation === 'player',
+        ),
+      ).toBe(true)
+    }
+    expect(
+      await host.emitWithAck('game:return-to-lobby', {
+        roomCode,
+        gameId: finalBoard.gameId,
+      }),
+    ).toEqual({ status: 'success' })
+
+    expect(await host.emitWithAck('game:start', { roomCode })).toEqual({
+      status: 'success',
+    })
+    const nextGame = server.snapshot(hostToken, roomCode)
+    if (nextGame.status !== 'hinting') throw new Error('Expected next game.')
+    expect(nextGame.gameId).not.toBe(finalBoard.gameId)
+    expect(
+      await host.emitWithAck('game:submit-hint', {
+        roomCode,
+        gameId: finalBoard.gameId,
+        hint: 'Stale',
+        targetCardIds: [
+          nextGame.board!.find(({ kind }) => kind === 'neutral')!.id,
+        ],
+      }),
+    ).toMatchObject({ status: 'stale' })
+  })
 
   it('restores the same player identity after reconnecting', async () => {
     const host = await connect(hostToken)

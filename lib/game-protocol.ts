@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 8 as const
+export const GAME_PROTOCOL_VERSION = 9 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -62,6 +62,10 @@ type MemberSnapshotBase = {
   members: PlayerIdentity[]
 }
 
+type ActiveGameSnapshotBase = MemberSnapshotBase & {
+  gameId: string
+}
+
 export type RoomSnapshot =
   | { status: 'not_found'; roomCode: string }
   | { status: 'joinable'; roomCode: string; joinsAsSpectator: boolean }
@@ -74,10 +78,11 @@ export type RoomSnapshot =
       board: HintCardSnapshot[] | null
       hint: string | null
       hintSubmitted: boolean
-    } & MemberSnapshotBase)
+    } & ActiveGameSnapshotBase)
   | ({
       status: 'guessing'
       turnId: string
+      isFinalTurn?: boolean
       turnNumber: number
       totalTurns: number
       clueGiverId: string
@@ -91,16 +96,13 @@ export type RoomSnapshot =
       canGuess: boolean
       canMarkDone: boolean
       canAdvanceTurn: boolean
-    } & MemberSnapshotBase)
+      canViewScoreboard?: boolean
+    } & ActiveGameSnapshotBase)
   | ({
       status: 'finished'
       scoreboard: ScoreboardEntry[]
       winners: ScoreboardEntry[]
-      lastClueGiverName: string
-      lastHint: string
-      lastHintNumber: number
-      board: GuessCardSnapshot[]
-    } & MemberSnapshotBase)
+    } & ActiveGameSnapshotBase)
 
 export function isMemberSnapshot(
   snapshot: RoomSnapshot,
@@ -143,13 +145,14 @@ export type SessionResumePayload = { roomCode?: string }
 export type CreateRoomPayload = { name: string }
 export type JoinRoomPayload = { roomCode: string; name: string }
 export type RoomCommandPayload = { roomCode: string }
-export type FinishGuessingPayload = RoomCommandPayload & { turnId: string }
+export type GameCommandPayload = RoomCommandPayload & { gameId: string }
+export type FinishGuessingPayload = GameCommandPayload & { turnId: string }
 export type RemovePlayerPayload = RoomCommandPayload & { playerId: string }
-export type SubmitHintPayload = RoomCommandPayload & {
+export type SubmitHintPayload = GameCommandPayload & {
   hint: string
   targetCardIds: string[]
 }
-export type ClaimCardPayload = RoomCommandPayload & {
+export type ClaimCardPayload = GameCommandPayload & {
   commandId: string
   turnId: string
   cardId: string
@@ -185,11 +188,11 @@ export type ClientToServerEvents = {
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:unlock-hint': (
-    payload: RoomCommandPayload,
+    payload: GameCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:start-guessing': (
-    payload: RoomCommandPayload,
+    payload: GameCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:claim-card': (
@@ -201,7 +204,15 @@ export type ClientToServerEvents = {
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:advance-turn': (
-    payload: RoomCommandPayload,
+    payload: GameCommandPayload,
+    acknowledge: (result: CommandResult) => void,
+  ) => void
+  'game:show-scoreboard': (
+    payload: GameCommandPayload,
+    acknowledge: (result: CommandResult) => void,
+  ) => void
+  'game:return-to-lobby': (
+    payload: GameCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
 }

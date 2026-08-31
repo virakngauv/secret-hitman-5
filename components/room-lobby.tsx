@@ -107,10 +107,19 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
         <HintPhaseScreen
           view={snapshot}
           onSubmitHint={(hint, targetCardIds) =>
-            game.submitHint({ roomCode, hint, targetCardIds })
+            game.submitHint({
+              roomCode,
+              gameId: snapshot.gameId,
+              hint,
+              targetCardIds,
+            })
           }
-          onUnlockHint={() => game.unlockHint(roomCode)}
-          onStartGuessing={() => game.startGuessing(roomCode)}
+          onUnlockHint={() =>
+            game.unlockHint({ roomCode, gameId: snapshot.gameId })
+          }
+          onStartGuessing={() =>
+            game.startGuessing({ roomCode, gameId: snapshot.gameId })
+          }
         />
       )
     case 'guessing':
@@ -121,19 +130,36 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onClaimCard={(cardId, turnId) =>
             game.claimCard({
               roomCode,
+              gameId: snapshot.gameId,
               turnId,
               cardId,
               commandId: crypto.randomUUID?.() ?? generateClientToken(),
             })
           }
           onFinishGuessing={() =>
-            game.finishGuessing({ roomCode, turnId: snapshot.turnId })
+            game.finishGuessing({
+              roomCode,
+              gameId: snapshot.gameId,
+              turnId: snapshot.turnId,
+            })
           }
-          onAdvanceTurn={() => game.advanceTurn(roomCode)}
+          onAdvanceTurn={() =>
+            game.advanceTurn({ roomCode, gameId: snapshot.gameId })
+          }
+          onShowScoreboard={() =>
+            game.showScoreboard({ roomCode, gameId: snapshot.gameId })
+          }
         />
       )
     case 'finished':
-      return <FinishedScreen view={snapshot} />
+      return (
+        <FinishedScreen
+          view={snapshot}
+          onReturnToLobby={() =>
+            game.returnToLobby({ roomCode, gameId: snapshot.gameId })
+          }
+        />
+      )
     default:
       return assertNever(snapshot)
   }

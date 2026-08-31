@@ -234,7 +234,7 @@ test.describe('Secret Hitman single round', () => {
     })
   }
 
-  test('runs two players through hints and guessing while a late joiner spectates', async ({
+  test('runs consecutive games after a late spectator returns to the lobby as a player', async ({
     browser,
   }) => {
     const contexts: BrowserContext[] = []
@@ -321,17 +321,56 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(host.getByText('Garden', { exact: true })).toBeVisible()
       await expect(
-        host.getByRole('button', { name: 'Finish the game' }),
+        host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeDisabled()
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await expect(
-        host.getByRole('button', { name: 'Finish the game' }),
+        host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeEnabled()
-      await host.getByRole('button', { name: 'Finish the game' }).click()
+      await host.getByRole('button', { name: 'View scoreboard' }).click()
 
       await expect(host.getByText('Game complete')).toBeVisible()
       await expect(guest.getByText('Final standings')).toBeVisible()
       await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(host.locator('button[data-card-id]')).toHaveCount(0)
+      await expect(
+        spectator.getByRole('button', { name: 'Return to lobby' }),
+      ).toHaveCount(0)
+      await spectator.reload()
+      await expect(spectator.getByText('Final standings')).toBeVisible()
+
+      await host.getByRole('button', { name: 'Return to lobby' }).click()
+      for (const player of [host, guest, spectator]) {
+        await expect(
+          player.getByRole('heading', { name: 'Assemble the room.' }),
+        ).toBeVisible()
+        await expect(player.getByText('Linus', { exact: true })).toBeVisible()
+        expect(new URL(player.url()).pathname).toBe(`/${roomCode}`)
+      }
+
+      await host.getByRole('button', { name: 'Start game' }).click()
+      await makeHint(host, 'Second orbit', 1)
+      await makeHint(guest, 'Second garden', 1)
+      await makeHint(spectator, 'Second metal', 1)
+      await host.getByRole('button', { name: 'Start guessing' }).click()
+
+      await guest.getByRole('button', { name: 'I’m done guessing' }).click()
+      await spectator.getByRole('button', { name: 'I’m done guessing' }).click()
+      await host.getByRole('button', { name: 'Next hint' }).click()
+      await host.getByRole('button', { name: 'I’m done guessing' }).click()
+      await spectator.getByRole('button', { name: 'I’m done guessing' }).click()
+      await host.getByRole('button', { name: 'Next hint' }).click()
+      await expect(
+        host.getByRole('heading', { name: 'Linus is the clue-giver' }),
+      ).toBeVisible()
+      await host.getByRole('button', { name: 'I’m done guessing' }).click()
+      await guest.getByRole('button', { name: 'I’m done guessing' }).click()
+      await host.getByRole('button', { name: 'View scoreboard' }).click()
+      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await host.getByRole('button', { name: 'Return to lobby' }).click()
+      await expect(
+        spectator.getByRole('heading', { name: 'Assemble the room.' }),
+      ).toBeVisible()
     } finally {
       await Promise.all(contexts.map((context) => context.close()))
     }

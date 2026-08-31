@@ -115,7 +115,10 @@ function UnlockHintProbe({ roomCode }: { roomCode: string }) {
       <button
         type="button"
         onClick={async () => {
-          const result = await unlockHint(roomCode)
+          const result = await unlockHint({
+            roomCode,
+            gameId: '10000000-0000-4000-8000-000000000001',
+          })
           setResultStatus(result.status)
         }}
       >
@@ -156,6 +159,7 @@ describe('GameSocketProvider', () => {
 
     expect(mocks.emitWithAck).toHaveBeenCalledWith('game:unlock-hint', {
       roomCode: 'bcdf2',
+      gameId: '10000000-0000-4000-8000-000000000001',
     })
     expect(screen.getByTestId('unlock-status')).toHaveTextContent('success')
   })

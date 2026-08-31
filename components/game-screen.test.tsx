@@ -8,6 +8,7 @@ import { FinishedScreen, GuessingScreen, HintPhaseScreen } from './game-screen'
 
 const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
   status: 'hinting',
+  gameId: '10000000-0000-4000-8000-000000000001',
   roomCode: 'bcdf2',
   player: {
     playerId: 'player-1',
@@ -442,6 +443,7 @@ describe('GuessingScreen messages', () => {
   it('shows scores for claimed cards without exposing unclaimed values', () => {
     const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
       status: 'guessing',
+      gameId: hintingView.gameId,
       turnId: '00000000-0000-4000-8000-000000000001',
       roomCode: 'bcdf2',
       player: hintingView.player,
@@ -556,6 +558,7 @@ describe('GuessingScreen messages', () => {
   it('identifies accepted picks without labeling untouched cards', () => {
     const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
       status: 'guessing',
+      gameId: hintingView.gameId,
       turnId: '00000000-0000-4000-8000-000000000001',
       roomCode: 'bcdf2',
       player: hintingView.player,
@@ -616,13 +619,16 @@ describe('GuessingScreen messages', () => {
     async (turnNumber) => {
       const user = userEvent.setup()
       const onAdvanceTurn = vi.fn().mockResolvedValue({ status: 'success' })
+      const onShowScoreboard = vi.fn().mockResolvedValue({ status: 'success' })
       const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
         status: 'guessing',
+        gameId: hintingView.gameId,
         turnId: '00000000-0000-4000-8000-000000000001',
         roomCode: 'bcdf2',
         player: hintingView.player,
         members: hintingView.members,
         turnNumber,
+        isFinalTurn: turnNumber === 2,
         totalTurns: 2,
         clueGiverId: 'player-2',
         clueGiverName: 'Grace',
@@ -635,15 +641,17 @@ describe('GuessingScreen messages', () => {
         canGuess: false,
         canMarkDone: false,
         canAdvanceTurn: false,
+        canViewScoreboard: false,
       }
       const props = {
         onClaimCard: vi.fn(),
         onFinishGuessing: vi.fn(),
         onAdvanceTurn,
+        onShowScoreboard,
       }
       const { rerender } = render(<GuessingScreen view={view} {...props} />)
       const button = screen.getByRole('button', {
-        name: turnNumber === 1 ? 'Next hint' : 'Finish the game',
+        name: turnNumber === 1 ? 'Next hint' : 'View scoreboard',
       })
       expect(button).toBeDisabled()
       expect(button).toHaveAccessibleDescription(
@@ -652,15 +660,25 @@ describe('GuessingScreen messages', () => {
       await user.click(button)
       expect(onAdvanceTurn).not.toHaveBeenCalled()
       rerender(
-        <GuessingScreen view={{ ...view, canAdvanceTurn: true }} {...props} />,
+        <GuessingScreen
+          view={{
+            ...view,
+            canAdvanceTurn: turnNumber === 1,
+            canViewScoreboard: turnNumber === 2,
+          }}
+          {...props}
+        />,
       )
       expect(button).toBeEnabled()
       expect(button).toHaveAccessibleDescription(
-        'Everyone has finished guessing. Advance when the room is ready.',
+        turnNumber === 1
+          ? 'Everyone has finished guessing. Advance when the room is ready.'
+          : 'Everyone has finished guessing. Show the final scoreboard when the room is ready.',
       )
       expect(onAdvanceTurn).not.toHaveBeenCalled()
       await user.click(button)
-      expect(onAdvanceTurn).toHaveBeenCalledOnce()
+      if (turnNumber === 1) expect(onAdvanceTurn).toHaveBeenCalledOnce()
+      else expect(onShowScoreboard).toHaveBeenCalledOnce()
       rerender(
         <GuessingScreen
           view={{ ...view, player: hintingView.members[1] }}
@@ -668,7 +686,7 @@ describe('GuessingScreen messages', () => {
         />,
       )
       expect(
-        screen.queryByRole('button', { name: /Next hint|Finish the game/ }),
+        screen.queryByRole('button', { name: /Next hint|View scoreboard/ }),
       ).not.toBeInTheDocument()
       expect(screen.queryByText('Host control')).not.toBeInTheDocument()
     },
@@ -687,6 +705,7 @@ describe('GuessingScreen messages', () => {
         .mockResolvedValueOnce({ status: 'success' })
       const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
         status: 'guessing',
+        gameId: hintingView.gameId,
         turnId: '00000000-0000-4000-8000-000000000001',
         roomCode: 'bcdf2',
         player: hintingView.player,
@@ -737,7 +756,9 @@ describe('GuessingScreen messages', () => {
 })
 
 describe('FinishedScreen', () => {
-  it('shows point values only on claimed final-board cards', () => {
+  it('shows board-free results and lets only the host return to the lobby', async () => {
+    const user = userEvent.setup()
+    const onReturnToLobby = vi.fn().mockResolvedValue({ status: 'success' })
     const player = {
       playerId: 'player-1',
       name: 'Ada',
@@ -748,55 +769,35 @@ describe('FinishedScreen', () => {
     }
     const view: Extract<RoomSnapshot, { status: 'finished' }> = {
       status: 'finished',
+      gameId: hintingView.gameId,
       roomCode: 'bcdf2',
       player,
       members: [player],
       scoreboard: [player],
       winners: [player],
-      lastClueGiverName: 'Ada',
-      lastHint: 'orbit',
-      lastHintNumber: 1,
-      board: [
-        {
-          id: 'claimed-target',
-          word: 'MOON',
-          revealedKind: 'target',
-          claimedBy: ['Ada'],
-          selectedByYou: false,
-          disabled: true,
-        },
-        {
-          id: 'unclaimed-assassin',
-          word: 'POISON',
-          revealedKind: 'assassin',
-          claimedBy: [],
-          selectedByYou: false,
-          disabled: true,
-        },
-      ],
     }
 
-    render(<FinishedScreen view={view} />)
+    const rendered = render(
+      <FinishedScreen view={view} onReturnToLobby={onReturnToLobby} />,
+    )
 
-    const board = screen.getByLabelText('Fully revealed final board')
-    expect(
-      within(board).getByText('+3', { selector: '.word-card-score' }),
-    ).toBeVisible()
-    expect(within(board).queryByText('−5')).not.toBeInTheDocument()
-    expect(within(board).getByText('ASSASSIN')).toBeVisible()
-    expect(
-      within(board).getByText('Ada', {
-        selector: '.word-card-picker-attribution',
-      }),
-    ).toHaveClass('word-card-picker-attribution')
-    expect(
-      within(
-        within(board).getByText('Ada', {
-          selector: '.word-card-picker-attribution',
-        }),
-      ).getByText('Selected by'),
-    ).toHaveClass('sr-only')
-    expect(within(board).queryByText('Unselected')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/board/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /start game/i })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
+    expect(onReturnToLobby).toHaveBeenCalledOnce()
+
+    rendered.rerender(
+      <FinishedScreen
+        view={{
+          ...view,
+          player: { ...player, role: 'player' },
+          members: [{ ...player, role: 'player' }],
+        }}
+        onReturnToLobby={onReturnToLobby}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Return to lobby' })).toBeNull()
+    expect(screen.getByText(/host can return everyone/i)).toBeVisible()
   })
 
   it.each([
@@ -825,15 +826,12 @@ describe('FinishedScreen', () => {
       }
       const view: Extract<RoomSnapshot, { status: 'finished' }> = {
         status: 'finished',
+        gameId: hintingView.gameId,
         roomCode: 'bcdf2',
         player: scoreboard[0],
         members: [...scoreboard, spectator],
         scoreboard: [spectator, ...scoreboard.toReversed()],
         winners: scoreboard.filter(({ score }) => score === scores[0]),
-        lastClueGiverName: 'Player 0',
-        lastHint: 'orbit',
-        lastHintNumber: 2,
-        board: [],
       }
       render(<FinishedScreen view={view} />)
 

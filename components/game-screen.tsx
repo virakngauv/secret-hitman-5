@@ -309,6 +309,7 @@ export function GuessingScreen({
   onClaimCard,
   onFinishGuessing,
   onAdvanceTurn,
+  onShowScoreboard,
 }: {
   view: GuessingView
   onClaimCard: (
@@ -317,6 +318,7 @@ export function GuessingScreen({
   ) => Promise<CommandResult<{ kind: CardKind }>>
   onFinishGuessing: () => Promise<CommandResult>
   onAdvanceTurn: () => Promise<CommandResult>
+  onShowScoreboard?: () => Promise<CommandResult>
 }) {
   const [busyCard, setBusyCard] = useState<string | null>(null)
   const [isFinishing, setIsFinishing] = useState(false)
@@ -329,6 +331,9 @@ export function GuessingScreen({
   const spectators = view.members.filter(
     ({ participation }) => participation === 'spectator',
   )
+  const canHostAct = view.isFinalTurn
+    ? view.canViewScoreboard
+    : view.canAdvanceTurn
 
   const claim = async (cardId: string) => {
     setBusyCard(cardId)
@@ -356,7 +361,9 @@ export function GuessingScreen({
   const advance = async () => {
     setFeedback(null)
     setIsAdvancing(true)
-    const result = await onAdvanceTurn()
+    const result = await (view.isFinalTurn && onShowScoreboard
+      ? onShowScoreboard()
+      : onAdvanceTurn())
     if (result.status !== 'success') setFeedback(result.message)
     setIsAdvancing(false)
   }
@@ -492,20 +499,22 @@ export function GuessingScreen({
                 role="status"
                 className="mt-1 text-sm text-[var(--muted-foreground)]"
               >
-                {view.canAdvanceTurn
-                  ? 'Everyone has finished guessing. Advance when the room is ready.'
+                {canHostAct
+                  ? view.isFinalTurn
+                    ? 'Everyone has finished guessing. Show the final scoreboard when the room is ready.'
+                    : 'Everyone has finished guessing. Advance when the room is ready.'
                   : 'Waiting for players to finish guessing.'}
               </p>
               <Button
                 className="mt-4 w-full"
                 onClick={() => void advance()}
-                disabled={isAdvancing || !view.canAdvanceTurn}
+                disabled={isAdvancing || !canHostAct}
                 aria-describedby="host-advance-status"
               >
                 {isAdvancing
                   ? 'Advancing…'
-                  : view.turnNumber === view.totalTurns
-                    ? 'Finish the game'
+                  : view.isFinalTurn
+                    ? 'View scoreboard'
                     : 'Next hint'}
               </Button>
             </div>
@@ -558,12 +567,30 @@ function CardAttribution({ names }: { names: string[] }) {
   )
 }
 
-export function FinishedScreen({ view }: { view: FinishedView }) {
+export function FinishedScreen({
+  view,
+  onReturnToLobby,
+}: {
+  view: FinishedView
+  onReturnToLobby?: () => Promise<CommandResult>
+}) {
+  const [isReturning, setIsReturning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const players = [...view.scoreboard]
     .filter(({ participation }) => participation === 'player')
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
   const ranks = getDenseRanks(players.map(({ score }) => score))
   const winnerNames = view.winners.map(({ name }) => name).join(' & ')
+  const isHost = view.player.role === 'host'
+
+  const returnToLobby = async () => {
+    if (!onReturnToLobby) return
+    setError(null)
+    setIsReturning(true)
+    const result = await onReturnToLobby()
+    if (result.status !== 'success') setError(result.message)
+    setIsReturning(false)
+  }
 
   return (
     <GamePageShell
@@ -572,57 +599,8 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
       title={`${winnerNames} ${view.winners.length === 1 ? 'wins' : 'win'}`}
       subtitle="Every player gave one hint. Final scores are locked."
     >
-      <div className="game-layout">
-        <section className="game-panel min-w-0">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="clue-label">
-                FINAL HINT · {view.lastClueGiverName}
-              </p>
-              <p className="text-3xl font-black tracking-tight uppercase">
-                {view.lastHint}{' '}
-                <span className="text-[var(--accent)]">
-                  {view.lastHintNumber}
-                </span>
-              </p>
-            </div>
-            <span className="phase-count">Revealed</span>
-          </div>
-          <div
-            className="word-grid mt-5"
-            aria-label="Fully revealed final board"
-          >
-            {view.board.map((card) => (
-              <div
-                className={cn(
-                  'word-card',
-                  card.revealedKind &&
-                    card.claimedBy.length > 0 &&
-                    'word-card-has-score',
-                  card.revealedKind === 'target' && 'word-card-target',
-                  card.revealedKind === 'civilian' && 'word-card-civilian',
-                  card.revealedKind === 'assassin' && 'word-card-assassin',
-                )}
-                key={card.id}
-                data-card-id={card.id}
-                data-card-kind={card.revealedKind ?? 'hidden'}
-              >
-                <span className="word-card-index">
-                  {card.revealedKind?.toUpperCase()}
-                </span>
-                {card.revealedKind && card.claimedBy.length > 0 && (
-                  <span className="word-card-score">
-                    {formatScore(CARD_SCORE[card.revealedKind])}
-                  </span>
-                )}
-                <CardWord word={card.word} />
-                <CardAttribution names={card.claimedBy} />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <aside className="game-panel game-sidebar">
+      <div className="mx-auto max-w-2xl">
+        <section className="game-panel">
           <h2 className="sidebar-title">Final standings</h2>
           <ol className="mt-4 grid gap-2">
             {players.map((player, index) => {
@@ -654,10 +632,26 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
               )
             })}
           </ol>
-          <Button asChild className="mt-6 w-full">
-            <Link href="/home">Back to home</Link>
-          </Button>
-        </aside>
+          {isHost ? (
+            <>
+              <p className="form-message" role={error ? 'alert' : 'status'}>
+                {error ??
+                  'Return everyone to the lobby before starting another game.'}
+              </p>
+              <Button
+                className="mt-2 w-full"
+                disabled={isReturning}
+                onClick={() => void returnToLobby()}
+              >
+                {isReturning ? 'Returning…' : 'Return to lobby'}
+              </Button>
+            </>
+          ) : (
+            <p className="waiting-host mt-6">
+              The host can return everyone to the lobby for another game.
+            </p>
+          )}
+        </section>
       </div>
     </GamePageShell>
   )

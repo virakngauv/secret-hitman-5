@@ -22,6 +22,7 @@ import {
   type CommandFailure,
   type CommandResult,
   type FinishGuessingPayload,
+  type GameCommandPayload,
   type RoomSnapshot,
   type ServerToClientEvents,
   type SubmitHintPayload,
@@ -45,13 +46,15 @@ type GameSocketContextValue = {
   removePlayer: (roomCode: string, playerId: string) => Promise<CommandResult>
   startGame: (roomCode: string) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
-  unlockHint: (roomCode: string) => Promise<CommandResult>
-  startGuessing: (roomCode: string) => Promise<CommandResult>
+  unlockHint: (payload: GameCommandPayload) => Promise<CommandResult>
+  startGuessing: (payload: GameCommandPayload) => Promise<CommandResult>
   claimCard: (
     payload: ClaimCardPayload,
   ) => Promise<CommandResult<{ kind: CardKind }>>
   finishGuessing: (payload: FinishGuessingPayload) => Promise<CommandResult>
-  advanceTurn: (roomCode: string) => Promise<CommandResult>
+  advanceTurn: (payload: GameCommandPayload) => Promise<CommandResult>
+  showScoreboard: (payload: GameCommandPayload) => Promise<CommandResult>
+  returnToLobby: (payload: GameCommandPayload) => Promise<CommandResult>
 }
 
 const GameSocketContext = createContext<GameSocketContextValue | null>(null)
@@ -297,16 +300,16 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     [],
   )
   const unlockHint = useCallback(
-    async (roomCode: string): Promise<CommandResult> =>
+    async (payload: GameCommandPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, (socket) =>
-        socket.emitWithAck('game:unlock-hint', { roomCode }),
+        socket.emitWithAck('game:unlock-hint', payload),
       ),
     [],
   )
   const startGuessing = useCallback(
-    async (roomCode: string): Promise<CommandResult> =>
+    async (payload: GameCommandPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, (socket) =>
-        socket.emitWithAck('game:start-guessing', { roomCode }),
+        socket.emitWithAck('game:start-guessing', payload),
       ),
     [],
   )
@@ -327,9 +330,23 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     [],
   )
   const advanceTurn = useCallback(
-    async (roomCode: string): Promise<CommandResult> =>
+    async (payload: GameCommandPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, (socket) =>
-        socket.emitWithAck('game:advance-turn', { roomCode }),
+        socket.emitWithAck('game:advance-turn', payload),
+      ),
+    [],
+  )
+  const showScoreboard = useCallback(
+    async (payload: GameCommandPayload): Promise<CommandResult> =>
+      await runCommand(socketRef.current, (socket) =>
+        socket.emitWithAck('game:show-scoreboard', payload),
+      ),
+    [],
+  )
+  const returnToLobby = useCallback(
+    async (payload: GameCommandPayload): Promise<CommandResult> =>
+      await runCommand(socketRef.current, (socket) =>
+        socket.emitWithAck('game:return-to-lobby', payload),
       ),
     [],
   )
@@ -351,6 +368,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       claimCard,
       finishGuessing,
       advanceTurn,
+      showScoreboard,
+      returnToLobby,
     }),
     [
       advanceTurn,
@@ -362,9 +381,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       leaveRoom,
       finishGuessing,
       removePlayer,
+      returnToLobby,
       snapshots,
       startGame,
       startGuessing,
+      showScoreboard,
       submitHint,
       unlockHint,
       watchRoom,

@@ -4,6 +4,7 @@ import type {
   ClaimCardPayload,
   CommandResult,
   FinishGuessingPayload,
+  GameCommandPayload,
   RoomSnapshot,
   SubmitHintPayload,
 } from '../lib/game-protocol'
@@ -101,12 +102,30 @@ export class GameServer {
     )
   }
 
-  unlockHint(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.unlockHint(token, now))
+  unlockHint(
+    token: string,
+    payload: GameCommandPayload | string,
+    now = Date.now(),
+  ) {
+    const command = this.normalizeGameCommand(token, payload)
+    if (!command)
+      return { status: 'room_not_found', message: 'Room not found.' } as const
+    return this.withRoom(command.roomCode, (room) =>
+      room.unlockHint(token, command, now),
+    )
   }
 
-  startGuessing(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.startGuessing(token, now))
+  startGuessing(
+    token: string,
+    payload: GameCommandPayload | string,
+    now = Date.now(),
+  ) {
+    const command = this.normalizeGameCommand(token, payload)
+    if (!command)
+      return { status: 'room_not_found', message: 'Room not found.' } as const
+    return this.withRoom(command.roomCode, (room) =>
+      room.startGuessing(token, command, now),
+    )
   }
 
   claimCard(token: string, payload: ClaimCardPayload, now = Date.now()) {
@@ -125,8 +144,29 @@ export class GameServer {
     )
   }
 
-  advanceTurn(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.advanceTurn(token, now))
+  advanceTurn(
+    token: string,
+    payload: GameCommandPayload | string,
+    now = Date.now(),
+  ) {
+    const command = this.normalizeGameCommand(token, payload)
+    if (!command)
+      return { status: 'room_not_found', message: 'Room not found.' } as const
+    return this.withRoom(command.roomCode, (room) =>
+      room.advanceTurn(token, command, now),
+    )
+  }
+
+  showScoreboard(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.showScoreboard(token, payload, now),
+    )
+  }
+
+  returnToLobby(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.returnToLobby(token, payload, now),
+    )
   }
 
   snapshot(token: string, roomCode: string): RoomSnapshot {
@@ -157,6 +197,19 @@ export class GameServer {
     return room
       ? action(room)
       : { status: 'room_not_found', message: 'Room not found.' }
+  }
+
+  private normalizeGameCommand(
+    token: string,
+    payload: GameCommandPayload | string,
+  ): GameCommandPayload | null {
+    if (typeof payload !== 'string') return payload
+    const snapshot = this.snapshot(token, payload)
+    return snapshot.status === 'hinting' ||
+      snapshot.status === 'guessing' ||
+      snapshot.status === 'finished'
+      ? { roomCode: payload, gameId: snapshot.gameId }
+      : null
   }
 
   private availableRoomCode() {
