@@ -1,11 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
-import { SECRET_HITMAN_WORDS } from '../lib/words'
-
 const widths = [320, 359, 360, 361, 375, 390, 414, 639, 640, 928, 1216, 1280]
-const longestWord = [...SECRET_HITMAN_WORDS].sort(
-  (left, right) => right.length - left.length,
-)[0]
+const longPickerName = 'Grace Hopper With An Extraordinarily Long Picker N'
 
 test('boards remain readable through hinting, guessing, and final reveal at mobile and desktop widths', async ({
   browser,
@@ -31,9 +27,9 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     ).toBeVisible()
     const roomCode = new URL(host.url()).pathname.slice(1)
     await guest.goto(`/${roomCode}`)
-    await guest.getByLabel('Name').fill('Grace Layout')
+    await guest.getByLabel('Name').fill(longPickerName)
     await guest.getByRole('button', { name: 'Join', exact: true }).click()
-    await expect(host.getByText('Grace Layout', { exact: true })).toBeVisible()
+    await expect(host.getByText(longPickerName, { exact: true })).toBeVisible()
     await host.getByRole('button', { name: 'Start game' }).click()
 
     await expect(host.getByLabel('Your twelve word board')).toBeVisible()
@@ -45,7 +41,16 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
       .getByRole('button', { name: /Available −1/i })
       .first()
     await expect(available).toBeVisible()
-    await expect(available.locator('.word-card-index')).toHaveText('Available')
+    const roleLabel = available.locator('.word-card-index')
+    await expect(roleLabel).toHaveText('Available')
+    for (const property of ['margin-top', 'margin-left']) {
+      const value = await roleLabel.evaluate(
+        (element, propertyName) =>
+          getComputedStyle(element).getPropertyValue(propertyName),
+        property,
+      )
+      expect(Number.parseFloat(value)).toBeCloseTo(3.2, 1)
+    }
     await expect(available.locator('.word-card-score')).toHaveText('−1')
     await expect(available.locator('.word-card-score')).toHaveCSS(
       'font-style',
@@ -82,6 +87,12 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     for (const card of await locked.all()) {
       await expect(card).toBeDisabled()
       await expect(card.locator('.word-card-lock')).toBeVisible()
+      const roleBox = await card.locator('.word-card-index').boundingBox()
+      const lockBox = await card.locator('.word-card-lock').boundingBox()
+      if (!roleBox || !lockBox) {
+        throw new Error('Locked role and lock icon are not visible')
+      }
+      expect(Math.abs(roleBox.y - lockBox.y)).toBeLessThanOrEqual(1)
     }
     await host.reload()
     await expect(host.getByLabel('Your twelve word board')).toBeVisible()
@@ -178,10 +189,24 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const claimerBox = await revealedTarget
       .locator('.word-card-claimers')
       .boundingBox()
+    const wordBox = await revealedTarget
+      .locator('.word-card-word')
+      .boundingBox()
+    await expect(revealedTarget.locator('.word-card-claimers')).toHaveCSS(
+      'font-style',
+      'italic',
+    )
+    await expect(revealedTarget).toHaveAccessibleName(
+      new RegExp(`selected by ${longPickerName}`, 'i'),
+    )
+    await expect(
+      revealedTarget.locator('.word-card-claimers .sr-only'),
+    ).toHaveText('Selected by')
     const revealedScoreBox = await revealedScore.boundingBox()
-    if (!roleBox || !claimerBox || !revealedScoreBox) {
+    if (!roleBox || !wordBox || !claimerBox || !revealedScoreBox) {
       throw new Error('Revealed card labels are not visible')
     }
+    expect(wordBox.y + wordBox.height).toBeLessThanOrEqual(claimerBox.y + 1)
     expect(Math.abs(claimerBox.x - roleBox.x)).toBeLessThanOrEqual(1)
     expect(claimerBox.x + claimerBox.width).toBeLessThanOrEqual(
       revealedScoreBox.x,
@@ -248,18 +273,100 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
       // without changing game state, roles, or interactions.
       const originalWords = await grid
         .locator('.word-card-word')
-        .allTextContents()
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            className: element.className,
+            text: element.textContent,
+          })),
+        )
       try {
-        for (const [label, word] of [
-          ['long-words', longestWord],
-          ['wrapped-words', 'COUNTERREVOLUTIONARIES'],
+        let normalFontSize: number | undefined
+        const supportsNativeTextFit = await page.evaluate(() =>
+          CSS.supports('text-fit', 'shrink 59%'),
+        )
+        for (const { className, label, word } of [
+          {
+            className: 'word-card-word word-card-word-single',
+            label: 'cotton',
+            word: 'COTTON',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact',
+            label: 'unicorn',
+            word: 'UNICORN',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact',
+            label: 'telescope',
+            word: 'TELESCOPE',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact',
+            label: 'snowman',
+            word: 'SNOWMAN',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide',
+            label: 'longest-deck-word',
+            word: 'MILLIONAIRE',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide',
+            label: 'wide-deck-word',
+            word: 'WASHINGTON',
+          },
+          {
+            className: 'word-card-word',
+            label: 'new-york',
+            word: 'NEW YORK',
+          },
+          {
+            className: 'word-card-word',
+            label: 'great-britain',
+            word: 'GREAT BRITAIN',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide word-card-word-break',
+            label: 'break-fallback',
+            word: 'COUNTERREVOLUTIONARIES',
+          },
         ]) {
-          await grid
-            .locator('.word-card-word')
-            .evaluateAll((elements, word) => {
-              for (const element of elements) element.textContent = word
-            }, word)
+          await grid.locator('.word-card-word').evaluateAll(
+            (elements, fixture) => {
+              for (const element of elements) {
+                element.setAttribute('class', fixture.className)
+                element.textContent = fixture.word
+              }
+            },
+            { className, word },
+          )
           await assertCardContentFits(page)
+          const fontSize = await grid
+            .locator('.word-card-word')
+            .first()
+            .evaluate((element) =>
+              Number.parseFloat(getComputedStyle(element).fontSize),
+            )
+          if (label === 'cotton') normalFontSize = fontSize
+          if (label === 'unicorn' && width === 1280) {
+            expect(fontSize).toBeCloseTo(normalFontSize!, 2)
+          }
+          if (label === 'wide-deck-word' && width === 1280) {
+            expect(fontSize).toBeCloseTo(normalFontSize!, 2)
+          }
+          if (
+            label === 'wide-deck-word' &&
+            width === 928 &&
+            !supportsNativeTextFit
+          ) {
+            expect(fontSize).toBeLessThan(normalFontSize!)
+          }
           if ([320, 359, 360, 390, 640, 1280].includes(width)) {
             await grid.screenshot({
               path: testInfo.outputPath(`${phase}-${width}-${label}.png`),
@@ -267,11 +374,14 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
           }
         }
       } finally {
-        await grid.locator('.word-card-word').evaluateAll((elements, words) => {
-          elements.forEach((element, index) => {
-            element.textContent = words[index]
-          })
-        }, originalWords)
+        await grid
+          .locator('.word-card-word')
+          .evaluateAll((elements, originals) => {
+            elements.forEach((element, index) => {
+              element.setAttribute('class', originals[index].className)
+              element.textContent = originals[index].text
+            })
+          }, originalWords)
       }
     })
   }
@@ -287,6 +397,8 @@ async function assertCardContentFits(page: Page) {
       const box = card.getBoundingClientRect()
       const word = card.querySelector<HTMLElement>('.word-card-word')!
       const wordBox = word.getBoundingClientRect()
+      const claimer = card.querySelector<HTMLElement>('.word-card-claimers')
+      const claimerBox = claimer?.getBoundingClientRect()
       if (
         Math.abs(
           wordBox.left + wordBox.width / 2 - (box.left + box.width / 2),
@@ -300,6 +412,13 @@ async function assertCardContentFits(page: Page) {
       if (getComputedStyle(word).textAlign !== 'center') {
         issues.push(`Card ${index}: wrapped word lines are not centered`)
       }
+      if (
+        claimer?.textContent?.trim() &&
+        claimerBox &&
+        wordBox.bottom > claimerBox.top + 1
+      ) {
+        issues.push(`Card ${index}: word overlaps picker attribution`)
+      }
       if (box.width < 44 || box.height < 44) {
         issues.push(`Card ${index} is smaller than a 44px tap target`)
       }
@@ -311,12 +430,18 @@ async function assertCardContentFits(page: Page) {
         .querySelector('.word-card-lock')
         ?.getBoundingClientRect()
       if (lock) {
+        const role = card
+          .querySelector('.word-card-index')!
+          .getBoundingClientRect()
         if (
           lock.right > box.right ||
           lock.top < box.top ||
           lock.left < box.left + box.width / 2
         ) {
           issues.push(`Card ${index}: lock is not inside the top-right corner`)
+        }
+        if (Math.abs(role.top - lock.top) > 1) {
+          issues.push(`Card ${index}: role and lock are not vertically aligned`)
         }
         for (const content of contents) {
           const rect = content.getBoundingClientRect()
@@ -332,15 +457,31 @@ async function assertCardContentFits(page: Page) {
       }
       for (const content of contents) {
         const rect = content.getBoundingClientRect()
+        const style = getComputedStyle(content)
+        const usesTextFit = style
+          .getPropertyValue('text-fit')
+          .startsWith('shrink')
+        let textOverflows =
+          !content.classList.contains('word-card-claimers') &&
+          content.scrollWidth > content.clientWidth + 1
+        if (usesTextFit && content.firstChild) {
+          const textRange = document.createRange()
+          textRange.selectNodeContents(content)
+          const textRect = textRange.getBoundingClientRect()
+          textOverflows =
+            textRect.left < rect.left - 1 || textRect.right > rect.right + 1
+        }
         if (
           rect.left < box.left ||
           rect.right > box.right ||
           rect.top < box.top ||
           rect.bottom > box.bottom ||
-          (!content.classList.contains('word-card-claimers') &&
-            content.scrollWidth > content.clientWidth + 1)
+          textOverflows
         ) {
-          issues.push(`Card ${index}: ${content.className} overflows`)
+          issues.push(
+            `Card ${index} (${content.textContent}): ${content.className} overflows ` +
+              `(${content.scrollWidth}/${content.clientWidth})`,
+          )
         }
       }
       for (

@@ -275,6 +275,11 @@ input {
 }
 
 .word-card {
+  --word-card-padding: 0.4rem;
+  --word-card-label-margin: 0.2rem;
+
+  container-name: word-card;
+  container-type: inline-size;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -286,7 +291,7 @@ input {
   border: 1px solid var(--border);
   border-radius: 1rem;
   background: var(--card);
-  padding: 0.8rem;
+  padding: var(--word-card-padding);
   color: var(--foreground);
   text-align: left;
   transition:
@@ -313,9 +318,12 @@ button.word-card:focus-visible {
 .word-card-index {
   grid-row: 1;
   align-self: start;
+  margin-block-start: var(--word-card-label-margin);
+  margin-inline-start: var(--word-card-label-margin);
   color: var(--muted-foreground);
   font-family: var(--font-mono);
   font-size: 0.55rem;
+  line-height: 0.8rem;
   text-transform: uppercase;
   font-weight: 900;
   letter-spacing: 0.09em;
@@ -323,8 +331,8 @@ button.word-card:focus-visible {
 
 .word-card-score {
   position: absolute;
-  right: 0.7rem;
-  bottom: 0.65rem;
+  right: 0.55rem;
+  bottom: 0.55rem;
   color: currentcolor;
   font-family: var(--font-mono);
   font-size: 0.65rem;
@@ -336,23 +344,24 @@ button.word-card:focus-visible {
 }
 
 .word-card[data-card-locked='true'] .word-card-index {
-  max-width: calc(100% - 0.85rem);
+  max-width: calc(100% - 1.4rem - var(--word-card-label-margin));
   overflow-wrap: anywhere;
 }
 
 .word-card-lock {
   position: absolute;
-  top: 0.7rem;
-  right: 0.6rem;
+  top: calc(var(--word-card-padding) + var(--word-card-label-margin));
+  right: calc(var(--word-card-padding) + var(--word-card-label-margin));
   width: 0.8rem;
   height: 0.8rem;
 }
 
 .word-card-word {
   grid-row: 2;
-  justify-self: center;
+  display: block;
+  width: 100%;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   font-size: clamp(0.9rem, 2vw, 1.16rem);
   font-weight: 950;
   letter-spacing: -0.025em;
@@ -360,26 +369,79 @@ button.word-card:focus-visible {
   text-align: center;
 }
 
+.word-card-word-single {
+  white-space: nowrap;
+}
+
+/* Compact likely-wide words only when the card itself is constrained. */
+@container word-card (max-width: 8rem) {
+  .word-card-word-wide {
+    font-size: clamp(0.68rem, 2vw, 1rem);
+    letter-spacing: -0.035em;
+  }
+}
+
+@container word-card (max-width: 5.5rem) {
+  .word-card-word-compact {
+    font-size: clamp(0.68rem, 2vw, 1rem);
+    letter-spacing: -0.035em;
+  }
+}
+
+/* 0.68rem is the bounded minimum before an extreme word may break. */
+.word-card-word-break {
+  font-size: clamp(0.68rem, 2vw, 1rem);
+  letter-spacing: -0.035em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Chromium 150+ can fit single words exactly without a heuristic. */
+@supports (text-fit: shrink) {
+  .word-card-word-single:not(.word-card-word-break) {
+    text-fit: shrink 59%;
+  }
+
+  .word-card-word-compact,
+  .word-card-word-wide {
+    font-size: clamp(0.9rem, 2vw, 1.16rem);
+    letter-spacing: -0.025em;
+  }
+}
+
 .word-card-claimers {
   grid-row: 3;
   align-self: end;
+  display: -webkit-box;
+  margin-inline-start: var(--word-card-label-margin);
+  min-width: 0;
   min-height: 1em;
-  max-width: 100%;
+  max-width: calc(100% - var(--word-card-label-margin));
   overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--muted-foreground);
   font-size: 0.62rem;
   font-weight: 700;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.word-card-picker-attribution {
+  font-size: clamp(0.72rem, 2.4vw, 0.8rem);
+  font-style: italic;
+  font-weight: 750;
+  line-height: 1.05;
 }
 
 .word-card-has-score .word-card-claimers {
-  max-width: calc(100% - 2rem);
+  max-width: calc(100% - 2.25rem - var(--word-card-label-margin));
   line-height: 1;
 }
 
 .word-card-has-score .word-card-score {
-  bottom: 0.8rem;
+  bottom: 0.4rem;
 }
 
 .word-card-target {
@@ -763,8 +825,14 @@ button.word-card:focus-visible {
   }
 
   .word-card {
+    --word-card-padding: 0.8rem;
+    --word-card-label-margin: 0.075rem;
+
     min-height: 8.4rem;
-    padding: 0.95rem;
+  }
+
+  .word-card-has-score .word-card-score {
+    bottom: 0.8rem;
   }
 
   .clue-banner {

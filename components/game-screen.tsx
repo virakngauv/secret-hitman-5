@@ -215,7 +215,7 @@ export function HintPhaseScreen({
                           <path d="M8 10V7a4 4 0 0 1 8 0v3" />
                         </svg>
                       )}
-                      <span className="word-card-word">{card.word}</span>
+                      <CardWord word={card.word} />
                     </button>
                   )
                 })}
@@ -426,10 +426,8 @@ export function GuessingScreen({
                     {formatScore(CARD_SCORE[card.revealedKind])}
                   </span>
                 )}
-                <span className="word-card-word">{card.word}</span>
-                <span className="word-card-claimers">
-                  {card.claimedBy.join(', ') || ' '}
-                </span>
+                <CardWord word={card.word} />
+                <CardAttribution names={card.claimedBy} />
               </button>
             ))}
           </div>
@@ -522,6 +520,44 @@ function formatScore(score: number) {
   return score > 0 ? `+${score}` : `−${Math.abs(score)}`
 }
 
+function CardWord({ word }: { word: string }) {
+  const segments = word.trim().split(/\s+/u)
+  const longestSegment = Math.max(...segments.map((segment) => segment.length))
+  const isSingleWord = segments.length === 1
+
+  return (
+    <span
+      className={cn(
+        'word-card-word',
+        isSingleWord && 'word-card-word-single',
+        isSingleWord && longestSegment >= 7 && 'word-card-word-compact',
+        isSingleWord && longestSegment >= 10 && 'word-card-word-wide',
+        longestSegment >= 16 && 'word-card-word-break',
+      )}
+    >
+      {word}
+    </span>
+  )
+}
+
+function CardAttribution({ names }: { names: string[] }) {
+  const pickerNames = names.join(', ')
+
+  if (pickerNames) {
+    return (
+      <span className="word-card-claimers word-card-picker-attribution">
+        <span className="sr-only">Selected by</span> {pickerNames}
+      </span>
+    )
+  }
+
+  return (
+    <span className="word-card-claimers" aria-hidden="true">
+      {' '}
+    </span>
+  )
+}
+
 export function FinishedScreen({ view }: { view: FinishedView }) {
   const players = [...view.scoreboard]
     .filter(({ participation }) => participation === 'player')
@@ -579,10 +615,8 @@ export function FinishedScreen({ view }: { view: FinishedView }) {
                     {formatScore(CARD_SCORE[card.revealedKind])}
                   </span>
                 )}
-                <span className="word-card-word">{card.word}</span>
-                <span className="word-card-claimers">
-                  {card.claimedBy.join(', ') || ' '}
-                </span>
+                <CardWord word={card.word} />
+                <CardAttribution names={card.claimedBy} />
               </div>
             ))}
           </div>
