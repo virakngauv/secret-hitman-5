@@ -170,6 +170,7 @@ export class GameRoom {
         applyTargets(member.game.board, [])
         member.game.targetCount = 0
         member.game.hintSubmitted = true
+        member.game.hintRejected = false
       }
       if (this.phase === 'guessing') member.game.turnState = 'done'
     }

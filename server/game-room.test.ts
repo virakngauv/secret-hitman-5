@@ -1137,6 +1137,35 @@ describe('GameRoom single-round flow', () => {
     expect(room.startGuessing(guestToken)).toEqual({ status: 'success' })
   })
 
+  it('clears a rejected hint when an inactive player falls back to PASS', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.start(hostToken, 1_002)
+    submitFirstHint(room, hostToken, 'Garden')
+    submitFirstHint(room, guestToken, 'Metal')
+    const guestId = hinting(room, guestToken).player.playerId
+
+    expect(
+      room.rejectHint(hostToken, { roomCode: room.code, playerId: guestId }),
+    ).toEqual({ status: 'success' })
+    expect(room.leave(guestToken, 1_003)).toEqual({ status: 'success' })
+    expect(hinting(room).hintStatuses).toEqual([
+      expect.objectContaining({
+        name: 'Ada',
+        submitted: true,
+        needsRevision: false,
+      }),
+      expect.objectContaining({
+        name: 'Grace',
+        submitted: true,
+        needsRevision: false,
+        hint: 'PASS',
+        hintNumber: 0,
+      }),
+    ])
+    expect(room.startGuessing(hostToken)).toEqual({ status: 'success' })
+  })
+
   it('orders late hinting joins atomically before the guessing cutoff', () => {
     const joinedFirst = createRoom()
     joinedFirst.join(guestToken, 'Grace', 1_001)
