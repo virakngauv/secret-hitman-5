@@ -102,29 +102,15 @@ export class GameServer {
     )
   }
 
-  unlockHint(
-    token: string,
-    payload: GameCommandPayload | string,
-    now = Date.now(),
-  ) {
-    const command = this.normalizeGameCommand(token, payload)
-    if (!command)
-      return { status: 'room_not_found', message: 'Room not found.' } as const
-    return this.withRoom(command.roomCode, (room) =>
-      room.unlockHint(token, command, now),
+  unlockHint(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.unlockHint(token, payload, now),
     )
   }
 
-  startGuessing(
-    token: string,
-    payload: GameCommandPayload | string,
-    now = Date.now(),
-  ) {
-    const command = this.normalizeGameCommand(token, payload)
-    if (!command)
-      return { status: 'room_not_found', message: 'Room not found.' } as const
-    return this.withRoom(command.roomCode, (room) =>
-      room.startGuessing(token, command, now),
+  startGuessing(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.startGuessing(token, payload, now),
     )
   }
 
@@ -144,16 +130,9 @@ export class GameServer {
     )
   }
 
-  advanceTurn(
-    token: string,
-    payload: GameCommandPayload | string,
-    now = Date.now(),
-  ) {
-    const command = this.normalizeGameCommand(token, payload)
-    if (!command)
-      return { status: 'room_not_found', message: 'Room not found.' } as const
-    return this.withRoom(command.roomCode, (room) =>
-      room.advanceTurn(token, command, now),
+  advanceTurn(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.advanceTurn(token, payload, now),
     )
   }
 
@@ -197,19 +176,6 @@ export class GameServer {
     return room
       ? action(room)
       : { status: 'room_not_found', message: 'Room not found.' }
-  }
-
-  private normalizeGameCommand(
-    token: string,
-    payload: GameCommandPayload | string,
-  ): GameCommandPayload | null {
-    if (typeof payload !== 'string') return payload
-    const snapshot = this.snapshot(token, payload)
-    return snapshot.status === 'hinting' ||
-      snapshot.status === 'guessing' ||
-      snapshot.status === 'finished'
-      ? { roomCode: payload, gameId: snapshot.gameId }
-      : null
   }
 
   private availableRoomCode() {

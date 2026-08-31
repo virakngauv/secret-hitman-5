@@ -516,7 +516,15 @@ describe('Socket.IO Secret Hitman protocol', () => {
           }),
         ).toEqual({ status: 'success' })
       }
-      expect(server.startGuessing(hostToken, roomCode)).toEqual({
+      const hintingView = server.snapshot(hostToken, roomCode)
+      if (hintingView.status !== 'hinting')
+        throw new Error('Expected hinting phase.')
+      expect(
+        server.startGuessing(hostToken, {
+          roomCode,
+          gameId: hintingView.gameId,
+        }),
+      ).toEqual({
         status: 'success',
       })
       const revealed = server.snapshot(hostToken, roomCode)

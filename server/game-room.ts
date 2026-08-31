@@ -32,9 +32,6 @@ export const MAX_ROOM_MEMBERS = 32
 // Bound retained identities without ever evicting a room's removal restrictions.
 export const MAX_ROOM_IDENTITIES = 1_024
 const MAX_REMEMBERED_COMMANDS_PER_PLAYER = 100
-type LegacyGamePayload<T extends { gameId: string }> = Omit<T, 'gameId'> & {
-  gameId?: undefined
-}
 
 type Member = {
   playerId: string
@@ -274,11 +271,10 @@ export class GameRoom {
 
   submitHint(
     token: string,
-    payload: SubmitHintPayload | LegacyGamePayload<SubmitHintPayload>,
+    payload: SubmitHintPayload,
     now = Date.now(),
   ): CommandResult {
-    if (payload.gameId && !this.isCurrentGame(payload.gameId))
-      return this.staleGame()
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'hinting') {
@@ -319,16 +315,10 @@ export class GameRoom {
 
   unlockHint(
     token: string,
-    payload: GameCommandPayload | number | undefined = undefined,
+    payload: GameCommandPayload,
     now = Date.now(),
   ): CommandResult {
-    if (typeof payload === 'number') now = payload
-    if (
-      payload &&
-      typeof payload !== 'number' &&
-      !this.isCurrentGame(payload.gameId)
-    )
-      return this.staleGame()
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'hinting') {
@@ -349,16 +339,10 @@ export class GameRoom {
 
   startGuessing(
     token: string,
-    payload: GameCommandPayload | number | undefined = undefined,
+    payload: GameCommandPayload,
     now = Date.now(),
   ): CommandResult {
-    if (typeof payload === 'number') now = payload
-    if (
-      payload &&
-      typeof payload !== 'number' &&
-      !this.isCurrentGame(payload.gameId)
-    )
-      return this.staleGame()
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
@@ -382,11 +366,10 @@ export class GameRoom {
 
   claimCard(
     token: string,
-    payload: ClaimCardPayload | LegacyGamePayload<ClaimCardPayload>,
+    payload: ClaimCardPayload,
     now = Date.now(),
   ): CommandResult<{ kind: CardKind }> {
-    if (payload.gameId && !this.isCurrentGame(payload.gameId))
-      return this.staleGame()
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'guessing') {
@@ -456,11 +439,10 @@ export class GameRoom {
 
   finishGuessing(
     token: string,
-    payload: FinishGuessingPayload | LegacyGamePayload<FinishGuessingPayload>,
+    payload: FinishGuessingPayload,
     now = Date.now(),
   ): CommandResult {
-    if (payload.gameId && !this.isCurrentGame(payload.gameId))
-      return this.staleGame()
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     if (!member?.game || this.phase !== 'guessing') {
       return { status: 'forbidden', message: 'You are not an active guesser.' }
@@ -485,16 +467,10 @@ export class GameRoom {
 
   advanceTurn(
     token: string,
-    payload: GameCommandPayload | number | undefined = undefined,
+    payload: GameCommandPayload,
     now = Date.now(),
   ): CommandResult {
-    if (typeof payload === 'number') now = payload
-    if (
-      payload &&
-      typeof payload !== 'number' &&
-      !this.isCurrentGame(payload.gameId)
-    )
-      return this.staleGame()
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
