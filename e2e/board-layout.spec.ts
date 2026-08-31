@@ -148,10 +148,12 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
       'font-style',
       'italic',
     )
-    await expect(revealedTarget.locator('.word-card-claimers')).toHaveAttribute(
-      'aria-label',
-      `Selected by ${longPickerName}`,
+    await expect(revealedTarget).toHaveAccessibleName(
+      new RegExp(`selected by ${longPickerName}`, 'i'),
     )
+    await expect(
+      revealedTarget.locator('.word-card-claimers .sr-only'),
+    ).toHaveText('Selected by')
     const revealedScoreBox = await revealedScore.boundingBox()
     if (!roleBox || !wordBox || !claimerBox || !revealedScoreBox) {
       throw new Error('Revealed card labels are not visible')

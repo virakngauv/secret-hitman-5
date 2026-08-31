@@ -530,11 +530,8 @@ function CardAttribution({ names }: { names: string[] }) {
 
   if (pickerNames) {
     return (
-      <span
-        className="word-card-claimers word-card-picker-attribution"
-        aria-label={`Selected by ${pickerNames}`}
-      >
-        {pickerNames}
+      <span className="word-card-claimers word-card-picker-attribution">
+        <span className="sr-only">Selected by</span> {pickerNames}
       </span>
     )
   }

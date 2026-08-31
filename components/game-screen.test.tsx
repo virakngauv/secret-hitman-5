@@ -412,9 +412,14 @@ describe('GuessingScreen messages', () => {
       const card = screen.getByRole('button', {
         name: new RegExp(`${role}.*selected by ${name}`, 'i'),
       })
-      const attribution = within(card).getByLabelText(`Selected by ${name}`)
+      const attribution = within(card).getByText(name, {
+        selector: '.word-card-picker-attribution',
+      })
       expect(attribution).toHaveClass('word-card-picker-attribution')
       expect(attribution).toHaveTextContent(name)
+      expect(within(attribution).getByText('Selected by')).toHaveClass(
+        'sr-only',
+      )
     }
   })
 
@@ -649,9 +654,18 @@ describe('FinishedScreen', () => {
     ).toBeVisible()
     expect(within(board).queryByText('−5')).not.toBeInTheDocument()
     expect(within(board).getByText('ASSASSIN')).toBeVisible()
-    expect(within(board).getByLabelText('Selected by Ada')).toHaveClass(
-      'word-card-picker-attribution',
-    )
+    expect(
+      within(board).getByText('Ada', {
+        selector: '.word-card-picker-attribution',
+      }),
+    ).toHaveClass('word-card-picker-attribution')
+    expect(
+      within(
+        within(board).getByText('Ada', {
+          selector: '.word-card-picker-attribution',
+        }),
+      ).getByText('Selected by'),
+    ).toHaveClass('sr-only')
     expect(within(board).queryByText('Unselected')).not.toBeInTheDocument()
   })
 
