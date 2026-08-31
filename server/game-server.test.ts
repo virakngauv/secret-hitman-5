@@ -17,14 +17,25 @@ describe('GameServer', () => {
   })
 
   it('expires rooms from meaningful activity without connectivity traffic', () => {
-    const server = new GameServer({ roomIdleMs: 100 })
+    const server = new GameServer({
+      roomIdleMs: 100,
+      expiredRoomTombstoneMs: 50,
+    })
     const { roomCode } = createdRoom(server, 'a'.repeat(32), 'Ada', 1_000)
 
     expect(server.snapshot('a'.repeat(32), roomCode).status).toBe('lobby')
     expect(server.expireRooms(1_099)).toEqual([])
     expect(server.expireRooms(1_100)).toEqual([roomCode])
     expect(server.expireRooms(1_101)).toEqual([])
-    expect(server.snapshot('a'.repeat(32), roomCode)).toEqual({
+    expect(server.snapshot('a'.repeat(32), roomCode, 1_100)).toEqual({
+      status: 'expired',
+      roomCode,
+    })
+    expect(server.snapshot('a'.repeat(32), roomCode, 1_149)).toEqual({
+      status: 'expired',
+      roomCode,
+    })
+    expect(server.snapshot('a'.repeat(32), roomCode, 1_150)).toEqual({
       status: 'not_found',
       roomCode,
     })
@@ -41,7 +52,12 @@ describe('GameServer', () => {
 
     expect(server.expireRooms(1_201)).toEqual([])
     expect(server.expireRooms(1_202)).toEqual([roomCode])
-    expect(new GameServer(expiration).rooms.size).toBe(0)
+    const restartedServer = new GameServer(expiration)
+    expect(restartedServer.rooms.size).toBe(0)
+    expect(restartedServer.snapshot(host, roomCode, 1_203)).toEqual({
+      status: 'not_found',
+      roomCode,
+    })
   })
 
   it('deletes a lobby after its final member explicitly leaves', () => {

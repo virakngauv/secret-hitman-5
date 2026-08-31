@@ -15,7 +15,6 @@ import {
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
   GAME_PROTOCOL_VERSION,
-  isMemberSnapshot,
   type CardKind,
   type ClaimCardPayload,
   type ClientToServerEvents,
@@ -29,12 +28,10 @@ import {
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
-export type RoomEndedReason = 'expired' | 'removed'
 
 type GameSocketContextValue = {
   connectionStatus: ConnectionStatus
   snapshots: Readonly<Record<string, RoomSnapshot>>
-  endedRooms: Readonly<Record<string, RoomEndedReason>>
   watchRoom: (roomCode: string) => () => void
   createRoom: (name: string) => Promise<CommandResult<{ roomCode: string }>>
   joinRoom: (
@@ -77,9 +74,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting')
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({})
-  const [endedRooms, setEndedRooms] = useState<Record<string, RoomEndedReason>>(
-    {},
-  )
 
   useEffect(() => {
     if (clientToken === null) ensureClientToken()
@@ -131,40 +125,31 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
 
       let remaining = roomCodes.length
       for (const roomCode of roomCodes) {
-        socket.emit('session:resume', { roomCode }, (result) => {
-          if (
-            socketRef.current !== socket ||
-            synchronizationGenerationRef.current !== generation ||
-            !socket.connected
-          )
-            return
-          if (result.status === 'success' && result.snapshot) {
-            remaining -= 1
-            if (remaining === 0) {
-              synchronizedRef.current = true
-              setConnectionStatus('connected')
+        socket
+          .timeout(COMMAND_TIMEOUT_MS)
+          .emit('session:resume', { roomCode }, (error, result) => {
+            if (
+              socketRef.current !== socket ||
+              synchronizationGenerationRef.current !== generation ||
+              !socket.connected
+            )
+              return
+            if (!error && result.status === 'success' && result.snapshot) {
+              remaining -= 1
+              if (remaining === 0) {
+                synchronizedRef.current = true
+                setConnectionStatus('connected')
+              }
+              receiveSnapshot(result.snapshot)
+            } else {
+              synchronizationGenerationRef.current += 1
+              synchronizedRef.current = false
+              setConnectionStatus('disconnected')
             }
-            receiveSnapshot(result.snapshot)
-          } else {
-            return
-          }
-        })
+          })
       }
     }
     const receiveSnapshot = (snapshot: RoomSnapshot) => {
-      if (isMemberSnapshot(snapshot)) {
-        setEndedRooms((rooms) => {
-          if (!(snapshot.roomCode in rooms)) return rooms
-          const next = { ...rooms }
-          delete next[snapshot.roomCode]
-          return next
-        })
-      } else if (snapshot.status === 'removed_from_room') {
-        setEndedRooms((rooms) => ({
-          ...rooms,
-          [snapshot.roomCode]: 'removed',
-        }))
-      }
       setSnapshots((current) => {
         return { ...current, [snapshot.roomCode]: snapshot }
       })
@@ -177,20 +162,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     }
     const handleDisconnect = () => markDisconnected()
     const handleConnectError = () => markDisconnected()
-    const handleExpired = ({ roomCode }: { roomCode: string }) => {
-      setEndedRooms((current) => ({ ...current, [roomCode]: 'expired' }))
-      setSnapshots((current) => ({
-        ...current,
-        [roomCode]: { status: 'not_found', roomCode },
-      }))
-    }
-    const handleRemoved = ({ roomCode }: { roomCode: string }) => {
-      setEndedRooms((current) => ({ ...current, [roomCode]: 'removed' }))
-      setSnapshots((current) => ({
-        ...current,
-        [roomCode]: { status: 'removed_from_room', roomCode },
-      }))
-    }
     const handleShutdown = () => {
       markDisconnected()
     }
@@ -199,8 +170,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectError)
     socket.on('room:snapshot', receiveSnapshot)
-    socket.on('room:removed', handleRemoved)
-    socket.on('room:expired', handleExpired)
     socket.on('server:shutdown', handleShutdown)
 
     if (socket.connected) resumeWatchedRooms()
@@ -211,7 +180,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       synchronizedRef.current = false
       receiveSnapshotRef.current = () => {}
       setSnapshots({})
-      setEndedRooms({})
       socket.disconnect()
     }
   }, [clientToken])
@@ -225,19 +193,25 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       const generation = ++synchronizationGenerationRef.current
       synchronizedRef.current = false
       setConnectionStatus('connecting')
-      socket.emit('session:resume', { roomCode }, (result) => {
-        if (
-          socketRef.current !== socket ||
-          synchronizationGenerationRef.current !== generation ||
-          !socket.connected
-        )
-          return
-        if (result.status === 'success' && result.snapshot) {
-          synchronizedRef.current = true
-          setConnectionStatus('connected')
-          receiveSnapshotRef.current(result.snapshot)
-        }
-      })
+      socket
+        .timeout(COMMAND_TIMEOUT_MS)
+        .emit('session:resume', { roomCode }, (error, result) => {
+          if (
+            socketRef.current !== socket ||
+            synchronizationGenerationRef.current !== generation ||
+            !socket.connected
+          )
+            return
+          if (!error && result.status === 'success' && result.snapshot) {
+            synchronizedRef.current = true
+            setConnectionStatus('connected')
+            receiveSnapshotRef.current(result.snapshot)
+          } else {
+            synchronizationGenerationRef.current += 1
+            synchronizedRef.current = false
+            setConnectionStatus('disconnected')
+          }
+        })
     }
 
     return () => {
@@ -285,14 +259,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
         (socket) => socket.emitWithAck('room:leave', { roomCode }),
       )
       if (socketRef.current !== socket) return unavailable()
-      if (result.status === 'success') {
-        setEndedRooms((rooms) => {
-          if (!(roomCode in rooms)) return rooms
-          const next = { ...rooms }
-          delete next[roomCode]
-          return next
-        })
-      }
       return result
     },
     [],
@@ -360,7 +326,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     () => ({
       connectionStatus,
       snapshots,
-      endedRooms,
       watchRoom,
       createRoom,
       joinRoom,
@@ -379,7 +344,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       claimCard,
       connectionStatus,
       createRoom,
-      endedRooms,
       joinRoom,
       leaveRoom,
       finishGuessing,
@@ -409,11 +373,10 @@ export function useGameSocket() {
 }
 
 export function useRoomSnapshot(roomCode: string) {
-  const { watchRoom, snapshots, endedRooms, connectionStatus } = useGameSocket()
+  const { watchRoom, snapshots, connectionStatus } = useGameSocket()
   useEffect(() => watchRoom(roomCode), [roomCode, watchRoom])
   return {
     snapshot: snapshots[roomCode],
-    endedReason: endedRooms[roomCode] ?? null,
     connectionStatus,
   }
 }

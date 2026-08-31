@@ -344,7 +344,10 @@ export function createGameSocketServer(
     try {
       for (const roomCode of gameServer.expireRooms()) {
         try {
-          io.to(roomCode).emit('room:expired', { roomCode, reason: 'idle' })
+          io.to(roomCode).emit('room:snapshot', {
+            status: 'expired',
+            roomCode,
+          })
           io.in(roomCode).socketsLeave(roomCode)
         } catch (error) {
           logFailure('expiration_room_failed', error)
@@ -381,7 +384,10 @@ export function createGameSocketServer(
     for (const roomSocket of sockets) {
       if (roomSocket.data.token !== token) continue
       try {
-        roomSocket.emit('room:removed', { roomCode })
+        roomSocket.emit('room:snapshot', {
+          status: 'removed_from_room',
+          roomCode,
+        })
         await roomSocket.leave(roomCode)
       } catch (error) {
         logFailure('removed_player_socket_failed', error)

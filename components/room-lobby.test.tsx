@@ -10,7 +10,6 @@ type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
 
 const mocks = vi.hoisted(() => ({
   view: null as RoomSnapshot | null,
-  endedReason: null as 'expired' | 'removed' | null,
   connectionStatus: 'connected' as 'connecting' | 'connected' | 'disconnected',
   startGame: vi.fn(),
   claimCard: vi.fn(),
@@ -28,7 +27,6 @@ vi.mock('@/components/game-socket-provider', () => ({
   }),
   useRoomSnapshot: () => ({
     snapshot: mocks.view,
-    endedReason: mocks.endedReason,
     connectionStatus: mocks.connectionStatus,
   }),
 }))
@@ -102,7 +100,6 @@ function guessingView(): Extract<RoomSnapshot, { status: 'guessing' }> {
 describe('RoomLobby invite prompt', () => {
   beforeEach(() => {
     mocks.view = lobbyView()
-    mocks.endedReason = null
     mocks.connectionStatus = 'connected'
     mocks.startGame.mockReset().mockResolvedValue({ status: 'success' })
     mocks.claimCard
@@ -298,5 +295,24 @@ describe('RoomLobby invite prompt', () => {
     expect(screen.getByRole('main')).not.toHaveTextContent(
       /server|restart|in-memory|persistence|deployment/i,
     )
+  })
+
+  it('renders an expired snapshot as the ended-room page', () => {
+    mocks.view = { status: 'expired', roomCode: 'bcdf2' }
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    expect(
+      screen.getByRole('heading', { name: 'This room ended' }),
+    ).toBeVisible()
+    expect(screen.getByText(/expired after a period/i)).toBeVisible()
+  })
+
+  it('renders a removed snapshot as the removed-player page', () => {
+    mocks.view = { status: 'removed_from_room', roomCode: 'bcdf2' }
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    expect(
+      screen.getByRole('heading', { name: 'You were removed' }),
+    ).toBeVisible()
   })
 })

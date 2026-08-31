@@ -30,17 +30,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
   const router = useRouter()
   const [actionError, setActionError] = useState<string | null>(null)
   const [isActing, setIsActing] = useState(false)
-  const { snapshot, endedReason, connectionStatus } = channel
-
-  if (endedReason) {
-    return (
-      <RoomMessage
-        title="This room ended"
-        body={endedCopy(endedReason)}
-        showRoomRecovery
-      />
-    )
-  }
+  const { snapshot, connectionStatus } = channel
   if (!snapshot) return <RoomLoading />
 
   const retainScreen = (screen: ReactNode) => (
@@ -55,6 +45,14 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
         <RoomMessage
           title="Room not found"
           body={`There is no active room named ${roomCode.toUpperCase()}.`}
+          showRoomRecovery
+        />
+      )
+    case 'expired':
+      return (
+        <RoomMessage
+          title="This room ended"
+          body="The room expired after a period without game activity."
           showRoomRecovery
         />
       )
@@ -361,12 +359,6 @@ function RoomMessage({
       </section>
     </main>
   )
-}
-
-function endedCopy(reason: 'expired' | 'removed') {
-  if (reason === 'expired')
-    return 'The room expired after a period without game activity.'
-  return 'The host removed this browser from the room.'
 }
 
 function assertNever(value: never): never {

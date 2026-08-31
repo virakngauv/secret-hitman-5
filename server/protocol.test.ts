@@ -831,4 +831,19 @@ describe('Socket.IO Secret Hitman protocol', () => {
       },
     })
   })
+
+  it('returns an expired snapshot while the expiration tombstone is active', async () => {
+    const host = await connect(hostToken)
+    const created = await host.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Unable to create room.')
+
+    socketServer.gameServer.expireRooms(Date.now() + 3 * 60 * 60 * 1_000)
+
+    expect(
+      await host.emitWithAck('session:resume', { roomCode: created.roomCode }),
+    ).toEqual({
+      status: 'success',
+      snapshot: { status: 'expired', roomCode: created.roomCode },
+    })
+  })
 })
