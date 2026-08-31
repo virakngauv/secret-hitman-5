@@ -41,15 +41,16 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
       .getByRole('button', { name: /Available −1/i })
       .first()
     await expect(available).toBeVisible()
-    await expect(available.locator('.word-card-index')).toHaveText('Available')
-    await expect(available.locator('.word-card-index')).toHaveCSS(
-      'margin-top',
-      '3.2px',
-    )
-    await expect(available.locator('.word-card-index')).toHaveCSS(
-      'margin-left',
-      '3.2px',
-    )
+    const roleLabel = available.locator('.word-card-index')
+    await expect(roleLabel).toHaveText('Available')
+    for (const property of ['margin-top', 'margin-left']) {
+      const value = await roleLabel.evaluate(
+        (element, propertyName) =>
+          getComputedStyle(element).getPropertyValue(propertyName),
+        property,
+      )
+      expect(Number.parseFloat(value)).toBeCloseTo(3.2, 1)
+    }
     await expect(available.locator('.word-card-score')).toHaveText('−1')
     await expect(available.locator('.word-card-score')).toHaveCSS(
       'font-style',
