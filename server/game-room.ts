@@ -571,6 +571,7 @@ export class GameRoom {
         status: 'joinable',
         roomCode: this.code,
         joinsAsSpectator:
+          !this.findMember(token)?.game &&
           this.phase !== 'lobby' &&
           (this.phase !== 'hinting' ||
             this.gamePlayers().length >= MAX_STARTING_PLAYERS),

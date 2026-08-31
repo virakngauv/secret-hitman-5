@@ -1300,6 +1300,15 @@ describe('GameRoom single-round flow', () => {
         room.join((index + 10).toString(16).padStart(32, '0'), `Late ${index}`),
       ).toEqual({ status: 'success' })
     }
+    const returningToken = (10).toString(16).padStart(32, '0')
+    expect(room.leave(returningToken)).toEqual({ status: 'success' })
+    expect(room.snapshotFor(returningToken)).toMatchObject({
+      status: 'joinable',
+      joinsAsSpectator: false,
+    })
+    expect(room.join(returningToken, 'Late 0')).toEqual({ status: 'success' })
+    expect(hinting(room, returningToken).player.participation).toBe('player')
+
     const overflowToken = 'f'.repeat(32)
     expect(room.snapshotFor(overflowToken)).toMatchObject({
       status: 'joinable',
