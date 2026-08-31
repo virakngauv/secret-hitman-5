@@ -154,6 +154,7 @@ describe('GameSocketProvider', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllEnvs()
   })
 
@@ -563,7 +564,7 @@ describe('GameSocketProvider', () => {
     expect(screen.getByTestId('status')).toHaveTextContent('not_found')
   })
 
-  it('leaves synchronization in a stable disconnected state when resume fails', async () => {
+  it('retries a failed resume while keeping mutations blocked', async () => {
     const roomCode = 'bcdf2'
     mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
     render(
@@ -579,6 +580,7 @@ describe('GameSocketProvider', () => {
     act(() => mocks.handlers.get('connect')?.())
     expect(screen.getByTestId('connection')).toHaveTextContent('connecting')
 
+    vi.useFakeTimers()
     act(() =>
       mocks.resumeCallbacks.get(roomCode)?.({
         status: 'server_unavailable',
@@ -588,6 +590,59 @@ describe('GameSocketProvider', () => {
 
     expect(screen.getByTestId('connection')).toHaveTextContent('disconnected')
     expect(screen.getByTestId('status')).toHaveTextContent('lobby')
+
+    act(() => vi.advanceTimersByTime(1_000))
+    expect(screen.getByTestId('connection')).toHaveTextContent('connecting')
+
+    act(() =>
+      mocks.resumeCallbacks.get(roomCode)?.({
+        status: 'success',
+        snapshot: lobbySnapshot(roomCode),
+      }),
+    )
+    expect(screen.getByTestId('connection')).toHaveTextContent('connected')
+  })
+
+  it('stops retrying resume after the bounded attempt limit', async () => {
+    const roomCode = 'bcdf2'
+    mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode={roomCode} />
+      </GameSocketProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('connection')).toHaveTextContent('connected'),
+    )
+
+    mocks.delayResumes = true
+    act(() => mocks.handlers.get('connect')?.())
+    vi.useFakeTimers()
+    const failResume = () =>
+      act(() =>
+        mocks.resumeCallbacks.get(roomCode)?.({
+          status: 'server_unavailable',
+          message: 'Please try again.',
+        }),
+      )
+
+    failResume()
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      act(() => vi.advanceTimersByTime(1_000))
+      failResume()
+    }
+    const resumeCallCount = mocks.socket.emit.mock.calls.filter(
+      ([event]) => event === 'session:resume',
+    ).length
+
+    act(() => vi.advanceTimersByTime(10_000))
+
+    expect(
+      mocks.socket.emit.mock.calls.filter(
+        ([event]) => event === 'session:resume',
+      ),
+    ).toHaveLength(resumeCallCount)
+    expect(screen.getByTestId('connection')).toHaveTextContent('disconnected')
   })
 
   it('ignores a stale resume when connection changes repeat', async () => {

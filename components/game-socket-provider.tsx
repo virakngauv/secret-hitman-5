@@ -53,6 +53,8 @@ type GameSocketContextValue = {
 
 const GameSocketContext = createContext<GameSocketContextValue | null>(null)
 const COMMAND_TIMEOUT_MS = 6_000
+const RESUME_RETRY_DELAY_MS = 1_000
+const MAX_RESUME_RETRIES = 3
 const DEFAULT_GAME_SERVER_PORT = 3200
 
 export function defaultGameServerUrl(hostname: string): string {
@@ -71,6 +73,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const synchronizedRef = useRef(false)
   const synchronizationGenerationRef = useRef(0)
   const receiveSnapshotRef = useRef<(snapshot: RoomSnapshot) => void>(() => {})
+  const resumeWatchedRoomsRef = useRef<() => void>(() => {})
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting')
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({})
@@ -111,8 +114,29 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       reconnection: true,
     })
     socketRef.current = socket
+    let resumeRetryTimer: ReturnType<typeof setTimeout> | null = null
+    let resumeRetryAttempts = 0
 
-    const resumeWatchedRooms = () => {
+    const clearResumeRetry = () => {
+      if (resumeRetryTimer === null) return
+      clearTimeout(resumeRetryTimer)
+      resumeRetryTimer = null
+    }
+    const scheduleResumeRetry = () => {
+      if (!socket.connected || resumeRetryAttempts >= MAX_RESUME_RETRIES) return
+      resumeRetryAttempts += 1
+      resumeRetryTimer = setTimeout(() => {
+        resumeRetryTimer = null
+        if (socketRef.current === socket && socket.connected) {
+          resumeWatchedRooms(true)
+        }
+      }, RESUME_RETRY_DELAY_MS)
+    }
+    function resumeWatchedRooms(isRetry = false) {
+      if (!isRetry) {
+        clearResumeRetry()
+        resumeRetryAttempts = 0
+      }
       const generation = ++synchronizationGenerationRef.current
       synchronizedRef.current = false
       setConnectionStatus('connecting')
@@ -137,6 +161,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
             if (!error && result.status === 'success' && result.snapshot) {
               remaining -= 1
               if (remaining === 0) {
+                clearResumeRetry()
+                resumeRetryAttempts = 0
                 synchronizedRef.current = true
                 setConnectionStatus('connected')
               }
@@ -145,10 +171,12 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
               synchronizationGenerationRef.current += 1
               synchronizedRef.current = false
               setConnectionStatus('disconnected')
+              scheduleResumeRetry()
             }
           })
       }
     }
+    resumeWatchedRoomsRef.current = () => resumeWatchedRooms()
     const receiveSnapshot = (snapshot: RoomSnapshot) => {
       setSnapshots((current) => {
         return { ...current, [snapshot.roomCode]: snapshot }
@@ -156,6 +184,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     }
     receiveSnapshotRef.current = receiveSnapshot
     const markDisconnected = () => {
+      clearResumeRetry()
+      resumeRetryAttempts = 0
       synchronizationGenerationRef.current += 1
       synchronizedRef.current = false
       setConnectionStatus('disconnected')
@@ -179,6 +209,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       synchronizationGenerationRef.current += 1
       synchronizedRef.current = false
       receiveSnapshotRef.current = () => {}
+      resumeWatchedRoomsRef.current = () => {}
+      clearResumeRetry()
       setSnapshots({})
       socket.disconnect()
     }
@@ -190,28 +222,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     watchers.set(roomCode, existingWatchers + 1)
     const socket = socketRef.current
     if (socket?.connected && existingWatchers === 0) {
-      const generation = ++synchronizationGenerationRef.current
-      synchronizedRef.current = false
-      setConnectionStatus('connecting')
-      socket
-        .timeout(COMMAND_TIMEOUT_MS)
-        .emit('session:resume', { roomCode }, (error, result) => {
-          if (
-            socketRef.current !== socket ||
-            synchronizationGenerationRef.current !== generation ||
-            !socket.connected
-          )
-            return
-          if (!error && result.status === 'success' && result.snapshot) {
-            synchronizedRef.current = true
-            setConnectionStatus('connected')
-            receiveSnapshotRef.current(result.snapshot)
-          } else {
-            synchronizationGenerationRef.current += 1
-            synchronizedRef.current = false
-            setConnectionStatus('disconnected')
-          }
-        })
+      resumeWatchedRoomsRef.current()
     }
 
     return () => {

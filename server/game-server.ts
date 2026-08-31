@@ -36,7 +36,12 @@ export class GameServer {
     private readonly random: () => number = () => randomInt(2 ** 30) / 2 ** 30,
     private readonly maxRooms = MAX_ACTIVE_ROOMS,
   ) {
-    this.expiration = { ...DEFAULT_ROOM_EXPIRATION, ...expiration }
+    this.expiration = {
+      roomIdleMs: expiration.roomIdleMs,
+      expiredRoomTombstoneMs:
+        expiration.expiredRoomTombstoneMs ??
+        DEFAULT_ROOM_EXPIRATION.expiredRoomTombstoneMs,
+    }
   }
 
   createRoom(

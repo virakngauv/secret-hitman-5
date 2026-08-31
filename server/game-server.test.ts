@@ -41,6 +41,21 @@ describe('GameServer', () => {
     })
   })
 
+  it('uses the default tombstone duration when the override is undefined', () => {
+    const server = new GameServer({
+      roomIdleMs: 100,
+      expiredRoomTombstoneMs: undefined,
+    })
+    const token = 'a'.repeat(32)
+    const { roomCode } = createdRoom(server, token, 'Ada', 1_000)
+
+    expect(server.expireRooms(1_100)).toEqual([roomCode])
+    expect(server.snapshot(token, roomCode, 1_100)).toEqual({
+      status: 'expired',
+      roomCode,
+    })
+  })
+
   it('expires every phase after the same shared idle window and starts a new process empty', () => {
     const expiration = { roomIdleMs: 200 }
     const server = new GameServer(expiration)
