@@ -146,13 +146,22 @@ export function HintPhaseScreen({
                 {view.board.map((card) => {
                   const isAssassin = card.kind === 'assassin'
                   const isSelected = selected.has(card.id)
+                  const isDerivedCivilian =
+                    selected.size === MAX_TARGET_COUNT &&
+                    !card.locked &&
+                    !isSelected
                   const roleName = isAssassin
                     ? 'Assassin'
                     : isSelected
                       ? 'Target'
-                      : card.kind === 'civilian'
+                      : card.kind === 'civilian' || isDerivedCivilian
                         ? 'Civilian'
                         : 'Available'
+                  const roleState = isDerivedCivilian
+                    ? 'Reversible when a target is deselected'
+                    : card.locked
+                      ? 'Locked'
+                      : null
                   const roleScore = formatScore(
                     CARD_SCORE[
                       isAssassin
@@ -168,14 +177,18 @@ export function HintPhaseScreen({
                       key={card.id}
                       type="button"
                       data-card-id={card.id}
-                      data-card-kind={card.kind}
+                      data-card-kind={
+                        isDerivedCivilian ? 'civilian' : card.kind
+                      }
                       data-card-locked={card.locked}
-                      aria-label={`${roleLabel}${card.locked ? ' · Locked' : ''} · ${card.word}`}
+                      data-card-derived-civilian={isDerivedCivilian}
+                      aria-label={`${roleLabel}${roleState ? ` · ${roleState}` : ''} · ${card.word}`}
                       className={cn(
                         'word-card',
                         isSelected && 'word-card-target',
                         isAssassin && 'word-card-assassin',
-                        card.kind === 'civilian' && 'word-card-civilian',
+                        (card.kind === 'civilian' || isDerivedCivilian) &&
+                          'word-card-civilian',
                       )}
                       onClick={() => toggleCard(card.id)}
                       disabled={
