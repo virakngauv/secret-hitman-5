@@ -154,6 +154,12 @@ test.describe('spectator experience audit', () => {
       await spectator.reload()
       await expect(spectator.getByText('Final standings')).toBeVisible()
       await expect(
+        spectator.getByLabel('Fully revealed final board'),
+      ).toBeVisible()
+      await expect(
+        spectator.locator('button[data-card-kind="hidden"]'),
+      ).toHaveCount(0)
+      await expect(
         spectator.getByRole('button', {
           name: /^(Start guessing|Next hint|Finish the game)$/,
         }),

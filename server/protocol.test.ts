@@ -857,7 +857,15 @@ describe('Socket.IO Secret Hitman protocol', () => {
         player: { playerId: before.player.playerId, role: 'host' },
       },
     })
+    const serverHostSocket = socketServer.io.sockets.sockets.get(
+      firstHostSocket.id!,
+    )
+    if (!serverHostSocket) throw new Error('Expected the first host socket.')
+    const disconnected = new Promise<void>((resolve) =>
+      serverHostSocket.once('disconnect', () => resolve()),
+    )
     firstHostSocket.disconnect()
+    await disconnected
 
     expect(
       await secondHostSocket.emitWithAck('session:resume', { roomCode }),
