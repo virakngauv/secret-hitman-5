@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 8 as const
+export const GAME_PROTOCOL_VERSION = 9 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -32,6 +32,9 @@ export type HintStatus = {
   playerId: string
   name: string
   submitted: boolean
+  needsRevision: boolean
+  hint: string | null
+  hintNumber: number | null
 }
 
 export type HintCardSnapshot = {
@@ -74,6 +77,7 @@ export type RoomSnapshot =
       board: HintCardSnapshot[] | null
       hint: string | null
       hintSubmitted: boolean
+      hintRejected: boolean
     } & MemberSnapshotBase)
   | ({
       status: 'guessing'
@@ -145,6 +149,7 @@ export type JoinRoomPayload = { roomCode: string; name: string }
 export type RoomCommandPayload = { roomCode: string }
 export type FinishGuessingPayload = RoomCommandPayload & { turnId: string }
 export type RemovePlayerPayload = RoomCommandPayload & { playerId: string }
+export type RejectHintPayload = RoomCommandPayload & { playerId: string }
 export type SubmitHintPayload = RoomCommandPayload & {
   hint: string
   targetCardIds: string[]
@@ -186,6 +191,10 @@ export type ClientToServerEvents = {
   ) => void
   'game:unlock-hint': (
     payload: RoomCommandPayload,
+    acknowledge: (result: CommandResult) => void,
+  ) => void
+  'game:reject-hint': (
+    payload: RejectHintPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:start-guessing': (

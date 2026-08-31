@@ -24,6 +24,8 @@ export function HintPhaseScreen({
   view,
   onSubmitHint,
   onUnlockHint,
+  onRejectHint,
+  onRemovePlayer,
   onStartGuessing,
 }: {
   view: HintingView
@@ -32,6 +34,8 @@ export function HintPhaseScreen({
     targetCardIds: string[],
   ) => Promise<CommandResult>
   onUnlockHint: () => Promise<CommandResult>
+  onRejectHint: (playerId: string) => Promise<CommandResult>
+  onRemovePlayer: (playerId: string) => Promise<CommandResult>
   onStartGuessing: () => Promise<CommandResult>
 }) {
   const [hint, setHint] = useState(view.hint ?? '')
@@ -51,6 +55,7 @@ export function HintPhaseScreen({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
   const readyCount = view.hintStatuses.filter(
@@ -93,6 +98,26 @@ export function HintPhaseScreen({
     const result = await onStartGuessing()
     if (result.status !== 'success') setError(result.message)
     setIsStarting(false)
+  }
+
+  const rejectHint = async (playerId: string) => {
+    setBusyPlayer(playerId)
+    setError(null)
+    const result = await onRejectHint(playerId)
+    if (result.status !== 'success') setError(result.message)
+    setBusyPlayer(null)
+  }
+
+  const removePlayer = async (playerId: string, name: string) => {
+    const confirmed = window.confirm(
+      `Remove ${name}? Their board, submitted hint, readiness, and remaining turn will be removed from this game. They will not be able to rejoin this room.`,
+    )
+    if (!confirmed) return
+    setBusyPlayer(playerId)
+    setError(null)
+    const result = await onRemovePlayer(playerId)
+    if (result.status !== 'success') setError(result.message)
+    setBusyPlayer(null)
   }
 
   return (
@@ -223,9 +248,11 @@ export function HintPhaseScreen({
 
               <p className="form-message" role={error ? 'alert' : 'status'}>
                 {error ??
-                  (view.hintSubmitted
-                    ? 'Unlock your hint to revise the clue or target selection.'
-                    : 'You can change your selection until you lock it in.')}
+                  (view.hintRejected
+                    ? 'The host rejected this hint. Revise it, then lock it in again.'
+                    : view.hintSubmitted
+                      ? 'Unlock your hint to revise the clue or target selection.'
+                      : 'You can change your selection until you lock it in.')}
               </p>
               {view.hintSubmitted ? (
                 <Button
@@ -263,27 +290,81 @@ export function HintPhaseScreen({
             </span>
           </div>
           <ul className="mt-4 grid gap-2">
-            {view.hintStatuses.map((player) => (
-              <li className="status-row" key={player.playerId}>
-                <span className="truncate font-semibold">{player.name}</span>
-                <span
-                  className={cn(
-                    'status-dot-label',
-                    player.submitted && 'is-ready',
-                  )}
+            {view.hintStatuses.map((player) => {
+              const member = view.members.find(
+                ({ playerId }) => playerId === player.playerId,
+              )
+              const isSelf = player.playerId === view.player.playerId
+              const canRemove = isHost && member?.role !== 'host'
+              return (
+                <li
+                  className="status-row flex-wrap items-center gap-x-3 gap-y-2"
+                  key={player.playerId}
                 >
-                  <span className="status-dot" />
-                  {player.submitted ? 'Ready' : 'Choosing'}
-                </span>
-              </li>
-            ))}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">
+                      {player.name}
+                    </span>
+                    {player.hint !== null && player.hintNumber !== null ? (
+                      <span
+                        className="block truncate text-sm text-[var(--muted-foreground)]"
+                        aria-label={`${player.name}'s hint: ${player.hint}, ${player.hintNumber}`}
+                      >
+                        {player.hint} · {player.hintNumber}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={cn(
+                      'status-dot-label',
+                      player.submitted && 'is-ready',
+                    )}
+                  >
+                    <span className="status-dot" />
+                    {player.needsRevision
+                      ? 'Needs revision'
+                      : player.submitted
+                        ? 'Ready'
+                        : 'Choosing'}
+                  </span>
+                  {isHost && view.allHintsSubmitted && !isSelf ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      disabled={busyPlayer !== null}
+                      onClick={() => void rejectHint(player.playerId)}
+                      aria-label={`Reject ${player.name}'s hint`}
+                    >
+                      Reject hint
+                    </Button>
+                  ) : null}
+                  {canRemove ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      disabled={busyPlayer !== null}
+                      onClick={() =>
+                        void removePlayer(player.playerId, player.name)
+                      }
+                      aria-label={`Remove ${player.name} from this game`}
+                    >
+                      Remove player
+                    </Button>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
 
           {isHost ? (
             <div className="host-control">
               <p className="host-control-label">Host control</p>
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Start when all hints are locked.
+                {view.allHintsSubmitted
+                  ? 'Review every hint, reject any that need revision, or start guessing.'
+                  : 'Start when all hints are locked.'}
               </p>
               <Button
                 className="mt-4 w-full"

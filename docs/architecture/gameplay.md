@@ -5,12 +5,14 @@ lobby
   └─ host starts with 2–12 players
        ↓
 hinting
-  ├─ each starting player selects 1–5 targets from eight editable words around three locked civilians and a locked assassin
+  ├─ each current participant selects 1–5 targets from eight editable words around three locked civilians and a locked assassin
   ├─ the selection count becomes the hint number
-  └─ after all hints are submitted, the host manually selects “Start guessing”
+  ├─ visitors may join as participants until guessing starts
+  ├─ after all hints are submitted, everyone reviews the shared clue list and the host may reject another player's clue
+  └─ the host manually selects “Start guessing” after every accepted or revised hint is submitted
        ↓
 guessing
-  ├─ one clue-giver turn per starting player
+  ├─ one clue-giver turn per accepted participant
   ├─ players guess, stop voluntarily, or stop on civilian/assassin
   └─ host advances manually only after all eligible pickers finish
        ↓
@@ -20,7 +22,7 @@ finished
 
 ## Personalized information
 
-- During hinting, a starting player receives only their own private board. Spectators receive readiness status but no board.
+- During hinting, each participant receives only their own private board. Submitted clue text and numbers remain hidden until every current participant submits, then become visible together without exposing boards. Spectators receive the shared check-in state but no board.
 - During guessing, the clue-giver and finished pickers see every card type on the current board. Passing or selecting a civilian immediately ends that picker's turn and privately reveals the board. Active pickers and spectators see only publicly claimed target/civilian types until the board completes.
 - The first accepted assassin claim completes the board for every picker and reveals all roles and claimant attribution to every player and spectator. Finished pickers cannot make additional picks, including after a refresh or reconnect.
 - At the end of the game, the final board is fully revealed to everyone in the room.
@@ -42,7 +44,7 @@ Room revisions are removed completely, not retained as a second identity mechani
 - Board initialization: uses the existing private initial seed and start time without a room counter. Default initial seeds already contain random entropy. Explicit fixed test seeds remain reproducible and do not control public turn identities.
 - Tests and smoke script: assert actual state, ownership, scores, and restored turn identity instead of treating counter increments as evidence of correctness.
 
-Protocol version 7 combines explicit turn identity with the unified locked-role, target-count, scoring, board-completion, and reversible hint-lock contracts. Deploy the frontend and game server together; older clients must reload to reconnect. No compatibility shim accepts revision-only commands.
+Protocol version 9 combines explicit turn identity with the unified locked-role, target-count, scoring, board-completion, reversible hint-lock, shared hint-review, clue rejection, hinting-phase membership, and participant-removal contracts. Deploy the frontend and game server together; older clients must reload to reconnect. No compatibility shim accepts older command or snapshot shapes.
 
 ## Host advancement
 
@@ -54,9 +56,11 @@ Temporary disconnects do not change membership or guessing eligibility and there
 
 ## Membership
 
-Room membership is independent from a Socket.IO connection. Disconnecting does not remove a player. Explicitly leaving during a game preserves the historical seat and score; reconnecting with the same browser token restores it. A new identity joining after the lobby is assigned spectator participation and cannot submit hints, claim cards, or enter the player standings.
+Room membership is independent from a Socket.IO connection. Disconnecting does not remove a player. Explicitly leaving during a game preserves the historical seat and score; reconnecting with the same browser token restores it. A new identity joining during hinting receives a participant seat when fewer than 12 seats exist; after the cutoff, or at the participant cap, it receives spectator participation and cannot submit hints, claim cards, or enter the player standings.
 
 Explicitly leaving during guessing ends the picker's turn, like passing. Rejoining restores a finished, privately revealed view, never eligibility to guess again on that board. This reveals no more than the freely available pass action; transport disconnect alone does not finish the turn or reveal hidden roles.
+
+During hinting, a new identity becomes a participant while fewer than 12 game seats exist. The server synchronously appends a private board and turn-order seat, so a join accepted before a start-guessing command makes readiness incomplete; a start accepted first closes participation and later identities become spectators. The host may remove a non-host participant while at least two seats remain. Removal deletes that board, hint, readiness, score, and future turn and preserves the room's token ban.
 
 ### Guest identity security boundary
 

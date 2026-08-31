@@ -33,8 +33,8 @@ test.describe('Secret Hitman single round', () => {
         await makeHint(host, 'Orbit', 2)
         await makeHint(guest, 'Garden', 2)
         await makeHint(third, 'Metal', 2)
-        await joinRoom(spectator, roomCode, 'Spectator')
         await host.getByRole('button', { name: 'Start guessing' }).click()
+        await joinRoom(spectator, roomCode, 'Spectator')
         await expect(
           host.locator('button[data-card-kind="assassin"]'),
         ).toHaveCount(1)
@@ -284,18 +284,14 @@ test.describe('Secret Hitman single round', () => {
       await makeHint(guest, 'Garden', 3)
       await expect(host.getByText('2/2')).toBeVisible()
 
+      await host.getByRole('button', { name: 'Start guessing' }).click()
+      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
       await spectator.goto(`/${roomCode}`)
       await expect(
         spectator.getByRole('heading', { name: 'Join as a spectator' }),
       ).toBeVisible()
       await spectator.getByLabel('Name').fill('Linus')
       await spectator.getByRole('button', { name: 'Join' }).click()
-      await expect(
-        spectator.getByText('You joined as a spectator'),
-      ).toBeVisible()
-
-      await host.getByRole('button', { name: 'Start guessing' }).click()
-      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
       await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
 
       const targetId = await host
@@ -332,6 +328,72 @@ test.describe('Secret Hitman single round', () => {
       await expect(host.getByText('Game complete')).toBeVisible()
       await expect(guest.getByText('Final standings')).toBeVisible()
       await expect(spectator.getByText('Final standings')).toBeVisible()
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()))
+    }
+  })
+
+  test('reviews and rejects clues while admitting and removing hinting participants', async ({
+    browser,
+  }) => {
+    test.setTimeout(60_000)
+    const contexts: BrowserContext[] = []
+    try {
+      const host = await newPlayer(browser, contexts)
+      const guest = await newPlayer(browser, contexts)
+      const late = await newPlayer(browser, contexts)
+
+      await host.goto('/home')
+      await host.getByRole('link', { name: 'Create a room' }).click()
+      await host.getByLabel('Name').fill('Ada')
+      await host.getByRole('button', { name: 'Create', exact: true }).click()
+      await expect(
+        host.getByRole('heading', { name: 'Assemble the room.' }),
+      ).toBeVisible()
+      const roomCode = new URL(host.url()).pathname.slice(1)
+      await joinRoom(guest, roomCode, 'Grace')
+      await host.getByRole('button', { name: 'Start game' }).click()
+      await makeHint(host, 'Orbit', 2)
+
+      await late.goto(`/${roomCode}`)
+      await expect(
+        late.getByRole('heading', { name: 'Join the operation' }),
+      ).toBeVisible()
+      await late.getByLabel('Name').fill('Linus')
+      await late.getByRole('button', { name: 'Join', exact: true }).click()
+      await expect(late.getByLabel('Your twelve word board')).toBeVisible()
+      await expect(host.getByText('1/3')).toBeVisible()
+
+      await makeHint(guest, 'Garden', 2)
+      await makeHint(late, 'New York', 3)
+      await expect(host.getByLabel("Ada's hint: Orbit, 2")).toBeVisible()
+      await expect(host.getByLabel("Grace's hint: Garden, 2")).toBeVisible()
+      await expect(host.getByLabel("Linus's hint: New York, 3")).toBeVisible()
+
+      await host.getByRole('button', { name: "Reject Linus's hint" }).click()
+      await expect(
+        late.getByText(
+          'The host rejected this hint. Revise it, then lock it in again.',
+        ),
+      ).toBeVisible()
+      await expect(host.getByText('Needs revision')).toBeVisible()
+      await late.getByLabel('Your hint').fill('City')
+      await late.getByRole('button', { name: 'Lock in hint · 3' }).click()
+      await expect(host.getByLabel("Linus's hint: City, 3")).toBeVisible()
+
+      host.once('dialog', (dialog) => dialog.accept())
+      await host
+        .getByRole('button', { name: 'Remove Grace from this game' })
+        .click()
+      await expect(host.getByText('2/2')).toBeVisible()
+      await expect(guest.getByText(/host removed this browser/i)).toBeVisible()
+      await expect(
+        host.getByRole('button', { name: 'Start guessing' }),
+      ).toBeEnabled()
+
+      await host.getByRole('button', { name: 'Start guessing' }).click()
+      await expect(host.getByText('Turn 1 of 2')).toBeVisible()
+      await expect(late.getByText('Turn 1 of 2')).toBeVisible()
     } finally {
       await Promise.all(contexts.map((context) => context.close()))
     }

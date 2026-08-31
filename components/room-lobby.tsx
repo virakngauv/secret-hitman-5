@@ -110,6 +110,8 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             game.submitHint({ roomCode, hint, targetCardIds })
           }
           onUnlockHint={() => game.unlockHint(roomCode)}
+          onRejectHint={(playerId) => game.rejectHint({ roomCode, playerId })}
+          onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
           onStartGuessing={() => game.startGuessing(roomCode)}
         />
       )

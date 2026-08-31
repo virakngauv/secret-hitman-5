@@ -30,12 +30,27 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
     },
   ],
   hintStatuses: [
-    { playerId: 'player-1', name: 'Ada', submitted: false },
-    { playerId: 'player-2', name: 'Grace', submitted: false },
+    {
+      playerId: 'player-1',
+      name: 'Ada',
+      submitted: false,
+      needsRevision: false,
+      hint: null,
+      hintNumber: null,
+    },
+    {
+      playerId: 'player-2',
+      name: 'Grace',
+      submitted: false,
+      needsRevision: false,
+      hint: null,
+      hintNumber: null,
+    },
   ],
   allHintsSubmitted: false,
   hint: null,
   hintSubmitted: false,
+  hintRejected: false,
   board: [
     { id: 'p0-card-0', word: 'MOON', kind: 'neutral', locked: false },
     { id: 'p0-card-1', word: 'SATELLITE', kind: 'neutral', locked: false },
@@ -75,6 +90,8 @@ describe('HintPhaseScreen', () => {
         view={view}
         onSubmitHint={vi.fn()}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -116,6 +133,8 @@ describe('HintPhaseScreen', () => {
         view={hintingView}
         onSubmitHint={vi.fn()}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -151,6 +170,8 @@ describe('HintPhaseScreen', () => {
       view: hintingView,
       onSubmitHint,
       onUnlockHint: vi.fn(),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const first = render(<HintPhaseScreen {...props} />)
@@ -195,6 +216,8 @@ describe('HintPhaseScreen', () => {
         view={hintingView}
         onSubmitHint={onSubmitHint}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
         onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
       />,
     )
@@ -229,6 +252,8 @@ describe('HintPhaseScreen', () => {
         view={hintingView}
         onSubmitHint={vi.fn()}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -318,6 +343,8 @@ describe('HintPhaseScreen', () => {
     const props = {
       onSubmitHint: vi.fn(),
       onUnlockHint: vi.fn().mockResolvedValue({ status: 'success' }),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const view = render(<HintPhaseScreen view={submittedView} {...props} />)
@@ -387,6 +414,8 @@ describe('HintPhaseScreen', () => {
     const props = {
       onSubmitHint,
       onUnlockHint,
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const view = render(<HintPhaseScreen view={lockedView} {...props} />)
@@ -435,6 +464,114 @@ describe('HintPhaseScreen', () => {
       'p0-card-1',
       'p0-card-6',
     ])
+  })
+
+  it('reveals the complete clue list together and lets the host reject another hint', async () => {
+    const user = userEvent.setup()
+    const onRejectHint = vi.fn().mockResolvedValue({ status: 'success' })
+    const view = {
+      ...hintingView,
+      allHintsSubmitted: true,
+      hint: 'Orbit',
+      hintSubmitted: true,
+      hintStatuses: [
+        {
+          ...hintingView.hintStatuses[0],
+          submitted: true,
+          hint: 'Orbit',
+          hintNumber: 2,
+        },
+        {
+          ...hintingView.hintStatuses[1],
+          submitted: true,
+          hint: 'New York',
+          hintNumber: 3,
+        },
+      ],
+    }
+
+    render(
+      <HintPhaseScreen
+        view={view}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={onRejectHint}
+        onRemovePlayer={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText("Ada's hint: Orbit, 2")).toBeVisible()
+    expect(screen.getByLabelText("Grace's hint: New York, 3")).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: "Reject Ada's hint" }),
+    ).not.toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: "Reject Grace's hint" }),
+    )
+    expect(onRejectHint).toHaveBeenCalledWith('player-2')
+  })
+
+  it('confirms hinting-phase removal with the named consequences', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const remove = screen.getByRole('button', {
+      name: 'Remove Grace from this game',
+    })
+    await user.click(remove)
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /Remove Grace.*board, submitted hint, readiness, and remaining turn.*not be able to rejoin/i,
+      ),
+    )
+    expect(onRemovePlayer).not.toHaveBeenCalled()
+
+    confirm.mockReturnValueOnce(true)
+    await user.click(remove)
+    expect(onRemovePlayer).toHaveBeenCalledWith('player-2')
+    confirm.mockRestore()
+  })
+
+  it('clearly tells a rejected author to revise and resubmit', () => {
+    render(
+      <HintPhaseScreen
+        view={{
+          ...hintingView,
+          hint: 'Orbit',
+          hintRejected: true,
+          hintStatuses: hintingView.hintStatuses.map((status) =>
+            status.playerId === hintingView.player.playerId
+              ? { ...status, needsRevision: true }
+              : status,
+          ),
+        }}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'The host rejected this hint. Revise it, then lock it in again.',
+      ),
+    ).toBeVisible()
+    expect(screen.getByText('Needs revision')).toBeVisible()
+    expect(screen.getByLabelText('Your hint')).not.toHaveAttribute('readonly')
   })
 })
 

@@ -23,6 +23,7 @@ import {
   type CommandResult,
   type FinishGuessingPayload,
   type RoomSnapshot,
+  type RejectHintPayload,
   type ServerToClientEvents,
   type SubmitHintPayload,
 } from '@/lib/game-protocol'
@@ -46,6 +47,7 @@ type GameSocketContextValue = {
   startGame: (roomCode: string) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
   unlockHint: (roomCode: string) => Promise<CommandResult>
+  rejectHint: (payload: RejectHintPayload) => Promise<CommandResult>
   startGuessing: (roomCode: string) => Promise<CommandResult>
   claimCard: (
     payload: ClaimCardPayload,
@@ -303,6 +305,13 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       ),
     [],
   )
+  const rejectHint = useCallback(
+    async (payload: RejectHintPayload): Promise<CommandResult> =>
+      await runCommand(socketRef.current, (socket) =>
+        socket.emitWithAck('game:reject-hint', payload),
+      ),
+    [],
+  )
   const startGuessing = useCallback(
     async (roomCode: string): Promise<CommandResult> =>
       await runCommand(socketRef.current, (socket) =>
@@ -347,6 +356,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       startGame,
       submitHint,
       unlockHint,
+      rejectHint,
       startGuessing,
       claimCard,
       finishGuessing,
@@ -362,6 +372,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       leaveRoom,
       finishGuessing,
       removePlayer,
+      rejectHint,
       snapshots,
       startGame,
       startGuessing,
