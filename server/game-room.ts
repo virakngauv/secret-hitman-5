@@ -56,6 +56,7 @@ type GameSeat = {
 
 type GameState = {
   boardSeed: string
+  nextBoardIndex: number
   playerOrder: string[]
   turnIndex: number
   turnId: string
@@ -283,6 +284,7 @@ export class GameRoom {
     })
     this.game = {
       boardSeed: seed,
+      nextBoardIndex: players.length,
       playerOrder: players.map(({ playerId }) => playerId),
       turnIndex: 0,
       turnId: randomUUID(),
@@ -378,7 +380,10 @@ export class GameRoom {
     }
 
     const target = this.members.find(
-      (member) => member.playerId === payload.playerId && member.game !== null,
+      (member) =>
+        member.playerId === payload.playerId &&
+        member.game !== null &&
+        member.active,
     )
     if (!target) {
       return { status: 'stale', message: 'That hint is no longer available.' }
@@ -739,11 +744,13 @@ export class GameRoom {
   private addGameSeat(member: Member) {
     const game = this.requireGame()
     const position = game.playerOrder.length
+    const boardIndex = game.nextBoardIndex
+    game.nextBoardIndex += 1
     member.participation = 'player'
     member.game = {
       position,
       score: 0,
-      board: createPlayerBoard(game.boardSeed, position),
+      board: createPlayerBoard(game.boardSeed, boardIndex),
       hint: null,
       targetCount: 0,
       hintSubmitted: false,

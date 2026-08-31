@@ -5,6 +5,7 @@ import { GameRoom, MAX_ROOM_IDENTITIES, MAX_ROOM_MEMBERS } from './game-room'
 const hostToken = 'a'.repeat(32)
 const guestToken = 'b'.repeat(32)
 const thirdToken = 'c'.repeat(32)
+const fourthToken = 'd'.repeat(32)
 
 function createRoom() {
   let id = 0
@@ -1116,6 +1117,26 @@ describe('GameRoom single-round flow', () => {
     })
   })
 
+  it('does not reject an inactive player fallback that cannot be revised', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.join(thirdToken, 'Linus', 1_002)
+    room.start(hostToken, 1_003)
+    const hostId = hinting(room).player.playerId
+    room.leave(hostToken, 1_004)
+    submitFirstHint(room, guestToken, 'Garden')
+    submitFirstHint(room, thirdToken, 'Metal')
+
+    expect(hinting(room, guestToken)).toMatchObject({
+      player: { role: 'host' },
+      allHintsSubmitted: true,
+    })
+    expect(
+      room.rejectHint(guestToken, { roomCode: room.code, playerId: hostId }),
+    ).toMatchObject({ status: 'stale' })
+    expect(room.startGuessing(guestToken)).toEqual({ status: 'success' })
+  })
+
   it('orders late hinting joins atomically before the guessing cutoff', () => {
     const joinedFirst = createRoom()
     joinedFirst.join(guestToken, 'Grace', 1_001)
@@ -1212,6 +1233,33 @@ describe('GameRoom single-round flow', () => {
     expect(room.removePlayer(hostToken, thirdId)).toMatchObject({
       status: 'invalid',
     })
+  })
+
+  it('never reuses a private board index after removal and reindexing', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.join(thirdToken, 'Linus', 1_002)
+    room.start(hostToken, 1_003)
+    const guestId = hinting(room, guestToken).player.playerId
+    const thirdBoardIds = hinting(room, thirdToken).board!.map(({ id }) => id)
+
+    expect(room.removePlayer(hostToken, guestId)).toMatchObject({
+      status: 'success',
+    })
+    expect(room.join(fourthToken, 'Margaret', 1_004)).toEqual({
+      status: 'success',
+    })
+    const replacement = hinting(room, fourthToken)
+    expect(replacement.board).toHaveLength(12)
+    expect(replacement.board!.map(({ id }) => id)).not.toEqual(thirdBoardIds)
+    expect(replacement.board!.every(({ id }) => id.startsWith('p3-'))).toBe(
+      true,
+    )
+    expect(replacement.hintStatuses.map(({ name }) => name)).toEqual([
+      'Ada',
+      'Linus',
+      'Margaret',
+    ])
   })
 
   it('caps late participants at twelve and clearly admits overflow as spectators', () => {

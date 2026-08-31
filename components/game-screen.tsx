@@ -327,7 +327,7 @@ export function HintPhaseScreen({
                         ? 'Ready'
                         : 'Choosing'}
                   </span>
-                  {isHost && view.allHintsSubmitted && !isSelf ? (
+                  {isHost && view.allHintsSubmitted && !isSelf && member ? (
                     <Button
                       type="button"
                       variant="outline"
