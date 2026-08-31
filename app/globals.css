@@ -366,9 +366,9 @@ button.word-card:focus-visible {
   text-align: center;
 }
 
-/* 0.72rem is the bounded minimum for long, unbroken board words. */
+/* 0.68rem is the bounded minimum for wide, unbroken board words. */
 .word-card-word-compact {
-  font-size: clamp(0.72rem, 2vw, 1rem);
+  font-size: clamp(0.68rem, 2vw, 1rem);
   letter-spacing: -0.035em;
 }
 

@@ -508,18 +508,15 @@ function formatScore(score: number) {
 }
 
 function CardWord({ word }: { word: string }) {
-  const longestSegment = Math.max(
-    ...word
-      .trim()
-      .split(/\s+/u)
-      .map((segment) => segment.length),
-  )
+  const segments = word.trim().split(/\s+/u)
+  const longestSegment = Math.max(...segments.map((segment) => segment.length))
+  const isSingleWord = segments.length === 1
 
   return (
     <span
       className={cn(
         'word-card-word',
-        longestSegment >= 7 && 'word-card-word-compact',
+        isSingleWord && longestSegment >= 7 && 'word-card-word-compact',
         longestSegment >= 16 && 'word-card-word-break',
       )}
     >

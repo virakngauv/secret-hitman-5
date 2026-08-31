@@ -54,7 +54,13 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
 
 describe('HintPhaseScreen', () => {
   it('fits long words individually while allowing phrases to wrap naturally', () => {
-    const words = ['TELESCOPE', 'NEW YORK', 'COUNTERREVOLUTIONARIES', 'SNOWMAN']
+    const words = [
+      'TELESCOPE',
+      'NEW YORK',
+      'COUNTERREVOLUTIONARIES',
+      'SNOWMAN',
+      'GREAT BRITAIN',
+    ]
     const view = {
       ...hintingView,
       board: hintingView.board!.map((card, index) => ({
@@ -84,6 +90,9 @@ describe('HintPhaseScreen', () => {
       'word-card-word-break',
     )
     expect(screen.getByText('SNOWMAN')).toHaveClass('word-card-word-compact')
+    expect(screen.getByText('GREAT BRITAIN')).not.toHaveClass(
+      'word-card-word-compact',
+    )
   })
 
   it('shows the score beside every clue-board role and state', async () => {

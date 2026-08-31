@@ -247,9 +247,19 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
             word: 'MILLIONAIRE',
           },
           {
+            className: 'word-card-word word-card-word-compact',
+            label: 'wide-deck-word',
+            word: 'WASHINGTON',
+          },
+          {
             className: 'word-card-word',
             label: 'new-york',
             word: 'NEW YORK',
+          },
+          {
+            className: 'word-card-word',
+            label: 'great-britain',
+            word: 'GREAT BRITAIN',
           },
           {
             className:
