@@ -35,11 +35,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
   if (endedReason) {
     return (
       <RoomMessage
-        title={
-          endedReason === 'unavailable'
-            ? 'This room is no longer available'
-            : 'This room ended'
-        }
+        title="This room ended"
         body={endedCopy(endedReason)}
         showRoomRecovery
       />
@@ -367,12 +363,10 @@ function RoomMessage({
   )
 }
 
-function endedCopy(reason: 'expired' | 'removed' | 'unavailable') {
+function endedCopy(reason: 'expired' | 'removed') {
   if (reason === 'expired')
     return 'The room expired after a period without game activity.'
-  if (reason === 'removed')
-    return 'The host removed this browser from the room.'
-  return 'This room is no longer available. You can create a new room or join another one.'
+  return 'The host removed this browser from the room.'
 }
 
 function assertNever(value: never): never {

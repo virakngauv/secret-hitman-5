@@ -10,7 +10,7 @@ type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
 
 const mocks = vi.hoisted(() => ({
   view: null as RoomSnapshot | null,
-  endedReason: null as 'expired' | 'removed' | 'unavailable' | null,
+  endedReason: null as 'expired' | 'removed' | null,
   connectionStatus: 'connected' as 'connecting' | 'connected' | 'disconnected',
   startGame: vi.fn(),
   claimCard: vi.fn(),
@@ -275,14 +275,13 @@ describe('RoomLobby invite prompt', () => {
     ).toBeVisible()
   })
 
-  it('uses neutral unavailable-room copy with recovery actions', () => {
+  it('uses canonical not-found copy with recovery actions', () => {
     mocks.view = { status: 'not_found', roomCode: 'bcdf2' }
-    mocks.endedReason = 'unavailable'
     render(<RoomLobby roomCode="bcdf2" />)
 
     expect(
       screen.getByRole('heading', {
-        name: 'This room is no longer available',
+        name: 'Room not found',
       }),
     ).toBeVisible()
     expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute(

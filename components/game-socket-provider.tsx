@@ -29,7 +29,7 @@ import {
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
-export type RoomEndedReason = 'expired' | 'removed' | 'unavailable'
+export type RoomEndedReason = 'expired' | 'removed'
 
 type GameSocketContextValue = {
   connectionStatus: ConnectionStatus
@@ -71,7 +71,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const { clientToken, ensureClientToken } = usePlayerSession()
   const socketRef = useRef<GameSocket | null>(null)
   const watchedRoomsRef = useRef(new Map<string, number>())
-  const memberRoomsRef = useRef(new Set<string>())
   const synchronizedRef = useRef(false)
   const synchronizationGenerationRef = useRef(0)
   const receiveSnapshotRef = useRef<(snapshot: RoomSnapshot) => void>(() => {})
@@ -89,7 +88,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!clientToken) return
 
-    const memberRooms = memberRoomsRef.current
     const gameServerUrl =
       process.env.NEXT_PUBLIC_GAME_SERVER_URL?.trim() ||
       defaultGameServerUrl(window.location.hostname)
@@ -155,23 +153,13 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     }
     const receiveSnapshot = (snapshot: RoomSnapshot) => {
       if (isMemberSnapshot(snapshot)) {
-        memberRooms.add(snapshot.roomCode)
         setEndedRooms((rooms) => {
           if (!(snapshot.roomCode in rooms)) return rooms
           const next = { ...rooms }
           delete next[snapshot.roomCode]
           return next
         })
-      } else if (
-        snapshot.status === 'not_found' &&
-        memberRooms.has(snapshot.roomCode)
-      ) {
-        setEndedRooms((rooms) => ({
-          ...rooms,
-          [snapshot.roomCode]: 'unavailable',
-        }))
       } else if (snapshot.status === 'removed_from_room') {
-        memberRooms.delete(snapshot.roomCode)
         setEndedRooms((rooms) => ({
           ...rooms,
           [snapshot.roomCode]: 'removed',
@@ -190,7 +178,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     const handleDisconnect = () => markDisconnected()
     const handleConnectError = () => markDisconnected()
     const handleExpired = ({ roomCode }: { roomCode: string }) => {
-      memberRooms.delete(roomCode)
       setEndedRooms((current) => ({ ...current, [roomCode]: 'expired' }))
       setSnapshots((current) => ({
         ...current,
@@ -198,7 +185,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       }))
     }
     const handleRemoved = ({ roomCode }: { roomCode: string }) => {
-      memberRooms.delete(roomCode)
       setEndedRooms((current) => ({ ...current, [roomCode]: 'removed' }))
       setSnapshots((current) => ({
         ...current,
@@ -224,7 +210,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       synchronizationGenerationRef.current += 1
       synchronizedRef.current = false
       receiveSnapshotRef.current = () => {}
-      memberRooms.clear()
       setSnapshots({})
       setEndedRooms({})
       socket.disconnect()
@@ -271,9 +256,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
         (socket) => socket.emitWithAck('room:create', { name }),
       )
       if (socketRef.current !== socket) return unavailable()
-      if (result.status === 'success') {
-        memberRoomsRef.current.add(result.roomCode)
-      }
       return result
     },
     [],
@@ -290,9 +272,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
         (socket) => socket.emitWithAck('room:join', { roomCode, name }),
       )
       if (socketRef.current !== socket) return unavailable()
-      if (result.status === 'success') {
-        memberRoomsRef.current.add(result.roomCode)
-      }
       return result
     },
     [],
@@ -307,7 +286,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       )
       if (socketRef.current !== socket) return unavailable()
       if (result.status === 'success') {
-        memberRoomsRef.current.delete(roomCode)
         setEndedRooms((rooms) => {
           if (!(roomCode in rooms)) return rooms
           const next = { ...rooms }

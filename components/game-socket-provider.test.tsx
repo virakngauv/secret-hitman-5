@@ -346,7 +346,7 @@ describe('GameSocketProvider', () => {
     }
   })
 
-  it('classifies a missing member room after watch resume as unavailable', async () => {
+  it('keeps a missing member room in the canonical not-found state', async () => {
     const firstRoom = 'bcdf2'
     const resumedRoom = 'cdfg3'
     mocks.resumeSnapshots.set(resumedRoom, lobbySnapshot(resumedRoom))
@@ -374,7 +374,8 @@ describe('GameSocketProvider', () => {
       } as never)
     })
 
-    expect(screen.getByTestId('ended')).toHaveTextContent('unavailable')
+    expect(screen.getByTestId('ended')).toHaveTextContent('active')
+    expect(screen.getByTestId('status')).toHaveTextContent('not_found')
   })
 
   it('clears identity-scoped room state when the client token changes', async () => {
@@ -564,7 +565,7 @@ describe('GameSocketProvider', () => {
     })
   })
 
-  it('waits for resume to confirm that a room became unavailable', async () => {
+  it('waits for resume to confirm that a room was not found', async () => {
     const roomCode = 'bcdf2'
     mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
     render(
@@ -588,7 +589,7 @@ describe('GameSocketProvider', () => {
         snapshot: { status: 'not_found', roomCode },
       }),
     )
-    expect(screen.getByTestId('ended')).toHaveTextContent('unavailable')
+    expect(screen.getByTestId('ended')).toHaveTextContent('active')
     expect(screen.getByTestId('status')).toHaveTextContent('not_found')
   })
 
