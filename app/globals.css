@@ -397,7 +397,7 @@ button.word-card:focus-visible {
   }
 }
 
-@container word-card (max-width: 5.5rem) {
+@container word-card (max-width: 6rem) {
   .word-card-word-compact {
     font-size: clamp(0.68rem, 2vw, 1rem);
     letter-spacing: -0.035em;
@@ -787,7 +787,15 @@ button.word-card:focus-visible {
   }
 
   .game-intro .page-subtitle {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
 
   .game-layout {

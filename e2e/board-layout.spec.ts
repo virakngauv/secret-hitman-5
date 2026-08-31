@@ -277,6 +277,10 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
       await assertCardContentFits(page)
       await assertResponsiveCardGeometry(page, width)
       if (mobileViewportHeights.has(width)) {
+        await expect(page.locator('.game-intro .page-subtitle')).toHaveCSS(
+          'clip-path',
+          'inset(50%)',
+        )
         await assertBoardFitsViewport(page, height)
         await page.screenshot({
           path: testInfo.outputPath(`${phase}-${width}-viewport.png`),
