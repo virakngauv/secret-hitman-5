@@ -831,4 +831,49 @@ describe('Socket.IO Secret Hitman protocol', () => {
       },
     })
   })
+
+  it('keeps host authority through transport disconnects and multiple sockets sharing one identity', async () => {
+    const firstHostSocket = await connect(hostToken)
+    const secondHostSocket = await connect(hostToken)
+    const guest = await connect(guestToken)
+    const spectator = await connect(spectatorToken)
+    const created = await firstHostSocket.emitWithAck('room:create', {
+      name: 'Ada',
+    })
+    if (created.status !== 'success') throw new Error('Unable to create room.')
+    const { roomCode } = created
+
+    await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
+    await firstHostSocket.emitWithAck('game:start', { roomCode })
+    await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
+    const before = socketServer.gameServer.snapshot(hostToken, roomCode)
+    if (before.status !== 'hinting') throw new Error('Expected hinting phase.')
+
+    expect(
+      await secondHostSocket.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({
+      status: 'success',
+      snapshot: {
+        player: { playerId: before.player.playerId, role: 'host' },
+      },
+    })
+    firstHostSocket.disconnect()
+
+    expect(
+      await secondHostSocket.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({
+      status: 'success',
+      snapshot: {
+        player: { playerId: before.player.playerId, role: 'host' },
+      },
+    })
+    expect(
+      socketServer.gameServer.snapshot(spectatorToken, roomCode),
+    ).toMatchObject({
+      player: { role: 'player', participation: 'spectator' },
+    })
+    expect(
+      await spectator.emitWithAck('game:start-guessing', { roomCode }),
+    ).toMatchObject({ status: 'forbidden' })
+  })
 })

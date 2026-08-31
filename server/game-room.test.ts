@@ -1171,4 +1171,115 @@ describe('GameRoom single-round flow', () => {
     ).toMatchObject({ status: 'stale' })
     expect(guessing(room).scoreboard.map(({ score }) => score)).toEqual([0, 0])
   })
+
+  describe('spectator host succession', () => {
+    const spectatorToken = 'd'.repeat(32)
+
+    it('requires every earlier active member to leave before a spectator inherits host authority', () => {
+      const room = createRoom()
+      room.join(guestToken, 'Grace', 1_001)
+      room.start(hostToken, 1_002)
+      room.join(spectatorToken, 'Spectator', 1_003)
+
+      expect(hinting(room, spectatorToken)).toMatchObject({
+        player: { role: 'player', participation: 'spectator' },
+        board: null,
+        hint: null,
+      })
+      expect(room.startGuessing(spectatorToken)).toMatchObject({
+        status: 'forbidden',
+      })
+
+      room.leave(hostToken, 1_004)
+      expect(hinting(room, guestToken).player.role).toBe('host')
+      expect(hinting(room, spectatorToken).player.role).toBe('player')
+      expect(room.startGuessing(spectatorToken)).toMatchObject({
+        status: 'forbidden',
+      })
+
+      room.leave(guestToken, 1_005)
+      expect(hinting(room, spectatorToken).player).toMatchObject({
+        role: 'host',
+        participation: 'spectator',
+      })
+    })
+
+    it('lets a legitimate spectator successor operate host transitions without gaining player data or actions', () => {
+      const room = createRoom()
+      room.join(guestToken, 'Grace', 1_001)
+      room.start(hostToken, 1_002)
+      room.join(spectatorToken, 'Spectator', 1_003)
+      room.leave(hostToken, 1_004)
+      room.leave(guestToken, 1_005)
+
+      const inherited = hinting(room, spectatorToken)
+      expect(inherited).toMatchObject({
+        player: { role: 'host', participation: 'spectator' },
+        board: null,
+        hint: null,
+        allHintsSubmitted: true,
+      })
+      expect(JSON.stringify(inherited)).not.toContain(hostToken)
+      expect(JSON.stringify(inherited)).not.toContain(guestToken)
+      expect(
+        room.submitHint(spectatorToken, {
+          roomCode: room.code,
+          hint: 'No private seat',
+          targetCardIds: ['not-a-card'],
+        }),
+      ).toMatchObject({ status: 'forbidden' })
+
+      expect(room.startGuessing(spectatorToken, 1_006)).toEqual({
+        status: 'success',
+      })
+      const firstTurn = guessing(room, spectatorToken)
+      expect(firstTurn).toMatchObject({
+        player: { role: 'host', participation: 'spectator' },
+        canGuess: false,
+        canMarkDone: false,
+        canAdvanceTurn: true,
+      })
+      expect(
+        firstTurn.board.every(
+          ({ revealedKind, claimedBy, disabled }) =>
+            revealedKind === null && claimedBy.length === 0 && disabled,
+        ),
+      ).toBe(true)
+      expect(
+        room.finishGuessing(spectatorToken, {
+          roomCode: room.code,
+          turnId: firstTurn.turnId,
+        }),
+      ).toMatchObject({ status: 'forbidden' })
+      expect(
+        room.claimCard(spectatorToken, {
+          roomCode: room.code,
+          turnId: firstTurn.turnId,
+          commandId: 'spectator-host-claim',
+          cardId: firstTurn.board[0]!.id,
+        }),
+      ).toMatchObject({ status: 'forbidden' })
+
+      expect(room.advanceTurn(spectatorToken, 1_007)).toEqual({
+        status: 'success',
+      })
+      expect(guessing(room, spectatorToken).canAdvanceTurn).toBe(true)
+      expect(room.advanceTurn(spectatorToken, 1_008)).toEqual({
+        status: 'success',
+      })
+      expect(room.snapshotFor(spectatorToken)).toMatchObject({
+        status: 'finished',
+        player: { role: 'host', participation: 'spectator' },
+      })
+
+      room.join(hostToken, 'Ada', 1_009)
+      room.join(guestToken, 'Grace', 1_010)
+      expect(room.snapshotFor(hostToken)).toMatchObject({
+        player: { role: 'player', participation: 'player' },
+      })
+      expect(room.snapshotFor(guestToken)).toMatchObject({
+        player: { role: 'player', participation: 'player' },
+      })
+    })
+  })
 })
