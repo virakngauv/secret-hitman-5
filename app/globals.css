@@ -278,6 +278,8 @@ input {
   --word-card-padding: 0.4rem;
   --word-card-label-margin: 0.2rem;
 
+  container-name: word-card;
+  container-type: inline-size;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -356,7 +358,8 @@ button.word-card:focus-visible {
 
 .word-card-word {
   grid-row: 2;
-  justify-self: center;
+  display: block;
+  width: 100%;
   max-width: 100%;
   overflow-wrap: normal;
   font-size: clamp(0.9rem, 2vw, 1.16rem);
@@ -366,14 +369,44 @@ button.word-card:focus-visible {
   text-align: center;
 }
 
-/* 0.68rem is the bounded minimum for wide, unbroken board words. */
-.word-card-word-compact {
-  font-size: clamp(0.68rem, 2vw, 1rem);
-  letter-spacing: -0.035em;
+.word-card-word-single {
+  white-space: nowrap;
 }
 
+/* Compact likely-wide words only when the card itself is constrained. */
+@container word-card (max-width: 8rem) {
+  .word-card-word-wide {
+    font-size: clamp(0.68rem, 2vw, 1rem);
+    letter-spacing: -0.035em;
+  }
+}
+
+@container word-card (max-width: 5.5rem) {
+  .word-card-word-compact {
+    font-size: clamp(0.68rem, 2vw, 1rem);
+    letter-spacing: -0.035em;
+  }
+}
+
+/* 0.68rem is the bounded minimum before an extreme word may break. */
 .word-card-word-break {
+  font-size: clamp(0.68rem, 2vw, 1rem);
+  letter-spacing: -0.035em;
+  white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* Chromium 150+ can fit single words exactly without a heuristic. */
+@supports (text-fit: shrink) {
+  .word-card-word-single:not(.word-card-word-break) {
+    text-fit: shrink 59%;
+  }
+
+  .word-card-word-compact,
+  .word-card-word-wide {
+    font-size: clamp(0.9rem, 2vw, 1.16rem);
+    letter-spacing: -0.025em;
+  }
 }
 
 .word-card-claimers {

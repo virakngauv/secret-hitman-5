@@ -280,24 +280,43 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
           })),
         )
       try {
+        let normalFontSize: number | undefined
+        const supportsNativeTextFit = await page.evaluate(() =>
+          CSS.supports('text-fit', 'shrink 59%'),
+        )
         for (const { className, label, word } of [
           {
-            className: 'word-card-word word-card-word-compact',
+            className: 'word-card-word word-card-word-single',
+            label: 'cotton',
+            word: 'COTTON',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact',
+            label: 'unicorn',
+            word: 'UNICORN',
+          },
+          {
+            className:
+              'word-card-word word-card-word-single word-card-word-compact',
             label: 'telescope',
             word: 'TELESCOPE',
           },
           {
-            className: 'word-card-word word-card-word-compact',
+            className:
+              'word-card-word word-card-word-single word-card-word-compact',
             label: 'snowman',
             word: 'SNOWMAN',
           },
           {
-            className: 'word-card-word word-card-word-compact',
+            className:
+              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide',
             label: 'longest-deck-word',
             word: 'MILLIONAIRE',
           },
           {
-            className: 'word-card-word word-card-word-compact',
+            className:
+              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide',
             label: 'wide-deck-word',
             word: 'WASHINGTON',
           },
@@ -313,7 +332,7 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
           },
           {
             className:
-              'word-card-word word-card-word-compact word-card-word-break',
+              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide word-card-word-break',
             label: 'break-fallback',
             word: 'COUNTERREVOLUTIONARIES',
           },
@@ -328,6 +347,26 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
             { className, word },
           )
           await assertCardContentFits(page)
+          const fontSize = await grid
+            .locator('.word-card-word')
+            .first()
+            .evaluate((element) =>
+              Number.parseFloat(getComputedStyle(element).fontSize),
+            )
+          if (label === 'cotton') normalFontSize = fontSize
+          if (label === 'unicorn' && width === 1280) {
+            expect(fontSize).toBeCloseTo(normalFontSize!, 2)
+          }
+          if (label === 'wide-deck-word' && width === 1280) {
+            expect(fontSize).toBeCloseTo(normalFontSize!, 2)
+          }
+          if (
+            label === 'wide-deck-word' &&
+            width === 928 &&
+            !supportsNativeTextFit
+          ) {
+            expect(fontSize).toBeLessThan(normalFontSize!)
+          }
           if ([320, 359, 360, 390, 640, 1280].includes(width)) {
             await grid.screenshot({
               path: testInfo.outputPath(`${phase}-${width}-${label}.png`),
@@ -418,13 +457,26 @@ async function assertCardContentFits(page: Page) {
       }
       for (const content of contents) {
         const rect = content.getBoundingClientRect()
+        const style = getComputedStyle(content)
+        const usesTextFit = style
+          .getPropertyValue('text-fit')
+          .startsWith('shrink')
+        let textOverflows =
+          !content.classList.contains('word-card-claimers') &&
+          content.scrollWidth > content.clientWidth + 1
+        if (usesTextFit && content.firstChild) {
+          const textRange = document.createRange()
+          textRange.selectNodeContents(content)
+          const textRect = textRange.getBoundingClientRect()
+          textOverflows =
+            textRect.left < rect.left - 1 || textRect.right > rect.right + 1
+        }
         if (
           rect.left < box.left ||
           rect.right > box.right ||
           rect.top < box.top ||
           rect.bottom > box.bottom ||
-          (!content.classList.contains('word-card-claimers') &&
-            content.scrollWidth > content.clientWidth + 1)
+          textOverflows
         ) {
           issues.push(
             `Card ${index} (${content.textContent}): ${content.className} overflows ` +

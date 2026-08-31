@@ -60,6 +60,7 @@ describe('HintPhaseScreen', () => {
       'COUNTERREVOLUTIONARIES',
       'SNOWMAN',
       'GREAT BRITAIN',
+      'WASHINGTON',
     ]
     const view = {
       ...hintingView,
@@ -78,20 +79,33 @@ describe('HintPhaseScreen', () => {
       />,
     )
 
-    expect(screen.getByText('TELESCOPE')).toHaveClass('word-card-word-compact')
+    expect(screen.getByText('TELESCOPE')).toHaveClass(
+      'word-card-word-single',
+      'word-card-word-compact',
+    )
     expect(screen.getByText('TELESCOPE')).not.toHaveClass(
       'word-card-word-break',
     )
     expect(screen.getByText('NEW YORK')).not.toHaveClass(
+      'word-card-word-single',
       'word-card-word-compact',
     )
     expect(screen.getByText('COUNTERREVOLUTIONARIES')).toHaveClass(
       'word-card-word-compact',
+      'word-card-word-wide',
       'word-card-word-break',
     )
-    expect(screen.getByText('SNOWMAN')).toHaveClass('word-card-word-compact')
+    expect(screen.getByText('SNOWMAN')).toHaveClass(
+      'word-card-word-single',
+      'word-card-word-compact',
+    )
     expect(screen.getByText('GREAT BRITAIN')).not.toHaveClass(
       'word-card-word-compact',
+    )
+    expect(screen.getByText('WASHINGTON')).toHaveClass(
+      'word-card-word-single',
+      'word-card-word-compact',
+      'word-card-word-wide',
     )
   })
 

@@ -529,7 +529,9 @@ function CardWord({ word }: { word: string }) {
     <span
       className={cn(
         'word-card-word',
+        isSingleWord && 'word-card-word-single',
         isSingleWord && longestSegment >= 7 && 'word-card-word-compact',
+        isSingleWord && longestSegment >= 10 && 'word-card-word-wide',
         longestSegment >= 16 && 'word-card-word-break',
       )}
     >
