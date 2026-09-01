@@ -333,7 +333,7 @@ export function HintPhaseScreen({
                         ? 'Ready'
                         : 'Choosing'}
                   </span>
-                  {isHost && view.allHintsSubmitted && !isSelf && member ? (
+                  {isHost && player.submitted && !isSelf && member ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -368,9 +368,8 @@ export function HintPhaseScreen({
             <div className="host-control">
               <p className="host-control-label">Host control</p>
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                {view.allHintsSubmitted
-                  ? 'Review every hint, reject any that need revision, or start guessing.'
-                  : 'Start when all hints are locked.'}
+                Review clues as they arrive, reject any that need revision, or
+                start guessing once everyone is ready.
               </p>
               <Button
                 className="mt-4 w-full"
@@ -382,7 +381,8 @@ export function HintPhaseScreen({
             </div>
           ) : (
             <p className="sidebar-note">
-              The host will start guessing when everyone is ready.
+              Submitted clues appear here as players lock them in. The host will
+              start guessing when everyone is ready.
             </p>
           )}
         </aside>

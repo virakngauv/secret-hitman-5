@@ -383,6 +383,13 @@ describe('Socket.IO Secret Hitman protocol', () => {
         hint: 'Orbit',
         hintSubmitted: false,
         allHintsSubmitted: false,
+        hintStatuses: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Grace',
+            hint: 'Garden',
+            hintNumber: 3,
+          }),
+        ]),
         board: expect.arrayContaining(
           hostTargets.map((id) =>
             expect.objectContaining({ id, kind: 'target' }),
@@ -409,6 +416,19 @@ describe('Socket.IO Secret Hitman protocol', () => {
       status: 'hinting',
       player: { participation: 'player' },
       board: expect.any(Array),
+      allHintsSubmitted: false,
+      hintStatuses: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Ada',
+          hint: 'Galaxy',
+          hintNumber: 1,
+        }),
+        expect.objectContaining({
+          name: 'Grace',
+          hint: 'Garden',
+          hintNumber: 3,
+        }),
+      ]),
     })
     if (lateHint.status !== 'hinting' || !lateHint.board)
       throw new Error('Expected a late-player hinting board.')

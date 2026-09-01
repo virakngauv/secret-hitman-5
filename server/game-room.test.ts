@@ -1020,7 +1020,7 @@ describe('GameRoom single-round flow', () => {
     expect(guessing(room).hintNumber).toBe(3)
   })
 
-  it('reveals all submitted hints together and lets only the host reject another player', () => {
+  it('reveals submitted hints immediately and lets only the host reject another player', () => {
     const room = createRoom()
     room.join(guestToken, 'Grace', 1_001)
     room.start(hostToken, 1_002)
@@ -1032,7 +1032,7 @@ describe('GameRoom single-round flow', () => {
         hintNumber,
       })),
     ).toEqual([
-      { hint: null, hintNumber: null },
+      { hint: 'Orbit', hintNumber: 2 },
       { hint: null, hintNumber: null },
     ])
     const guestId = hinting(room, guestToken).player.playerId
@@ -1041,7 +1041,7 @@ describe('GameRoom single-round flow', () => {
         roomCode: room.code,
         playerId: guestId,
       }),
-    ).toMatchObject({ status: 'invalid' })
+    ).toMatchObject({ status: 'stale' })
 
     submitFirstHint(room, guestToken, 'New York')
     expect(hinting(room).hintStatuses).toEqual([
@@ -1084,8 +1084,8 @@ describe('GameRoom single-round flow', () => {
         name: 'Ada',
         submitted: true,
         needsRevision: false,
-        hint: null,
-        hintNumber: null,
+        hint: 'Orbit',
+        hintNumber: 2,
       }),
       expect.objectContaining({
         name: 'Grace',
@@ -1120,6 +1120,41 @@ describe('GameRoom single-round flow', () => {
       allHintsSubmitted: true,
       hintRejected: false,
     })
+  })
+
+  it('lets the host reject a submitted hint while another player is still choosing', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.join(thirdToken, 'Linus', 1_002)
+    room.start(hostToken, 1_003)
+    submitFirstHint(room, hostToken, 'Orbit')
+    submitFirstHint(room, guestToken, 'Garden')
+
+    const before = hinting(room, thirdToken)
+    expect(before.allHintsSubmitted).toBe(false)
+    expect(
+      before.hintStatuses.map(({ hint, hintNumber }) => ({ hint, hintNumber })),
+    ).toEqual([
+      { hint: 'Orbit', hintNumber: 2 },
+      { hint: 'Garden', hintNumber: 2 },
+      { hint: null, hintNumber: null },
+    ])
+
+    const guestId = hinting(room, guestToken).player.playerId
+    expect(
+      room.rejectHint(hostToken, { roomCode: room.code, playerId: guestId }),
+    ).toEqual({ status: 'success' })
+    expect(hinting(room).hintStatuses).toEqual([
+      expect.objectContaining({ name: 'Ada', hint: 'Orbit', hintNumber: 2 }),
+      expect.objectContaining({
+        name: 'Grace',
+        submitted: false,
+        needsRevision: true,
+        hint: null,
+        hintNumber: null,
+      }),
+      expect.objectContaining({ name: 'Linus', hint: null, hintNumber: null }),
+    ])
   })
 
   it('does not reject an inactive player fallback that cannot be revised', () => {

@@ -363,11 +363,10 @@ test.describe('Secret Hitman single round', () => {
       await late.getByRole('button', { name: 'Join', exact: true }).click()
       await expect(late.getByLabel('Your twelve word board')).toBeVisible()
       await expect(host.getByText('1/3')).toBeVisible()
+      await expect(late.getByLabel("Ada's hint: Orbit, 2")).toBeVisible()
 
-      await makeHint(guest, 'Garden', 2)
       await makeHint(late, 'New York', 3)
       await expect(host.getByLabel("Ada's hint: Orbit, 2")).toBeVisible()
-      await expect(host.getByLabel("Grace's hint: Garden, 2")).toBeVisible()
       await expect(host.getByLabel("Linus's hint: New York, 3")).toBeVisible()
 
       await host.getByRole('button', { name: "Reject Linus's hint" }).click()
@@ -383,6 +382,8 @@ test.describe('Secret Hitman single round', () => {
       await expect(host.getByText('Needs revision')).toBeVisible()
       await makeHint(late, 'City', 3)
       await expect(host.getByLabel("Linus's hint: City, 3")).toBeVisible()
+      await makeHint(guest, 'Garden', 2)
+      await expect(late.getByLabel("Grace's hint: Garden, 2")).toBeVisible()
 
       host.once('dialog', (dialog) => dialog.accept())
       await host

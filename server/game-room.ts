@@ -397,10 +397,10 @@ export class GameRoom {
         message: 'Only the host can reject a hint.',
       }
     }
-    if (this.phase !== 'hinting' || !this.allHintsSubmitted()) {
+    if (this.phase !== 'hinting') {
       return {
         status: 'invalid',
-        message: 'Hints can be rejected after every player locks one in.',
+        message: 'Hints can only be rejected during clue creation.',
       }
     }
 
@@ -420,7 +420,10 @@ export class GameRoom {
       }
     }
     if (!target.game?.hintSubmitted) {
-      return { status: 'stale', message: 'That hint is already being revised.' }
+      return {
+        status: 'stale',
+        message: 'That player does not have a submitted hint to reject.',
+      }
     }
 
     const game = this.requireGame()
@@ -632,8 +635,8 @@ export class GameRoom {
             name: player.name,
             submitted: seat?.hintSubmitted ?? false,
             needsRevision: seat?.hintRejected ?? false,
-            hint: allHintsSubmitted ? (seat?.hint ?? null) : null,
-            hintNumber: allHintsSubmitted ? (seat?.targetCount ?? null) : null,
+            hint: seat?.hintSubmitted ? (seat.hint ?? null) : null,
+            hintNumber: seat?.hintSubmitted ? seat.targetCount : null,
           }
         }),
         allHintsSubmitted,

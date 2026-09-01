@@ -8,7 +8,7 @@ hinting
   ├─ each current participant selects 1–5 targets from eight editable words around three locked civilians and a locked assassin
   ├─ the selection count becomes the hint number
   ├─ visitors may join as participants until guessing starts
-  ├─ after all hints are submitted, everyone reviews the shared clue list and the host may reject another player's clue, replacing that player's private board and clearing the rejected clue
+  ├─ each submitted clue and number appears immediately to everyone, and the host may reject it while other players are still choosing, replacing that player's private board and clearing the rejected clue
   └─ the host manually selects “Start guessing” after every accepted or revised hint is submitted
        ↓
 guessing
@@ -22,7 +22,7 @@ finished
 
 ## Personalized information
 
-- During hinting, each participant receives only their own private board. Submitted clue text and numbers remain hidden until every current participant submits, then become visible together without exposing boards. Spectators receive the shared check-in state but no board.
+- During hinting, each participant receives only their own private board. A submitted clue and number become visible immediately to every player and spectator without exposing its board or selected targets. The host may reject any submitted non-host clue while other participants are still choosing, giving that player a fresh private board for the revision.
 - During guessing, the clue-giver and finished pickers see every card type on the current board. Passing or selecting a civilian immediately ends that picker's turn and privately reveals the board. Active pickers and spectators see only publicly claimed target/civilian types until the board completes.
 - The first accepted assassin claim completes the board for every picker and reveals all roles and claimant attribution to every player and spectator. Finished pickers cannot make additional picks, including after a refresh or reconnect.
 - At the end of the game, the final board is fully revealed to everyone in the room.

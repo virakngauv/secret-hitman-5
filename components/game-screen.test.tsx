@@ -222,7 +222,7 @@ describe('HintPhaseScreen', () => {
       />,
     )
 
-    expect(screen.getByText('Start when all hints are locked.')).toBeVisible()
+    expect(screen.getByText(/review clues as they arrive/i)).toBeVisible()
     expect(screen.getByRole('main')).not.toHaveTextContent(/\btimers?\b/i)
     expect(
       screen.getByRole('button', { name: 'Start guessing' }),
@@ -466,14 +466,23 @@ describe('HintPhaseScreen', () => {
     ])
   })
 
-  it('reveals the complete clue list together and lets the host reject another hint', async () => {
+  it('reveals submitted clues and lets the host reject one before everyone is ready', async () => {
     const user = userEvent.setup()
     const onRejectHint = vi.fn().mockResolvedValue({ status: 'success' })
     const view = {
       ...hintingView,
-      allHintsSubmitted: true,
+      allHintsSubmitted: false,
       hint: 'Orbit',
       hintSubmitted: true,
+      members: [
+        ...hintingView.members,
+        {
+          playerId: 'player-3',
+          name: 'Linus',
+          role: 'player' as const,
+          participation: 'player' as const,
+        },
+      ],
       hintStatuses: [
         {
           ...hintingView.hintStatuses[0],
@@ -486,6 +495,14 @@ describe('HintPhaseScreen', () => {
           submitted: true,
           hint: 'New York',
           hintNumber: 3,
+        },
+        {
+          playerId: 'player-3',
+          name: 'Linus',
+          submitted: false,
+          needsRevision: false,
+          hint: null,
+          hintNumber: null,
         },
       ],
     }
@@ -503,6 +520,10 @@ describe('HintPhaseScreen', () => {
 
     expect(screen.getByLabelText("Ada's hint: Orbit, 2")).toBeVisible()
     expect(screen.getByLabelText("Grace's hint: New York, 3")).toBeVisible()
+    expect(screen.getByText('2/3')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Start guessing' }),
+    ).toBeDisabled()
     expect(
       screen.queryByRole('button', { name: "Reject Ada's hint" }),
     ).not.toBeInTheDocument()
