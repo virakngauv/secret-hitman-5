@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 9 as const
+export const GAME_PROTOCOL_VERSION = 10 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12

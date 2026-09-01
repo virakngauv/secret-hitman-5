@@ -57,6 +57,7 @@ describe('turn-bound commands', () => {
 
   it('rejects older clients that cannot send the turn-bound payload', () => {
     const token = 'a'.repeat(32)
+    expect(GAME_PROTOCOL_VERSION).toBe(10)
     expect(
       parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
     ).toBeNull()
@@ -97,6 +98,34 @@ describe('parseHint', () => {
       roomCode: 'bcdf2',
       hint: 'Blue sky',
       targetCardIds: ['p1-card-1'],
+    })
+  })
+
+  it('accepts card IDs from boards created after index 99', () => {
+    const turnId = 'abcdef01-2345-4abc-8def-0123456789ab'
+    expect(
+      parseSubmitHint({
+        roomCode: 'bcdf2',
+        hint: 'Orbit',
+        targetCardIds: ['p100-card-11'],
+      }),
+    ).toEqual({
+      roomCode: 'bcdf2',
+      hint: 'Orbit',
+      targetCardIds: ['p100-card-11'],
+    })
+    expect(
+      parseClaimCard({
+        roomCode: 'bcdf2',
+        commandId: 'claim-100',
+        turnId,
+        cardId: 'p100-card-11',
+      }),
+    ).toEqual({
+      roomCode: 'bcdf2',
+      commandId: 'claim-100',
+      turnId,
+      cardId: 'p100-card-11',
     })
   })
 
