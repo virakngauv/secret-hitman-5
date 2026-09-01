@@ -1075,7 +1075,7 @@ describe('GameRoom single-round flow', () => {
       }),
     ).toMatchObject({ status: 'forbidden' })
 
-    const submittedGuestBoard = hinting(room, guestToken).board
+    const submittedGuestBoard = hinting(room, guestToken).board!
     expect(
       room.rejectHint(hostToken, { roomCode: room.code, playerId: guestId }),
     ).toEqual({ status: 'success' })
@@ -1096,17 +1096,22 @@ describe('GameRoom single-round flow', () => {
       }),
     ])
     expect(hinting(room, guestToken)).toMatchObject({
-      hint: 'New York',
+      hint: null,
       hintSubmitted: false,
       hintRejected: true,
     })
-    expect(hinting(room, guestToken).board).toEqual(
-      submittedGuestBoard?.map((card) =>
-        !card.locked && card.kind === 'civilian'
-          ? { ...card, kind: 'neutral' }
-          : card,
-      ),
+    const replacementGuestBoard = hinting(room, guestToken).board!
+    expect(replacementGuestBoard).toHaveLength(12)
+    expect(replacementGuestBoard.map(({ id }) => id)).not.toEqual(
+      submittedGuestBoard.map(({ id }) => id),
     )
+    expect(replacementGuestBoard.every(({ id }) => id.startsWith('p2-'))).toBe(
+      true,
+    )
+    expect(
+      replacementGuestBoard.filter(({ kind }) => kind === 'neutral'),
+    ).toHaveLength(8)
+    expect(replacementGuestBoard.filter(({ locked }) => locked)).toHaveLength(4)
     expect(room.startGuessing(hostToken)).toMatchObject({ status: 'invalid' })
     expect(submitFirstHint(room, guestToken, 'City')).toEqual({
       status: 'success',

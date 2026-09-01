@@ -373,12 +373,15 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: "Reject Linus's hint" }).click()
       await expect(
         late.getByText(
-          'The host rejected this hint. Revise it, then lock it in again.',
+          'The host rejected this hint. Your board was refreshed; create and lock in a new hint.',
         ),
       ).toBeVisible()
+      await expect(late.getByLabel('Your hint')).toHaveValue('')
+      await expect(late.locator('button[data-card-kind="target"]')).toHaveCount(
+        0,
+      )
       await expect(host.getByText('Needs revision')).toBeVisible()
-      await late.getByLabel('Your hint').fill('City')
-      await late.getByRole('button', { name: 'Lock in hint · 3' }).click()
+      await makeHint(late, 'City', 3)
       await expect(host.getByLabel("Linus's hint: City, 3")).toBeVisible()
 
       host.once('dialog', (dialog) => dialog.accept())

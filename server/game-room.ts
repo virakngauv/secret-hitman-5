@@ -399,6 +399,12 @@ export class GameRoom {
       return { status: 'stale', message: 'That hint is already being revised.' }
     }
 
+    const game = this.requireGame()
+    const boardIndex = game.nextBoardIndex
+    game.nextBoardIndex += 1
+    target.game.board = createPlayerBoard(game.boardSeed, boardIndex)
+    target.game.hint = null
+    target.game.targetCount = 0
     target.game.hintSubmitted = false
     target.game.hintRejected = true
     this.touch(now)

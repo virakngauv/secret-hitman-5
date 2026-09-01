@@ -544,34 +544,68 @@ describe('HintPhaseScreen', () => {
     confirm.mockRestore()
   })
 
-  it('clearly tells a rejected author to revise and resubmit', () => {
-    render(
+  it('clears the rejected clue when the server replaces its private board', async () => {
+    const lockedBoard = hintingView.board!.map((card, index) =>
+      card.locked
+        ? card
+        : {
+            ...card,
+            kind: index < 2 ? ('target' as const) : ('civilian' as const),
+          },
+    )
+    const props = {
+      onSubmitHint: vi.fn(),
+      onUnlockHint: vi.fn(),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onStartGuessing: vi.fn(),
+    }
+    const view = render(
       <HintPhaseScreen
+        key="p0-card-0"
         view={{
           ...hintingView,
           hint: 'Orbit',
+          hintSubmitted: true,
+          board: lockedBoard,
+        }}
+        {...props}
+      />,
+    )
+    expect(screen.getByLabelText('Your hint')).toHaveValue('Orbit')
+
+    const replacementBoard = hintingView.board!.map((card) => ({
+      ...card,
+      id: card.id.replace('p0-', 'p2-'),
+      word: `NEW ${card.word}`,
+    }))
+    view.rerender(
+      <HintPhaseScreen
+        key="p2-card-0"
+        view={{
+          ...hintingView,
+          hint: null,
           hintRejected: true,
+          board: replacementBoard,
           hintStatuses: hintingView.hintStatuses.map((status) =>
             status.playerId === hintingView.player.playerId
               ? { ...status, needsRevision: true }
               : status,
           ),
         }}
-        onSubmitHint={vi.fn()}
-        onUnlockHint={vi.fn()}
-        onRejectHint={vi.fn()}
-        onRemovePlayer={vi.fn()}
-        onStartGuessing={vi.fn()}
+        {...props}
       />,
     )
 
     expect(
       screen.getByText(
-        'The host rejected this hint. Revise it, then lock it in again.',
+        'The host rejected this hint. Your board was refreshed; create and lock in a new hint.',
       ),
     ).toBeVisible()
     expect(screen.getByText('Needs revision')).toBeVisible()
+    expect(await screen.findByLabelText('Your hint')).toHaveValue('')
     expect(screen.getByLabelText('Your hint')).not.toHaveAttribute('readonly')
+    expect(screen.getByText('NEW MOON')).toBeVisible()
   })
 })
 

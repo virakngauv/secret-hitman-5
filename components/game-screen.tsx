@@ -249,7 +249,7 @@ export function HintPhaseScreen({
               <p className="form-message" role={error ? 'alert' : 'status'}>
                 {error ??
                   (view.hintRejected
-                    ? 'The host rejected this hint. Revise it, then lock it in again.'
+                    ? 'The host rejected this hint. Your board was refreshed; create and lock in a new hint.'
                     : view.hintSubmitted
                       ? 'Unlock your hint to revise the clue or target selection.'
                       : 'You can change your selection until you lock it in.')}

@@ -452,7 +452,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       socketServer.gameServer.snapshot(spectatorToken, roomCode),
     ).toMatchObject({
       status: 'hinting',
-      hint: 'New York',
+      hint: null,
       hintSubmitted: false,
       hintRejected: true,
     })
@@ -460,6 +460,14 @@ describe('Socket.IO Secret Hitman protocol', () => {
       spectatorToken,
       roomCode,
     )
+    if (rejectedSnapshot.status !== 'hinting' || !rejectedSnapshot.board)
+      throw new Error('Expected a replacement late-player board.')
+    const replacementLateTargets = rejectedSnapshot.board
+      .filter(({ kind }) => kind === 'neutral')
+      .slice(0, 2)
+      .map(({ id }) => id)
+    expect(replacementLateTargets).toHaveLength(2)
+    expect(replacementLateTargets).not.toEqual(lateTargets)
     latePlayer.disconnect()
     const reconnectedLate = await connect(spectatorToken)
     expect(
@@ -469,7 +477,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       await reconnectedLate.emitWithAck('game:submit-hint', {
         roomCode,
         hint: 'City',
-        targetCardIds: lateTargets,
+        targetCardIds: replacementLateTargets,
       }),
     ).toEqual({ status: 'success' })
 

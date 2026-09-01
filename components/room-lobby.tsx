@@ -105,6 +105,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
     case 'hinting':
       return (
         <HintPhaseScreen
+          key={snapshot.board?.[0]?.id ?? 'spectator'}
           view={snapshot}
           onSubmitHint={(hint, targetCardIds) =>
             game.submitHint({ roomCode, hint, targetCardIds })

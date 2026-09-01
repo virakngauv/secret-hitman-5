@@ -8,7 +8,7 @@ hinting
   ├─ each current participant selects 1–5 targets from eight editable words around three locked civilians and a locked assassin
   ├─ the selection count becomes the hint number
   ├─ visitors may join as participants until guessing starts
-  ├─ after all hints are submitted, everyone reviews the shared clue list and the host may reject another player's clue
+  ├─ after all hints are submitted, everyone reviews the shared clue list and the host may reject another player's clue, replacing that player's private board and clearing the rejected clue
   └─ the host manually selects “Start guessing” after every accepted or revised hint is submitted
        ↓
 guessing
