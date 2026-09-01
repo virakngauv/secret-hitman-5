@@ -111,7 +111,7 @@ export function HintPhaseScreen({
             />
           ) : (
             <>
-              <div className="mb-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem] sm:items-end">
+              <div className="hint-controls">
                 <div>
                   <label className="field-label" htmlFor="hint">
                     Your hint
@@ -136,7 +136,7 @@ export function HintPhaseScreen({
 
               <p
                 id="hint-editing-status"
-                className="mb-3 text-sm text-[var(--muted-foreground)]"
+                className="board-instructions text-sm text-[var(--muted-foreground)]"
               >
                 {view.hintSubmitted
                   ? 'Hint locked in. Your board and targets stay private until your turn.'
@@ -396,7 +396,7 @@ export function GuessingScreen({
         </div>
       </section>
 
-      <div className="game-layout mt-5">
+      <div className="game-layout game-board-layout">
         <section className="game-panel min-w-0">
           <div
             className="word-grid"
@@ -671,7 +671,7 @@ function GamePageShell({
   children: React.ReactNode
 }) {
   return (
-    <main className="min-h-screen px-4 py-5 sm:px-7 sm:py-7 lg:px-10">
+    <main className="game-page min-h-screen px-4 py-5 sm:px-7 sm:py-7 lg:px-10">
       <div className="mx-auto max-w-[90rem]">
         <header className="game-topbar">
           <Link
@@ -686,7 +686,7 @@ function GamePageShell({
           </Link>
           <span className="room-chip">ROOM {roomCode.toUpperCase()}</span>
         </header>
-        <div className="mt-10 mb-6 max-w-3xl sm:mt-14">
+        <div className="game-intro mt-10 mb-6 max-w-3xl sm:mt-14">
           <p className="page-eyebrow">{eyebrow}</p>
           <h1 className="page-title">{title}</h1>
           <p className="page-subtitle">{subtitle}</p>
