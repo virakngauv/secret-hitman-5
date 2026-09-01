@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   clientToken: 'a'.repeat(32) as string | null,
   handlers: new Map<string, (...args: never[]) => void>(),
   resumeSnapshots: new Map<string, RoomSnapshot>(),
+  delayResumes: false,
+  resumeCallbacks: new Map<string, (result: unknown) => void>(),
   emitWithAck: vi.fn(),
   io: vi.fn(),
   socket: {
@@ -22,19 +24,7 @@ const mocks = vi.hoisted(() => ({
     on: vi.fn((event: string, handler: (...args: never[]) => void) => {
       mocks.handlers.set(event, handler)
     }),
-    emit: vi.fn(
-      (
-        event: string,
-        payload: { roomCode?: string },
-        acknowledge?: (result: unknown) => void,
-      ) => {
-        if (event !== 'session:resume' || !acknowledge) return
-        const snapshot = payload.roomCode
-          ? mocks.resumeSnapshots.get(payload.roomCode)
-          : undefined
-        acknowledge({ status: 'success', snapshot })
-      },
-    ),
+    emit: vi.fn(),
     emitWithAck: (...args: unknown[]) => mocks.emitWithAck(...args),
     timeout: vi.fn(),
     disconnect: vi.fn(),
@@ -53,12 +43,12 @@ vi.mock('@/components/player-session-provider', () => ({
 }))
 
 function RoomProbe({ roomCode }: { roomCode: string }) {
-  const { snapshot, endedReason } = useRoomSnapshot(roomCode)
-  const { leaveRoom, removePlayer } = useGameSocket()
+  const { snapshot } = useRoomSnapshot(roomCode)
+  const { connectionStatus, leaveRoom, removePlayer } = useGameSocket()
   return (
     <>
       <div data-testid="status">{snapshot?.status ?? 'missing'}</div>
-      <div data-testid="ended">{endedReason ?? 'active'}</div>
+      <div data-testid="connection">{connectionStatus}</div>
       <button type="button" onClick={() => void leaveRoom(roomCode)}>
         Leave
       </button>
@@ -80,7 +70,7 @@ function MembershipProbe({
   roomCode: string
 }) {
   const { createRoom, joinRoom, leaveRoom } = useGameSocket()
-  const { endedReason } = useRoomSnapshot(roomCode)
+  useRoomSnapshot(roomCode)
   const [completed, setCompleted] = useState(false)
   const [resultStatus, setResultStatus] = useState('pending')
 
@@ -96,7 +86,6 @@ function MembershipProbe({
 
   return (
     <>
-      <div data-testid="membership-ended">{endedReason ?? 'active'}</div>
       <div data-testid="command-completed">{completed ? 'yes' : 'no'}</div>
       <div data-testid="command-status">{resultStatus}</div>
       <button type="button" onClick={() => void runCommand()}>
@@ -140,16 +129,41 @@ describe('GameSocketProvider', () => {
     mocks.clientToken = 'a'.repeat(32)
     mocks.handlers.clear()
     mocks.resumeSnapshots.clear()
+    mocks.delayResumes = false
+    mocks.resumeCallbacks.clear()
     mocks.emitWithAck.mockReset().mockResolvedValue({ status: 'success' })
     mocks.io.mockReset().mockReturnValue(mocks.socket)
     mocks.socket.connected = true
     mocks.socket.on.mockClear()
-    mocks.socket.emit.mockClear()
+    mocks.socket.emit
+      .mockReset()
+      .mockImplementation(
+        (
+          event: string,
+          payload: { roomCode?: string },
+          acknowledge?: (error: Error | null, result: unknown) => void,
+        ) => {
+          if (event !== 'session:resume' || !acknowledge || !payload.roomCode)
+            return
+          if (mocks.delayResumes) {
+            mocks.resumeCallbacks.set(payload.roomCode, (result) =>
+              acknowledge(null, result),
+            )
+            return
+          }
+          const snapshot = mocks.resumeSnapshots.get(payload.roomCode) ?? {
+            status: 'not_found',
+            roomCode: payload.roomCode,
+          }
+          acknowledge(null, { status: 'success', snapshot })
+        },
+      )
     mocks.socket.timeout.mockReset().mockReturnValue(mocks.socket)
     mocks.socket.disconnect.mockClear()
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllEnvs()
   })
 
@@ -225,9 +239,6 @@ describe('GameSocketProvider', () => {
         'server_unavailable',
       )
       act(() => mocks.handlers.get('server:shutdown')?.())
-      expect(screen.getByTestId('membership-ended')).toHaveTextContent(
-        command === 'leave' ? 'server_restart' : 'active',
-      )
     },
   )
 
@@ -325,7 +336,7 @@ describe('GameSocketProvider', () => {
       act(() =>
         acknowledge?.({ status: 'success', snapshot: lobbySnapshot('bcdf2') }),
       )
-      expect(screen.getByTestId('status')).toHaveTextContent('missing')
+      expect(screen.getByTestId('status')).toHaveTextContent('not_found')
       act(() =>
         mocks.handlers.get('room:snapshot')?.(lobbySnapshot('bcdf2') as never),
       )
@@ -361,7 +372,7 @@ describe('GameSocketProvider', () => {
     }
   })
 
-  it('classifies a missing room after watch resume as a server restart', async () => {
+  it('keeps a missing member room in the canonical not-found state', async () => {
     const firstRoom = 'bcdf2'
     const resumedRoom = 'cdfg3'
     mocks.resumeSnapshots.set(resumedRoom, lobbySnapshot(resumedRoom))
@@ -389,7 +400,7 @@ describe('GameSocketProvider', () => {
       } as never)
     })
 
-    expect(screen.getByTestId('ended')).toHaveTextContent('server_restart')
+    expect(screen.getByTestId('status')).toHaveTextContent('not_found')
   })
 
   it('clears identity-scoped room state when the client token changes', async () => {
@@ -406,8 +417,6 @@ describe('GameSocketProvider', () => {
       mocks.handlers.get('server:shutdown')?.()
     })
     expect(screen.getByTestId('status')).toHaveTextContent('lobby')
-    expect(screen.getByTestId('ended')).toHaveTextContent('server_restart')
-
     mocks.clientToken = 'b'.repeat(32)
     view.rerender(
       <GameSocketProvider>
@@ -416,12 +425,11 @@ describe('GameSocketProvider', () => {
     )
 
     await waitFor(() => expect(mocks.io).toHaveBeenCalledTimes(2))
-    expect(screen.getByTestId('status')).toHaveTextContent('missing')
-    expect(screen.getByTestId('ended')).toHaveTextContent('active')
+    expect(screen.getByTestId('status')).toHaveTextContent('not_found')
     expect(mocks.socket.disconnect).toHaveBeenCalledOnce()
   })
 
-  it('keeps an expired room classified as expired after shutdown', async () => {
+  it('keeps an expired snapshot after shutdown', async () => {
     const roomCode = 'bcdf2'
     mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
     render(
@@ -436,20 +444,19 @@ describe('GameSocketProvider', () => {
     )
 
     act(() => {
-      mocks.handlers.get('room:expired')?.({
+      mocks.handlers.get('room:snapshot')?.({
+        status: 'expired',
         roomCode,
-        reason: 'idle',
       } as never)
     })
 
-    expect(screen.getByTestId('status')).toHaveTextContent('not_found')
-    expect(screen.getByTestId('ended')).toHaveTextContent('expired')
+    expect(screen.getByTestId('status')).toHaveTextContent('expired')
 
     act(() => mocks.handlers.get('server:shutdown')?.())
-    expect(screen.getByTestId('ended')).toHaveTextContent('expired')
+    expect(screen.getByTestId('status')).toHaveTextContent('expired')
   })
 
-  it('classifies host removal as terminal and clears membership before shutdown', async () => {
+  it('keeps a removed snapshot after shutdown', async () => {
     const roomCode = 'bcdf2'
     mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
     render(
@@ -463,16 +470,20 @@ describe('GameSocketProvider', () => {
       expect(screen.getByTestId('status')).toHaveTextContent('lobby'),
     )
 
-    act(() => mocks.handlers.get('room:removed')?.({ roomCode } as never))
+    act(() =>
+      mocks.handlers.get('room:snapshot')?.({
+        status: 'removed_from_room',
+        roomCode,
+      } as never),
+    )
 
     expect(screen.getByTestId('status')).toHaveTextContent('removed_from_room')
-    expect(screen.getByTestId('ended')).toHaveTextContent('removed')
 
     act(() => mocks.handlers.get('server:shutdown')?.())
-    expect(screen.getByTestId('ended')).toHaveTextContent('removed')
+    expect(screen.getByTestId('status')).toHaveTextContent('removed_from_room')
   })
 
-  it('classifies a removed_from_room snapshot after reload as terminal', async () => {
+  it('accepts a removed_from_room snapshot after reload', async () => {
     const roomCode = 'bcdf2'
     render(
       <GameSocketProvider>
@@ -490,7 +501,6 @@ describe('GameSocketProvider', () => {
     })
 
     expect(screen.getByTestId('status')).toHaveTextContent('removed_from_room')
-    expect(screen.getByTestId('ended')).toHaveTextContent('removed')
   })
 
   it('sends a typed host-removal command through the socket timeout', async () => {
@@ -511,32 +521,199 @@ describe('GameSocketProvider', () => {
     })
   })
 
-  it.each(['create', 'join'] as const)(
-    'records membership after a successful %s acknowledgement',
-    async (command) => {
-      const user = userEvent.setup()
-      const roomCode = 'bcdf2'
-      mocks.emitWithAck.mockResolvedValue({ status: 'success', roomCode })
-      render(
-        <GameSocketProvider>
-          <MembershipProbe command={command} roomCode={roomCode} />
-        </GameSocketProvider>,
-      )
-      await waitFor(() => expect(mocks.io).toHaveBeenCalled())
+  it('retains the last snapshot and blocks mutations until resume synchronizes it', async () => {
+    const user = userEvent.setup()
+    const roomCode = 'bcdf2'
+    mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode={roomCode} />
+      </GameSocketProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('connection')).toHaveTextContent('connected'),
+    )
+    expect(screen.getByTestId('status')).toHaveTextContent('lobby')
 
-      await user.click(screen.getByRole('button', { name: command }))
-      await waitFor(() =>
-        expect(screen.getByTestId('command-completed')).toHaveTextContent(
-          'yes',
-        ),
-      )
-      act(() => mocks.handlers.get('server:shutdown')?.())
+    mocks.emitWithAck.mockClear()
+    mocks.socket.connected = false
+    act(() => mocks.handlers.get('disconnect')?.())
+    expect(screen.getByTestId('status')).toHaveTextContent('lobby')
+    expect(screen.getByTestId('connection')).toHaveTextContent('disconnected')
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(mocks.emitWithAck).not.toHaveBeenCalled()
 
-      expect(screen.getByTestId('membership-ended')).toHaveTextContent(
-        'server_restart',
+    mocks.delayResumes = true
+    mocks.socket.connected = true
+    act(() => mocks.handlers.get('connect')?.())
+    expect(screen.getByTestId('connection')).toHaveTextContent('connecting')
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(mocks.emitWithAck).not.toHaveBeenCalled()
+
+    act(() =>
+      mocks.resumeCallbacks.get(roomCode)?.({
+        status: 'success',
+        snapshot: lobbySnapshot(roomCode),
+      }),
+    )
+    expect(screen.getByTestId('connection')).toHaveTextContent('connected')
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(mocks.emitWithAck).toHaveBeenCalledWith('room:remove-player', {
+      roomCode,
+      playerId: 'player-2',
+    })
+  })
+
+  it('waits for resume to confirm that a room was not found', async () => {
+    const roomCode = 'bcdf2'
+    mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode={roomCode} />
+      </GameSocketProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('lobby'),
+    )
+
+    mocks.delayResumes = true
+    act(() => mocks.handlers.get('server:shutdown')?.())
+    expect(screen.getByTestId('status')).toHaveTextContent('lobby')
+
+    act(() => mocks.handlers.get('connect')?.())
+    act(() =>
+      mocks.resumeCallbacks.get(roomCode)?.({
+        status: 'success',
+        snapshot: { status: 'not_found', roomCode },
+      }),
+    )
+    expect(screen.getByTestId('status')).toHaveTextContent('not_found')
+  })
+
+  it('retries a failed resume while keeping mutations blocked', async () => {
+    const roomCode = 'bcdf2'
+    mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode={roomCode} />
+      </GameSocketProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('connection')).toHaveTextContent('connected'),
+    )
+
+    mocks.delayResumes = true
+    act(() => mocks.handlers.get('connect')?.())
+    expect(screen.getByTestId('connection')).toHaveTextContent('connecting')
+
+    vi.useFakeTimers()
+    act(() =>
+      mocks.resumeCallbacks.get(roomCode)?.({
+        status: 'server_unavailable',
+        message: 'Please try again.',
+      }),
+    )
+
+    expect(screen.getByTestId('connection')).toHaveTextContent('disconnected')
+    expect(screen.getByTestId('status')).toHaveTextContent('lobby')
+
+    act(() => vi.advanceTimersByTime(1_000))
+    expect(screen.getByTestId('connection')).toHaveTextContent('connecting')
+
+    act(() =>
+      mocks.resumeCallbacks.get(roomCode)?.({
+        status: 'success',
+        snapshot: lobbySnapshot(roomCode),
+      }),
+    )
+    expect(screen.getByTestId('connection')).toHaveTextContent('connected')
+  })
+
+  it('stops retrying resume after the bounded attempt limit', async () => {
+    const roomCode = 'bcdf2'
+    mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode={roomCode} />
+      </GameSocketProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('connection')).toHaveTextContent('connected'),
+    )
+
+    mocks.delayResumes = true
+    act(() => mocks.handlers.get('connect')?.())
+    vi.useFakeTimers()
+    const failResume = () =>
+      act(() =>
+        mocks.resumeCallbacks.get(roomCode)?.({
+          status: 'server_unavailable',
+          message: 'Please try again.',
+        }),
       )
-    },
-  )
+
+    failResume()
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      act(() => vi.advanceTimersByTime(1_000))
+      failResume()
+    }
+    const resumeCallCount = mocks.socket.emit.mock.calls.filter(
+      ([event]) => event === 'session:resume',
+    ).length
+
+    act(() => vi.advanceTimersByTime(10_000))
+
+    expect(
+      mocks.socket.emit.mock.calls.filter(
+        ([event]) => event === 'session:resume',
+      ),
+    ).toHaveLength(resumeCallCount)
+    expect(screen.getByTestId('connection')).toHaveTextContent('disconnected')
+  })
+
+  it('ignores a stale resume when connection changes repeat', async () => {
+    const roomCode = 'bcdf2'
+    mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode={roomCode} />
+      </GameSocketProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('connection')).toHaveTextContent('connected'),
+    )
+
+    mocks.delayResumes = true
+    mocks.socket.connected = false
+    act(() => mocks.handlers.get('disconnect')?.())
+    mocks.socket.connected = true
+    act(() => mocks.handlers.get('connect')?.())
+    const staleResume = mocks.resumeCallbacks.get(roomCode)
+
+    mocks.socket.connected = false
+    act(() => mocks.handlers.get('disconnect')?.())
+    mocks.socket.connected = true
+    act(() => mocks.handlers.get('connect')?.())
+    const currentResume = mocks.resumeCallbacks.get(roomCode)
+
+    act(() =>
+      staleResume?.({
+        status: 'success',
+        snapshot: { status: 'not_found', roomCode },
+      }),
+    )
+    expect(screen.getByTestId('connection')).toHaveTextContent('connecting')
+    expect(screen.getByTestId('status')).toHaveTextContent('lobby')
+
+    act(() =>
+      currentResume?.({
+        status: 'success',
+        snapshot: lobbySnapshot(roomCode),
+      }),
+    )
+    expect(screen.getByTestId('connection')).toHaveTextContent('connected')
+    expect(screen.getByTestId('status')).toHaveTextContent('lobby')
+  })
 
   it.each(['create', 'join'] as const)(
     'returns server_unavailable without emitting a disconnected %s command',
@@ -591,28 +768,6 @@ describe('GameSocketProvider', () => {
     expect(screen.getByTestId('command-status')).toHaveTextContent(
       'server_unavailable',
     )
-  })
-
-  it('does not mark an explicitly left room as ended on shutdown', async () => {
-    const user = userEvent.setup()
-    const roomCode = 'bcdf2'
-    mocks.resumeSnapshots.set(roomCode, lobbySnapshot(roomCode))
-    render(
-      <GameSocketProvider>
-        <RoomProbe roomCode={roomCode} />
-      </GameSocketProvider>,
-    )
-    await waitFor(() => expect(mocks.io).toHaveBeenCalled())
-    act(() => mocks.handlers.get('connect')?.())
-    await waitFor(() =>
-      expect(screen.getByTestId('status')).toHaveTextContent('lobby'),
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Leave' }))
-    await waitFor(() => expect(mocks.emitWithAck).toHaveBeenCalled())
-    act(() => mocks.handlers.get('server:shutdown')?.())
-
-    expect(screen.getByTestId('ended')).toHaveTextContent('active')
   })
 })
 

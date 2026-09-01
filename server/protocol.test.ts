@@ -901,4 +901,33 @@ describe('Socket.IO Secret Hitman protocol', () => {
       },
     })
   })
+
+  it('returns a resume snapshot only through the acknowledgement', async () => {
+    const client = await connect(hostToken)
+    const roomSnapshots = vi.fn<(snapshot: RoomSnapshot) => void>()
+    client.on('room:snapshot', roomSnapshots)
+
+    await expect(
+      client.emitWithAck('session:resume', { roomCode: 'bcdf2' }),
+    ).resolves.toEqual({
+      status: 'success',
+      snapshot: { status: 'not_found', roomCode: 'bcdf2' },
+    })
+    expect(roomSnapshots).not.toHaveBeenCalled()
+  })
+
+  it('returns an expired snapshot while the expiration tombstone is active', async () => {
+    const host = await connect(hostToken)
+    const created = await host.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Unable to create room.')
+
+    socketServer.gameServer.expireRooms(Date.now() + 3 * 60 * 60 * 1_000)
+
+    expect(
+      await host.emitWithAck('session:resume', { roomCode: created.roomCode }),
+    ).toEqual({
+      status: 'success',
+      snapshot: { status: 'expired', roomCode: created.roomCode },
+    })
+  })
 })
