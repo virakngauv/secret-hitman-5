@@ -528,7 +528,13 @@ describe('GameRoom single-round flow', () => {
     expect(guessing(room).canAdvanceTurn).toBe(true)
     expect(guessing(room).turnNumber).toBe(1)
     expect(guessing(room, guestToken).canAdvanceTurn).toBe(false)
-    expect(guessing(room, spectator).canAdvanceTurn).toBe(false)
+    const settledSpectator = guessing(room, spectator)
+    expect(settledSpectator.canAdvanceTurn).toBe(false)
+    expect(
+      settledSpectator.board.every(
+        ({ revealedKind, disabled }) => revealedKind !== null && disabled,
+      ),
+    ).toBe(true)
     expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
     // A delayed retry from the now-completed turn cannot skip new pickers.
     const next = guessing(room)
@@ -1204,7 +1210,7 @@ describe('GameRoom single-round flow', () => {
       })
     })
 
-    it('lets a legitimate spectator successor operate host transitions without gaining player data or actions', () => {
+    it('lets a legitimate spectator successor operate host transitions without gaining player-only actions', () => {
       const room = createRoom()
       room.join(guestToken, 'Grace', 1_001)
       room.start(hostToken, 1_002)
@@ -1242,7 +1248,7 @@ describe('GameRoom single-round flow', () => {
       expect(
         firstTurn.board.every(
           ({ revealedKind, claimedBy, disabled }) =>
-            revealedKind === null && claimedBy.length === 0 && disabled,
+            revealedKind !== null && claimedBy.length === 0 && disabled,
         ),
       ).toBe(true)
       expect(

@@ -566,7 +566,7 @@ describe('GuessingScreen messages', () => {
       clueGiverName: 'Grace',
       hint: 'Orbit',
       hintNumber: 1,
-      boardCompleted: true,
+      boardCompleted: false,
       board: [
         {
           id: 'claimed-target',

@@ -461,7 +461,7 @@ export class GameRoom {
         message: 'The game is not in the guessing phase.',
       }
     }
-    if (this.hasActiveGuessers()) {
+    if (!this.isCurrentTurnSettled()) {
       return {
         status: 'invalid',
         message: 'Waiting for players to finish guessing.',
@@ -536,9 +536,10 @@ export class GameRoom {
     const clueSeat = clueGiver.game
     if (!clueSeat?.hint)
       throw new Error('Current clue giver is missing a hint.')
+    const turnSettled = this.isCurrentTurnSettled()
     const revealAll =
       this.phase === 'finished' ||
-      this.requireGame().turnCompleted ||
+      turnSettled ||
       member === clueGiver ||
       member.game?.turnState === 'done'
     const board = clueSeat.board.map((card) => {
@@ -626,7 +627,7 @@ export class GameRoom {
         Boolean(member.game) &&
         member !== clueGiver &&
         member.game?.turnState === 'guessing',
-      canAdvanceTurn: member.role === 'host' && !this.hasActiveGuessers(),
+      canAdvanceTurn: member.role === 'host' && turnSettled,
     }
   }
 
@@ -729,6 +730,10 @@ export class GameRoom {
         player !== clueGiver &&
         player.game?.turnState === 'guessing',
     )
+  }
+
+  private isCurrentTurnSettled() {
+    return !this.hasActiveGuessers()
   }
 
   private allTargetsClaimed() {

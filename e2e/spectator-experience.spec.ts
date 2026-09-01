@@ -90,10 +90,20 @@ test.describe('spectator experience audit', () => {
       await expect(
         host.getByRole('button', { name: 'Next hint' }),
       ).toBeEnabled()
+      await expect(
+        spectator.getByLabel('Completed and fully revealed board'),
+      ).toBeVisible()
+      await expect(
+        spectator.locator('button[data-card-kind="hidden"]'),
+      ).toHaveCount(0)
       await capture(spectator, testInfo, '04-target-and-passes.png')
 
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(spectator.getByText('Garden', { exact: true })).toBeVisible()
+      await expect(spectator.getByLabel('Current guessing board')).toBeVisible()
+      await expect(
+        spectator.locator('button[data-card-kind="hidden"]'),
+      ).toHaveCount(12)
       const civilianId = await guest
         .locator('button[data-card-kind="civilian"]')
         .first()
@@ -129,7 +139,10 @@ test.describe('spectator experience audit', () => {
 
       await spectator.context().setOffline(true)
       await expect(
-        spectator.getByRole('heading', { name: 'Reconnecting' }),
+        spectator.getByText('Reconnecting · updates may be delayed'),
+      ).toBeVisible()
+      await expect(
+        spectator.getByLabel('Completed and fully revealed board'),
       ).toBeVisible()
       await capture(spectator, testInfo, '07-reconnecting.png')
       await spectator.context().setOffline(false)

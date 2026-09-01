@@ -323,6 +323,9 @@ export function GuessingScreen({
   const [isAdvancing, setIsAdvancing] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const isClueGiver = view.player.playerId === view.clueGiverId
+  const fullyRevealed = view.board.every(
+    ({ revealedKind }) => revealedKind !== null,
+  )
   const players = view.scoreboard.filter(
     ({ participation }) => participation === 'player',
   )
@@ -394,7 +397,7 @@ export function GuessingScreen({
           <div
             className="word-grid"
             aria-label={
-              view.boardCompleted
+              fullyRevealed
                 ? 'Completed and fully revealed board'
                 : 'Current guessing board'
             }

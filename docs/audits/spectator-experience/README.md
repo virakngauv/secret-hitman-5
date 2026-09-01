@@ -57,10 +57,10 @@ and are committed beside this report.
 | 1    | Join after the game starts, during clue creation | [Waiting state, readiness only, no board or hint form](assets/01-hinting-waiting-desktop.png)                    |
 | 2    | First guessing turn, desktop                     | [Current clue and number, classified disabled board, player states and scores](assets/02-first-turn-desktop.png) |
 | 3    | Same turn at 390 x 844                           | [Readable responsive view; the scorecard remains below the visible board](assets/03-first-turn-mobile.png)       |
-| 4    | Target claimed and remaining guessers pass       | [Public role, picker, score, and done states update](assets/04-target-and-passes.png)                            |
+| 4    | Target claimed and remaining guessers pass       | [Settled turn reveals the full board alongside picker, score, and done states](assets/04-target-and-passes.png)  |
 | 5    | Civilian selected                                | [Public role and picker appear; affected guesser becomes done](assets/05-civilian-turn.png)                      |
 | 6    | Assassin selected                                | [Board completes and every role becomes public](assets/06-assassin-reveal.png)                                   |
-| 7    | Temporary network loss                           | [Reconnecting state appears](assets/07-reconnecting.png); restored identity remains a spectator                  |
+| 7    | Temporary network loss                           | [Inline reconnect status preserves the board](assets/07-reconnecting.png); restored identity remains a spectator |
 | 8    | Host finishes the game                           | [Final standings and revealed board](assets/08-final-standings.png) persist after refresh                        |
 
 The live baseline did not include participant join/removal during clue creation
@@ -83,17 +83,18 @@ duplicate those tickets.
    card is classified and disabled. The clue-giver and active players receive
    their appropriate different views at the same moment.
 4. **Target and passing — functionally correct, weak narrative.** Public claims,
-   picker attribution, scores, and `Done this turn` states update. A pass has no
-   durable public event, and the actor-only feedback sentence is not shared, so
-   the spectator must infer why progress stopped.
+   picker attribution, scores, and `Done this turn` states update. Once every
+   guesser is done, the same settled-turn rule that enables host advancement
+   fully reveals the board to players and spectators. A pass still has no
+   durable public event, so the spectator must infer why progress stopped.
 5. **Civilian and assassin — healthy reveal rules.** A civilian reveals only
    after its public claim. An assassin is visible to its picker, then all roles
    become public when the board completes. The spectator never sees a private
    finished-picker reveal before the shared completion boundary.
-6. **Reconnect — identity-safe, visually abrupt.** Refresh and reconnect restore
-   the same spectator identity without participant or host promotion. During a
-   network interruption, the whole game view is replaced; #37 already owns that
-   experience.
+6. **Reconnect — identity-safe and context-preserving.** Refresh and reconnect
+   restore the same spectator identity without participant or host promotion.
+   During a network interruption, the board remains visible beneath an inline
+   reconnect status while room actions are synchronized.
 7. **Results — legible baseline.** Scores, winners, picker attribution, and all
    card roles are readable. #17's in-progress dedicated scoreboard will change
    this surface, so its result should be rechecked with the same spectator test.
@@ -105,8 +106,7 @@ duplicate those tickets.
 | Rank | Finding                                                                                                                    | Impact | Effort | Disposition                    |
 | ---- | -------------------------------------------------------------------------------------------------------------------------- | ------ | ------ | ------------------------------ |
 | 1    | Spectators cannot tell why every guesser became done or why a turn completed without inferring it from several UI changes. | Medium | Medium | Focused follow-up ticket       |
-| 2    | Reconnect temporarily replaces the game context.                                                                           | Medium | Medium | Already tracked by #37         |
-| 3    | Current mobile game chrome can require excess scrolling.                                                                   | Medium | Medium | Already tracked by #26 and #54 |
+| 2    | Current mobile game chrome can require excess scrolling.                                                                   | Medium | Medium | Already tracked by #26 and #54 |
 
 ### Privacy and room integrity
 
