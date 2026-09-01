@@ -306,7 +306,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   )
   const rejectHint = useCallback(
     async (payload: RejectHintPayload): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:reject-hint', payload),
       ),
     [],
