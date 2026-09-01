@@ -18,20 +18,31 @@ export const MAX_ACTIVE_ROOMS = 25_000
 
 export type RoomExpirationPolicy = {
   roomIdleMs: number
+  expiredRoomTombstoneMs?: number
 }
 
-export const DEFAULT_ROOM_EXPIRATION: RoomExpirationPolicy = {
+export const DEFAULT_ROOM_EXPIRATION = {
   roomIdleMs: 2 * 60 * 60 * 1_000,
-}
+  expiredRoomTombstoneMs: 5 * 60 * 1_000,
+} satisfies Required<RoomExpirationPolicy>
 
 export class GameServer {
   readonly rooms = new Map<string, GameRoom>()
+  private readonly expiredRooms = new Map<string, number>()
+  private readonly expiration: Required<RoomExpirationPolicy>
 
   constructor(
-    private readonly expiration = DEFAULT_ROOM_EXPIRATION,
+    expiration: RoomExpirationPolicy = DEFAULT_ROOM_EXPIRATION,
     private readonly random: () => number = () => randomInt(2 ** 30) / 2 ** 30,
     private readonly maxRooms = MAX_ACTIVE_ROOMS,
-  ) {}
+  ) {
+    this.expiration = {
+      roomIdleMs: expiration.roomIdleMs,
+      expiredRoomTombstoneMs:
+        expiration.expiredRoomTombstoneMs ??
+        DEFAULT_ROOM_EXPIRATION.expiredRoomTombstoneMs,
+    }
+  }
 
   createRoom(
     token: string,
@@ -45,7 +56,7 @@ export class GameServer {
       }
     }
 
-    const roomCode = this.availableRoomCode()
+    const roomCode = this.availableRoomCode(now)
     if (!roomCode) {
       return {
         status: 'server_unavailable',
@@ -129,20 +140,30 @@ export class GameServer {
     return this.withRoom(roomCode, (room) => room.advanceTurn(token, now))
   }
 
-  snapshot(token: string, roomCode: string): RoomSnapshot {
-    return (
-      this.rooms.get(roomCode)?.snapshotFor(token) ?? {
-        status: 'not_found',
-        roomCode,
-      }
-    )
+  snapshot(token: string, roomCode: string, now = Date.now()): RoomSnapshot {
+    const room = this.rooms.get(roomCode)
+    if (room) return room.snapshotFor(token)
+
+    const tombstoneExpiresAt = this.expiredRooms.get(roomCode)
+    if (tombstoneExpiresAt !== undefined) {
+      if (now < tombstoneExpiresAt) return { status: 'expired', roomCode }
+      this.expiredRooms.delete(roomCode)
+    }
+    return { status: 'not_found', roomCode }
   }
 
   expireRooms(now = Date.now()) {
+    this.pruneExpiredRoomTombstones(now)
     const expired: string[] = []
     for (const [roomCode, room] of this.rooms) {
       if (now - room.lastMeaningfulActivityAt >= this.expiration.roomIdleMs) {
         this.rooms.delete(roomCode)
+        if (this.expiration.expiredRoomTombstoneMs > 0) {
+          this.expiredRooms.set(
+            roomCode,
+            now + this.expiration.expiredRoomTombstoneMs,
+          )
+        }
         expired.push(roomCode)
       }
     }
@@ -159,17 +180,32 @@ export class GameServer {
       : { status: 'room_not_found', message: 'Room not found.' }
   }
 
-  private availableRoomCode() {
+  private availableRoomCode(now: number) {
     for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
       const code = `${pick(ROOM_CODE_CONSONANTS, this.random)}${pick(ROOM_CODE_CONSONANTS, this.random)}${pick(ROOM_CODE_CONSONANTS, this.random)}${pick(ROOM_CODE_CONSONANTS, this.random)}${pick(ROOM_CODE_FINAL_CHARACTERS, this.random)}`
-      if (!this.rooms.has(code)) return code
+      if (this.isRoomCodeAvailable(code, now)) return code
     }
     for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
       const bytes = randomBytes(5)
       const code = `${ROOM_CODE_CONSONANTS[bytes[0]! % ROOM_CODE_CONSONANTS.length]}${ROOM_CODE_CONSONANTS[bytes[1]! % ROOM_CODE_CONSONANTS.length]}${ROOM_CODE_CONSONANTS[bytes[2]! % ROOM_CODE_CONSONANTS.length]}${ROOM_CODE_CONSONANTS[bytes[3]! % ROOM_CODE_CONSONANTS.length]}${ROOM_CODE_FINAL_CHARACTERS[bytes[4]! % ROOM_CODE_FINAL_CHARACTERS.length]}`
-      if (!this.rooms.has(code)) return code
+      if (this.isRoomCodeAvailable(code, now)) return code
     }
     return null
+  }
+
+  private isRoomCodeAvailable(roomCode: string, now: number) {
+    if (this.rooms.has(roomCode)) return false
+    const tombstoneExpiresAt = this.expiredRooms.get(roomCode)
+    if (tombstoneExpiresAt === undefined) return true
+    if (now < tombstoneExpiresAt) return false
+    this.expiredRooms.delete(roomCode)
+    return true
+  }
+
+  private pruneExpiredRoomTombstones(now: number) {
+    for (const [roomCode, expiresAt] of this.expiredRooms) {
+      if (now >= expiresAt) this.expiredRooms.delete(roomCode)
+    }
   }
 }
 

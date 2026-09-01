@@ -15,7 +15,6 @@ import {
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
   GAME_PROTOCOL_VERSION,
-  isMemberSnapshot,
   type CardKind,
   type ClaimCardPayload,
   type ClientToServerEvents,
@@ -29,12 +28,10 @@ import {
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
-export type RoomEndedReason = 'expired' | 'removed' | 'server_restart'
 
 type GameSocketContextValue = {
   connectionStatus: ConnectionStatus
   snapshots: Readonly<Record<string, RoomSnapshot>>
-  endedRooms: Readonly<Record<string, RoomEndedReason>>
   watchRoom: (roomCode: string) => () => void
   createRoom: (name: string) => Promise<CommandResult<{ roomCode: string }>>
   joinRoom: (
@@ -56,6 +53,8 @@ type GameSocketContextValue = {
 
 const GameSocketContext = createContext<GameSocketContextValue | null>(null)
 const COMMAND_TIMEOUT_MS = 6_000
+const RESUME_RETRY_DELAY_MS = 1_000
+const MAX_RESUME_RETRIES = 3
 const DEFAULT_GAME_SERVER_PORT = 3200
 
 export function defaultGameServerUrl(hostname: string): string {
@@ -71,14 +70,13 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const { clientToken, ensureClientToken } = usePlayerSession()
   const socketRef = useRef<GameSocket | null>(null)
   const watchedRoomsRef = useRef(new Map<string, number>())
-  const memberRoomsRef = useRef(new Set<string>())
+  const synchronizedRef = useRef(false)
+  const synchronizationGenerationRef = useRef(0)
   const receiveSnapshotRef = useRef<(snapshot: RoomSnapshot) => void>(() => {})
+  const resumeWatchedRoomsRef = useRef<() => void>(() => {})
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting')
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({})
-  const [endedRooms, setEndedRooms] = useState<Record<string, RoomEndedReason>>(
-    {},
-  )
 
   useEffect(() => {
     if (clientToken === null) ensureClientToken()
@@ -87,7 +85,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!clientToken) return
 
-    const memberRooms = memberRoomsRef.current
     const gameServerUrl =
       process.env.NEXT_PUBLIC_GAME_SERVER_URL?.trim() ||
       defaultGameServerUrl(window.location.hostname)
@@ -117,104 +114,115 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       reconnection: true,
     })
     socketRef.current = socket
+    let resumeRetryTimer: ReturnType<typeof setTimeout> | null = null
+    let resumeRetryAttempts = 0
 
-    const resumeWatchedRooms = () => {
-      setConnectionStatus('connected')
-      for (const roomCode of watchedRoomsRef.current.keys()) {
-        socket.emit('session:resume', { roomCode }, (result) => {
-          if (socketRef.current !== socket) return
-          if (result.status === 'success' && result.snapshot) {
-            receiveSnapshot(result.snapshot)
-          }
-        })
+    const clearResumeRetry = () => {
+      if (resumeRetryTimer === null) return
+      clearTimeout(resumeRetryTimer)
+      resumeRetryTimer = null
+    }
+    const scheduleResumeRetry = () => {
+      if (!socket.connected || resumeRetryAttempts >= MAX_RESUME_RETRIES) return
+      resumeRetryAttempts += 1
+      resumeRetryTimer = setTimeout(() => {
+        resumeRetryTimer = null
+        if (socketRef.current === socket && socket.connected) {
+          resumeWatchedRooms(true)
+        }
+      }, RESUME_RETRY_DELAY_MS)
+    }
+    function resumeWatchedRooms(isRetry = false) {
+      if (!isRetry) {
+        clearResumeRetry()
+        resumeRetryAttempts = 0
+      }
+      const generation = ++synchronizationGenerationRef.current
+      synchronizedRef.current = false
+      setConnectionStatus('connecting')
+      const roomCodes = [...watchedRoomsRef.current.keys()]
+      if (roomCodes.length === 0) {
+        synchronizedRef.current = true
+        setConnectionStatus('connected')
+        return
+      }
+
+      let remaining = roomCodes.length
+      for (const roomCode of roomCodes) {
+        socket
+          .timeout(COMMAND_TIMEOUT_MS)
+          .emit('session:resume', { roomCode }, (error, result) => {
+            if (
+              socketRef.current !== socket ||
+              synchronizationGenerationRef.current !== generation ||
+              !socket.connected
+            )
+              return
+            if (!error && result.status === 'success' && result.snapshot) {
+              remaining -= 1
+              if (remaining === 0) {
+                clearResumeRetry()
+                resumeRetryAttempts = 0
+                synchronizedRef.current = true
+                setConnectionStatus('connected')
+              }
+              receiveSnapshot(result.snapshot)
+            } else {
+              synchronizationGenerationRef.current += 1
+              synchronizedRef.current = false
+              setConnectionStatus('disconnected')
+              scheduleResumeRetry()
+            }
+          })
       }
     }
+    resumeWatchedRoomsRef.current = () => resumeWatchedRooms()
     const receiveSnapshot = (snapshot: RoomSnapshot) => {
-      if (isMemberSnapshot(snapshot)) {
-        memberRooms.add(snapshot.roomCode)
-        setEndedRooms((rooms) => {
-          if (!(snapshot.roomCode in rooms)) return rooms
-          const next = { ...rooms }
-          delete next[snapshot.roomCode]
-          return next
-        })
-      } else if (
-        snapshot.status === 'not_found' &&
-        memberRooms.has(snapshot.roomCode)
-      ) {
-        setEndedRooms((rooms) => ({
-          ...rooms,
-          [snapshot.roomCode]: 'server_restart',
-        }))
-      } else if (snapshot.status === 'removed_from_room') {
-        memberRooms.delete(snapshot.roomCode)
-        setEndedRooms((rooms) => ({
-          ...rooms,
-          [snapshot.roomCode]: 'removed',
-        }))
-      }
       setSnapshots((current) => {
         return { ...current, [snapshot.roomCode]: snapshot }
       })
     }
     receiveSnapshotRef.current = receiveSnapshot
-    const handleDisconnect = () => setConnectionStatus('disconnected')
-    const handleConnectError = () => setConnectionStatus('disconnected')
-    const handleExpired = ({ roomCode }: { roomCode: string }) => {
-      memberRooms.delete(roomCode)
-      setEndedRooms((current) => ({ ...current, [roomCode]: 'expired' }))
-      setSnapshots((current) => ({
-        ...current,
-        [roomCode]: { status: 'not_found', roomCode },
-      }))
-    }
-    const handleRemoved = ({ roomCode }: { roomCode: string }) => {
-      memberRooms.delete(roomCode)
-      setEndedRooms((current) => ({ ...current, [roomCode]: 'removed' }))
-      setSnapshots((current) => ({
-        ...current,
-        [roomCode]: { status: 'removed_from_room', roomCode },
-      }))
-    }
-    const handleShutdown = () => {
-      const ended: Record<string, RoomEndedReason> = {}
-      for (const roomCode of memberRooms) {
-        ended[roomCode] = 'server_restart'
-      }
-      memberRooms.clear()
-      setEndedRooms((current) => ({ ...current, ...ended }))
+    const markDisconnected = () => {
+      clearResumeRetry()
+      resumeRetryAttempts = 0
+      synchronizationGenerationRef.current += 1
+      synchronizedRef.current = false
       setConnectionStatus('disconnected')
+    }
+    const handleDisconnect = () => markDisconnected()
+    const handleConnectError = () => markDisconnected()
+    const handleShutdown = () => {
+      markDisconnected()
     }
 
     socket.on('connect', resumeWatchedRooms)
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectError)
     socket.on('room:snapshot', receiveSnapshot)
-    socket.on('room:removed', handleRemoved)
-    socket.on('room:expired', handleExpired)
     socket.on('server:shutdown', handleShutdown)
+
+    if (socket.connected) resumeWatchedRooms()
 
     return () => {
       socketRef.current = null
+      synchronizationGenerationRef.current += 1
+      synchronizedRef.current = false
       receiveSnapshotRef.current = () => {}
-      memberRooms.clear()
+      resumeWatchedRoomsRef.current = () => {}
+      clearResumeRetry()
       setSnapshots({})
-      setEndedRooms({})
       socket.disconnect()
     }
   }, [clientToken])
 
   const watchRoom = useCallback((roomCode: string) => {
     const watchers = watchedRoomsRef.current
-    watchers.set(roomCode, (watchers.get(roomCode) ?? 0) + 1)
+    const existingWatchers = watchers.get(roomCode) ?? 0
+    watchers.set(roomCode, existingWatchers + 1)
     const socket = socketRef.current
-    if (socket?.connected) {
-      socket.emit('session:resume', { roomCode }, (result) => {
-        if (socketRef.current !== socket) return
-        if (result.status === 'success' && result.snapshot) {
-          receiveSnapshotRef.current(result.snapshot)
-        }
-      })
+    if (socket?.connected && existingWatchers === 0) {
+      resumeWatchedRoomsRef.current()
     }
 
     return () => {
@@ -227,13 +235,12 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const createRoom = useCallback(
     async (name: string): Promise<CommandResult<{ roomCode: string }>> => {
       const socket = socketRef.current
-      const result = await runCommand(socket, (socket) =>
-        socket.emitWithAck('room:create', { name }),
+      const result = await runCommand(
+        socket,
+        synchronizedRef.current,
+        (socket) => socket.emitWithAck('room:create', { name }),
       )
       if (socketRef.current !== socket) return unavailable()
-      if (result.status === 'success') {
-        memberRoomsRef.current.add(result.roomCode)
-      }
       return result
     },
     [],
@@ -244,13 +251,12 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       name: string,
     ): Promise<CommandResult<{ roomCode: string }>> => {
       const socket = socketRef.current
-      const result = await runCommand(socket, (socket) =>
-        socket.emitWithAck('room:join', { roomCode, name }),
+      const result = await runCommand(
+        socket,
+        synchronizedRef.current,
+        (socket) => socket.emitWithAck('room:join', { roomCode, name }),
       )
       if (socketRef.current !== socket) return unavailable()
-      if (result.status === 'success') {
-        memberRoomsRef.current.add(result.roomCode)
-      }
       return result
     },
     [],
@@ -258,54 +264,47 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const leaveRoom = useCallback(
     async (roomCode: string): Promise<CommandResult> => {
       const socket = socketRef.current
-      const result = await runCommand(socket, (socket) =>
-        socket.emitWithAck('room:leave', { roomCode }),
+      const result = await runCommand(
+        socket,
+        synchronizedRef.current,
+        (socket) => socket.emitWithAck('room:leave', { roomCode }),
       )
       if (socketRef.current !== socket) return unavailable()
-      if (result.status === 'success') {
-        memberRoomsRef.current.delete(roomCode)
-        setEndedRooms((rooms) => {
-          if (!(roomCode in rooms)) return rooms
-          const next = { ...rooms }
-          delete next[roomCode]
-          return next
-        })
-      }
       return result
     },
     [],
   )
   const startGame = useCallback(
     async (roomCode: string): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:start', { roomCode }),
       ),
     [],
   )
   const removePlayer = useCallback(
     async (roomCode: string, playerId: string): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('room:remove-player', { roomCode, playerId }),
       ),
     [],
   )
   const submitHint = useCallback(
     async (payload: SubmitHintPayload): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:submit-hint', payload),
       ),
     [],
   )
   const unlockHint = useCallback(
     async (roomCode: string): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:unlock-hint', { roomCode }),
       ),
     [],
   )
   const startGuessing = useCallback(
     async (roomCode: string): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:start-guessing', { roomCode }),
       ),
     [],
@@ -314,21 +313,21 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     async (
       payload: ClaimCardPayload,
     ): Promise<CommandResult<{ kind: CardKind }>> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:claim-card', payload),
       ),
     [],
   )
   const finishGuessing = useCallback(
     async (payload: FinishGuessingPayload): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:finish-guessing', payload),
       ),
     [],
   )
   const advanceTurn = useCallback(
     async (roomCode: string): Promise<CommandResult> =>
-      await runCommand(socketRef.current, (socket) =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:advance-turn', { roomCode }),
       ),
     [],
@@ -338,7 +337,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     () => ({
       connectionStatus,
       snapshots,
-      endedRooms,
       watchRoom,
       createRoom,
       joinRoom,
@@ -357,7 +355,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       claimCard,
       connectionStatus,
       createRoom,
-      endedRooms,
       joinRoom,
       leaveRoom,
       finishGuessing,
@@ -387,20 +384,20 @@ export function useGameSocket() {
 }
 
 export function useRoomSnapshot(roomCode: string) {
-  const { watchRoom, snapshots, endedRooms, connectionStatus } = useGameSocket()
+  const { watchRoom, snapshots, connectionStatus } = useGameSocket()
   useEffect(() => watchRoom(roomCode), [roomCode, watchRoom])
   return {
     snapshot: snapshots[roomCode],
-    endedReason: endedRooms[roomCode] ?? null,
     connectionStatus,
   }
 }
 
 async function runCommand<TResult extends object>(
   socket: GameSocket | null,
+  synchronized: boolean,
   command: (connectedSocket: GameSocket) => Promise<CommandResult<TResult>>,
 ): Promise<CommandResult<TResult>> {
-  if (!socket?.connected) return unavailable()
+  if (!socket?.connected || !synchronized) return unavailable()
 
   try {
     return await command(socket.timeout(COMMAND_TIMEOUT_MS))
