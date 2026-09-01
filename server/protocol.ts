@@ -224,6 +224,7 @@ export function createGameSocketServer(
           socket.data.token,
           parsed.roomCode,
           parsed.playerId,
+          parsed.allowRoundReset ?? false,
         )
         if (result.status !== 'success') return acknowledge(result)
 
@@ -268,6 +269,18 @@ export function createGameSocketServer(
         const parsed = parseRoomCommand(payload)
         if (!parsed) return acknowledge(invalid())
         const result = gameServer.unlockHint(socket.data.token, parsed.roomCode)
+        acknowledge(result)
+        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
+      })
+    })
+
+    socket.on('game:reject-hint', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('game:reject-hint', acknowledge, () => {
+        const parsed = parseRemovePlayer(payload)
+        if (!parsed) return acknowledge(invalid())
+        const result = gameServer.rejectHint(socket.data.token, parsed)
         acknowledge(result)
         if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })

@@ -30,12 +30,27 @@ const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
     },
   ],
   hintStatuses: [
-    { playerId: 'player-1', name: 'Ada', submitted: false },
-    { playerId: 'player-2', name: 'Grace', submitted: false },
+    {
+      playerId: 'player-1',
+      name: 'Ada',
+      submitted: false,
+      needsRevision: false,
+      hint: null,
+      hintNumber: null,
+    },
+    {
+      playerId: 'player-2',
+      name: 'Grace',
+      submitted: false,
+      needsRevision: false,
+      hint: null,
+      hintNumber: null,
+    },
   ],
   allHintsSubmitted: false,
   hint: null,
   hintSubmitted: false,
+  hintRejected: false,
   board: [
     { id: 'p0-card-0', word: 'MOON', kind: 'neutral', locked: false },
     { id: 'p0-card-1', word: 'SATELLITE', kind: 'neutral', locked: false },
@@ -75,6 +90,9 @@ describe('HintPhaseScreen', () => {
         view={view}
         onSubmitHint={vi.fn()}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -116,6 +134,9 @@ describe('HintPhaseScreen', () => {
         view={hintingView}
         onSubmitHint={vi.fn()}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -151,6 +172,9 @@ describe('HintPhaseScreen', () => {
       view: hintingView,
       onSubmitHint,
       onUnlockHint: vi.fn(),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const first = render(<HintPhaseScreen {...props} />)
@@ -195,11 +219,14 @@ describe('HintPhaseScreen', () => {
         view={hintingView}
         onSubmitHint={onSubmitHint}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
       />,
     )
 
-    expect(screen.getByText('Start when all hints are locked.')).toBeVisible()
+    expect(screen.getByText(/review clues as they arrive/i)).toBeVisible()
     expect(screen.getByRole('main')).not.toHaveTextContent(/\btimers?\b/i)
     expect(
       screen.getByRole('button', { name: 'Start guessing' }),
@@ -229,6 +256,9 @@ describe('HintPhaseScreen', () => {
         view={hintingView}
         onSubmitHint={vi.fn()}
         onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -318,6 +348,9 @@ describe('HintPhaseScreen', () => {
     const props = {
       onSubmitHint: vi.fn(),
       onUnlockHint: vi.fn().mockResolvedValue({ status: 'success' }),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const view = render(<HintPhaseScreen view={submittedView} {...props} />)
@@ -387,6 +420,9 @@ describe('HintPhaseScreen', () => {
     const props = {
       onSubmitHint,
       onUnlockHint,
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const view = render(<HintPhaseScreen view={lockedView} {...props} />)
@@ -436,9 +472,293 @@ describe('HintPhaseScreen', () => {
       'p0-card-6',
     ])
   })
+
+  it('reveals submitted clues and lets the host reject one before everyone is ready', async () => {
+    const user = userEvent.setup()
+    const onRejectHint = vi.fn().mockResolvedValue({ status: 'success' })
+    const view = {
+      ...hintingView,
+      allHintsSubmitted: false,
+      hint: 'Orbit',
+      hintSubmitted: true,
+      members: [
+        ...hintingView.members,
+        {
+          playerId: 'player-3',
+          name: 'Linus',
+          role: 'player' as const,
+          participation: 'player' as const,
+        },
+      ],
+      hintStatuses: [
+        {
+          ...hintingView.hintStatuses[0],
+          submitted: true,
+          hint: 'Orbit',
+          hintNumber: 2,
+        },
+        {
+          ...hintingView.hintStatuses[1],
+          submitted: true,
+          hint: 'New York',
+          hintNumber: 3,
+        },
+        {
+          playerId: 'player-3',
+          name: 'Linus',
+          submitted: false,
+          needsRevision: false,
+          hint: null,
+          hintNumber: null,
+        },
+      ],
+    }
+
+    render(
+      <HintPhaseScreen
+        view={view}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={onRejectHint}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText("Ada's hint: Orbit, 2")).toBeVisible()
+    expect(screen.getByLabelText("Grace's hint: New York, 3")).toBeVisible()
+    expect(screen.getByText('2/3')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Start guessing' }),
+    ).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: "Reject Ada's hint" }),
+    ).not.toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: "Reject Grace's hint" }),
+    )
+    expect(onRejectHint).toHaveBeenCalledWith('player-2')
+  })
+
+  it('warns that removing the only other player resets the round', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const remove = screen.getByRole('button', {
+      name: 'Remove Grace from this game',
+    })
+    await user.click(remove)
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /Remove Grace.*fewer than two players.*end the current round.*return everyone else to the lobby.*boards, hints, readiness, scores, and turns.*not be able to rejoin/i,
+      ),
+    )
+    expect(onRemovePlayer).not.toHaveBeenCalled()
+
+    confirm.mockReturnValueOnce(true)
+    await user.click(remove)
+    expect(onRemovePlayer).toHaveBeenCalledWith('player-2', true)
+    confirm.mockRestore()
+  })
+
+  it('uses the ordinary removal warning when the round keeps two players', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
+    const thirdPlayerView = {
+      ...hintingView,
+      members: [
+        ...hintingView.members,
+        {
+          playerId: 'player-3',
+          name: 'Linus',
+          role: 'player' as const,
+          participation: 'player' as const,
+        },
+      ],
+      hintStatuses: [
+        ...hintingView.hintStatuses,
+        {
+          playerId: 'player-3',
+          name: 'Linus',
+          submitted: false,
+          needsRevision: false,
+          hint: null,
+          hintNumber: null,
+        },
+      ],
+    }
+
+    render(
+      <HintPhaseScreen
+        view={thirdPlayerView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /Remove Grace.*board, submitted hint, readiness, and remaining turn.*not be able to rejoin/i,
+      ),
+    )
+    expect(onRemovePlayer).toHaveBeenCalledWith('player-2', false)
+    confirm.mockRestore()
+  })
+
+  it('clears the rejected clue when the server replaces its private board', async () => {
+    const lockedBoard = hintingView.board!.map((card, index) =>
+      card.locked
+        ? card
+        : {
+            ...card,
+            kind: index < 2 ? ('target' as const) : ('civilian' as const),
+          },
+    )
+    const props = {
+      onSubmitHint: vi.fn(),
+      onUnlockHint: vi.fn(),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
+      onStartGuessing: vi.fn(),
+    }
+    const view = render(
+      <HintPhaseScreen
+        key="p0-card-0"
+        view={{
+          ...hintingView,
+          hint: 'Orbit',
+          hintSubmitted: true,
+          board: lockedBoard,
+        }}
+        {...props}
+      />,
+    )
+    expect(screen.getByLabelText('Your hint')).toHaveValue('Orbit')
+
+    const replacementBoard = hintingView.board!.map((card) => ({
+      ...card,
+      id: card.id.replace('p0-', 'p2-'),
+      word: `NEW ${card.word}`,
+    }))
+    view.rerender(
+      <HintPhaseScreen
+        key="p2-card-0"
+        view={{
+          ...hintingView,
+          hint: null,
+          hintRejected: true,
+          board: replacementBoard,
+          hintStatuses: hintingView.hintStatuses.map((status) =>
+            status.playerId === hintingView.player.playerId
+              ? { ...status, needsRevision: true }
+              : status,
+          ),
+        }}
+        {...props}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'The host rejected this hint. Your board was refreshed; create and lock in a new hint.',
+      ),
+    ).toBeVisible()
+    expect(screen.getByText('Needs revision')).toBeVisible()
+    expect(await screen.findByLabelText('Your hint')).toHaveValue('')
+    expect(screen.getByLabelText('Your hint')).not.toHaveAttribute('readonly')
+    expect(screen.getByText('NEW MOON')).toBeVisible()
+  })
 })
 
 describe('GuessingScreen messages', () => {
+  it('lets the host remove a guesser while promising to preserve game history', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: hintingView.player,
+      members: hintingView.members,
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-1',
+      clueGiverName: 'Ada',
+      hint: 'Orbit',
+      hintNumber: 2,
+      boardCompleted: false,
+      board: [],
+      turnPlayers: [
+        { playerId: 'player-1', name: 'Ada', state: 'clue-giver' },
+        { playerId: 'player-2', name: 'Grace', state: 'guessing' },
+      ],
+      scoreboard: [
+        { ...hintingView.members[0], position: 0, score: 3 },
+        { ...hintingView.members[1], position: 1, score: 1 },
+      ],
+      canGuess: false,
+      canMarkDone: false,
+      canAdvanceTurn: false,
+    }
+    const props = {
+      onClaimCard: vi.fn(),
+      onFinishGuessing: vi.fn(),
+      onRemovePlayer,
+      onAdvanceTurn: vi.fn(),
+    }
+    const rendered = render(<GuessingScreen view={view} {...props} />)
+
+    expect(
+      screen.queryByRole('button', { name: 'Remove Ada from this game' }),
+    ).not.toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /Remove Grace.*no longer be able to guess or rejoin.*board, clue, turn, and score history will remain/i,
+      ),
+    )
+    expect(onRemovePlayer).toHaveBeenCalledWith('player-2')
+
+    rendered.rerender(
+      <GuessingScreen
+        view={{ ...view, members: [hintingView.members[0]] }}
+        {...props}
+      />,
+    )
+    expect(screen.getByText('No longer active')).toBeVisible()
+    expect(screen.getByText('Grace')).toBeVisible()
+    expect(screen.getByText('1', { selector: '.score-value' })).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'Remove Grace from this game' }),
+    ).not.toBeInTheDocument()
+    confirm.mockRestore()
+  })
+
   it('shows scores for claimed cards without exposing unclaimed values', () => {
     const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
       status: 'guessing',
@@ -507,6 +827,7 @@ describe('GuessingScreen messages', () => {
         view={view}
         onClaimCard={vi.fn()}
         onFinishGuessing={vi.fn()}
+        onRemovePlayer={vi.fn()}
         onAdvanceTurn={vi.fn()}
       />,
     )
@@ -597,6 +918,7 @@ describe('GuessingScreen messages', () => {
         view={view}
         onClaimCard={vi.fn()}
         onFinishGuessing={vi.fn()}
+        onRemovePlayer={vi.fn()}
         onAdvanceTurn={vi.fn()}
       />,
     )
@@ -639,6 +961,7 @@ describe('GuessingScreen messages', () => {
       const props = {
         onClaimCard: vi.fn(),
         onFinishGuessing: vi.fn(),
+        onRemovePlayer: vi.fn(),
         onAdvanceTurn,
       }
       const { rerender } = render(<GuessingScreen view={view} {...props} />)
@@ -710,6 +1033,7 @@ describe('GuessingScreen messages', () => {
           view={view}
           onClaimCard={vi.fn()}
           onFinishGuessing={action}
+          onRemovePlayer={vi.fn()}
           onAdvanceTurn={action}
         />,
       )

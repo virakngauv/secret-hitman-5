@@ -20,6 +20,7 @@ type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>
 const hostToken = 'a'.repeat(32)
 const guestToken = 'b'.repeat(32)
 const spectatorToken = 'c'.repeat(32)
+const watcherToken = 'd'.repeat(32)
 const allowedOrigin = 'http://localhost:3100'
 
 describe('Socket.IO Secret Hitman protocol', () => {
@@ -188,6 +189,8 @@ describe('Socket.IO Secret Hitman protocol', () => {
         'room:remove-player',
         'game:start',
         'game:submit-hint',
+        'game:unlock-hint',
+        'game:reject-hint',
         'game:start-guessing',
         'game:claim-card',
         'game:finish-guessing',
@@ -286,10 +289,10 @@ describe('Socket.IO Secret Hitman protocol', () => {
     ).toMatchObject({ status: 'rate_limited' })
   })
 
-  it('runs room entry, hint readiness, host transition, scoring, and spectator permissions', async () => {
+  it('runs late entry, hint review, host moderation, transition, scoring, and spectator permissions', async () => {
     const host = await connect(hostToken)
     const guest = await connect(guestToken)
-    const spectator = await connect(spectatorToken)
+    const latePlayer = await connect(spectatorToken)
 
     const created = await host.emitWithAck('room:create', { name: 'Ada' })
     expect(created.status).toBe('success')
@@ -380,6 +383,13 @@ describe('Socket.IO Secret Hitman protocol', () => {
         hint: 'Orbit',
         hintSubmitted: false,
         allHintsSubmitted: false,
+        hintStatuses: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Grace',
+            hint: 'Garden',
+            hintNumber: 3,
+          }),
+        ]),
         board: expect.arrayContaining(
           hostTargets.map((id) =>
             expect.objectContaining({ id, kind: 'target' }),
@@ -399,31 +409,111 @@ describe('Socket.IO Secret Hitman protocol', () => {
     ).toEqual({ status: 'success' })
 
     expect(
-      await spectator.emitWithAck('room:join', { roomCode, name: 'Linus' }),
+      await latePlayer.emitWithAck('room:join', { roomCode, name: 'Linus' }),
     ).toEqual({ status: 'success', roomCode })
-    const spectatorHint = socketServer.gameServer.snapshot(
-      spectatorToken,
-      roomCode,
-    )
-    expect(spectatorHint).toMatchObject({
+    const lateHint = socketServer.gameServer.snapshot(spectatorToken, roomCode)
+    expect(lateHint).toMatchObject({
       status: 'hinting',
-      player: { participation: 'spectator' },
-      board: null,
+      player: { participation: 'player' },
+      board: expect.any(Array),
+      allHintsSubmitted: false,
+      hintStatuses: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Ada',
+          hint: 'Galaxy',
+          hintNumber: 1,
+        }),
+        expect.objectContaining({
+          name: 'Grace',
+          hint: 'Garden',
+          hintNumber: 3,
+        }),
+      ]),
     })
+    if (lateHint.status !== 'hinting' || !lateHint.board)
+      throw new Error('Expected a late-player hinting board.')
+    const lateTargets = lateHint.board
+      .filter(({ kind }) => kind === 'neutral')
+      .slice(0, 2)
+      .map(({ id }) => id)
     expect(
-      await spectator.emitWithAck('game:submit-hint', {
+      await latePlayer.emitWithAck('game:submit-hint', {
         roomCode,
-        hint: 'Cheat',
-        targetCardIds: hostTargets,
+        hint: 'New York',
+        targetCardIds: lateTargets,
+      }),
+    ).toEqual({ status: 'success' })
+    const review = socketServer.gameServer.snapshot(hostToken, roomCode)
+    expect(review).toMatchObject({
+      status: 'hinting',
+      allHintsSubmitted: true,
+      hintStatuses: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Linus',
+          hint: 'New York',
+          hintNumber: 2,
+        }),
+      ]),
+    })
+    const latePlayerId = lateHint.player.playerId
+    expect(
+      await guest.emitWithAck('game:reject-hint', {
+        roomCode,
+        playerId: latePlayerId,
       }),
     ).toMatchObject({ status: 'forbidden' })
     expect(
-      await spectator.emitWithAck('game:unlock-hint', { roomCode }),
-    ).toMatchObject({ status: 'forbidden' })
+      await host.emitWithAck('game:reject-hint', {
+        roomCode,
+        playerId: latePlayerId,
+      }),
+    ).toEqual({ status: 'success' })
+    expect(
+      socketServer.gameServer.snapshot(spectatorToken, roomCode),
+    ).toMatchObject({
+      status: 'hinting',
+      hint: null,
+      hintSubmitted: false,
+      hintRejected: true,
+    })
+    const rejectedSnapshot = socketServer.gameServer.snapshot(
+      spectatorToken,
+      roomCode,
+    )
+    if (rejectedSnapshot.status !== 'hinting' || !rejectedSnapshot.board)
+      throw new Error('Expected a replacement late-player board.')
+    const replacementLateTargets = rejectedSnapshot.board
+      .filter(({ kind }) => kind === 'neutral')
+      .slice(0, 2)
+      .map(({ id }) => id)
+    expect(replacementLateTargets).toHaveLength(2)
+    expect(replacementLateTargets).not.toEqual(lateTargets)
+    latePlayer.disconnect()
+    const reconnectedLate = await connect(spectatorToken)
+    expect(
+      await reconnectedLate.emitWithAck('session:resume', { roomCode }),
+    ).toEqual({ status: 'success', snapshot: rejectedSnapshot })
+    expect(
+      await reconnectedLate.emitWithAck('game:submit-hint', {
+        roomCode,
+        hint: 'City',
+        targetCardIds: replacementLateTargets,
+      }),
+    ).toEqual({ status: 'success' })
 
     expect(await host.emitWithAck('game:start-guessing', { roomCode })).toEqual(
       { status: 'success' },
     )
+    const spectator = await connect(watcherToken)
+    expect(
+      await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' }),
+    ).toEqual({ status: 'success', roomCode })
+    expect(
+      socketServer.gameServer.snapshot(watcherToken, roomCode),
+    ).toMatchObject({
+      status: 'guessing',
+      player: { participation: 'spectator' },
+    })
     const hostGuessing = socketServer.gameServer.snapshot(hostToken, roomCode)
     const guestGuessing = socketServer.gameServer.snapshot(guestToken, roomCode)
     if (
@@ -461,7 +551,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       scored.scoreboard
         .filter(({ participation }) => participation === 'player')
         .map(({ score }) => score),
-    ).toEqual([3, 3])
+    ).toEqual([3, 3, 0])
   })
 
   it.each(['active', 'pass', 'civilian', 'assassin'] as const)(
@@ -720,8 +810,8 @@ describe('Socket.IO Secret Hitman protocol', () => {
           }),
         ).toEqual({ status: 'success' })
       }
-      await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
       await host.emitWithAck('game:start-guessing', { roomCode })
+      await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
       const before = socketServer.gameServer.snapshot(hostToken, roomCode)
       if (before.status !== 'guessing') throw new Error('Expected guessing.')
       const card = before.board.find(

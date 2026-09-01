@@ -24,6 +24,9 @@ export function HintPhaseScreen({
   view,
   onSubmitHint,
   onUnlockHint,
+  onRejectHint,
+  onRemovePlayer,
+  onLeave,
   onStartGuessing,
 }: {
   view: HintingView
@@ -32,6 +35,12 @@ export function HintPhaseScreen({
     targetCardIds: string[],
   ) => Promise<CommandResult>
   onUnlockHint: () => Promise<CommandResult>
+  onRejectHint: (playerId: string) => Promise<CommandResult>
+  onRemovePlayer: (
+    playerId: string,
+    allowRoundReset: boolean,
+  ) => Promise<CommandResult>
+  onLeave: () => Promise<CommandResult>
   onStartGuessing: () => Promise<CommandResult>
 }) {
   const [hint, setHint] = useState(view.hint ?? '')
@@ -51,7 +60,10 @@ export function HintPhaseScreen({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
+  const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [leaveError, setLeaveError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
   const readyCount = view.hintStatuses.filter(
     ({ submitted }) => submitted,
@@ -93,6 +105,37 @@ export function HintPhaseScreen({
     const result = await onStartGuessing()
     if (result.status !== 'success') setError(result.message)
     setIsStarting(false)
+  }
+
+  const rejectHint = async (playerId: string) => {
+    setBusyPlayer(playerId)
+    setError(null)
+    const result = await onRejectHint(playerId)
+    if (result.status !== 'success') setError(result.message)
+    setBusyPlayer(null)
+  }
+
+  const removePlayer = async (playerId: string, name: string) => {
+    const resetsRound = view.hintStatuses.length <= 2
+    const confirmed = window.confirm(
+      resetsRound
+        ? `Remove ${name}? This will leave fewer than two players, end the current round, and return everyone else to the lobby. All current boards, hints, readiness, scores, and turns will be discarded. ${name} will not be able to rejoin this room.`
+        : `Remove ${name}? Their board, submitted hint, readiness, and remaining turn will be removed from this game. They will not be able to rejoin this room.`,
+    )
+    if (!confirmed) return
+    setBusyPlayer(playerId)
+    setError(null)
+    const result = await onRemovePlayer(playerId, resetsRound)
+    if (result.status !== 'success') setError(result.message)
+    setBusyPlayer(null)
+  }
+
+  const leave = async () => {
+    setIsLeaving(true)
+    setLeaveError(null)
+    const result = await onLeave()
+    if (result.status !== 'success') setLeaveError(result.message)
+    setIsLeaving(false)
   }
 
   return (
@@ -223,9 +266,11 @@ export function HintPhaseScreen({
 
               <p className="form-message" role={error ? 'alert' : 'status'}>
                 {error ??
-                  (view.hintSubmitted
-                    ? 'Unlock your hint to revise the clue or target selection.'
-                    : 'You can change your selection until you lock it in.')}
+                  (view.hintRejected
+                    ? 'The host rejected this hint. Your board was refreshed; create and lock in a new hint.'
+                    : view.hintSubmitted
+                      ? 'Unlock your hint to revise the clue or target selection.'
+                      : 'You can change your selection until you lock it in.')}
               </p>
               {view.hintSubmitted ? (
                 <Button
@@ -263,27 +308,80 @@ export function HintPhaseScreen({
             </span>
           </div>
           <ul className="mt-4 grid gap-2">
-            {view.hintStatuses.map((player) => (
-              <li className="status-row" key={player.playerId}>
-                <span className="truncate font-semibold">{player.name}</span>
-                <span
-                  className={cn(
-                    'status-dot-label',
-                    player.submitted && 'is-ready',
-                  )}
+            {view.hintStatuses.map((player) => {
+              const member = view.members.find(
+                ({ playerId }) => playerId === player.playerId,
+              )
+              const isSelf = player.playerId === view.player.playerId
+              const canRemove = isHost && member?.role !== 'host'
+              return (
+                <li
+                  className="status-row flex-wrap items-center gap-x-3 gap-y-2"
+                  key={player.playerId}
                 >
-                  <span className="status-dot" />
-                  {player.submitted ? 'Ready' : 'Choosing'}
-                </span>
-              </li>
-            ))}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">
+                      {player.name}
+                    </span>
+                    {player.hint !== null && player.hintNumber !== null ? (
+                      <span
+                        className="block truncate text-sm text-[var(--muted-foreground)]"
+                        aria-label={`${player.name}'s hint: ${player.hint}, ${player.hintNumber}`}
+                      >
+                        {player.hint} · {player.hintNumber}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={cn(
+                      'status-dot-label',
+                      player.submitted && 'is-ready',
+                    )}
+                  >
+                    <span className="status-dot" />
+                    {player.needsRevision
+                      ? 'Needs revision'
+                      : player.submitted
+                        ? 'Ready'
+                        : 'Choosing'}
+                  </span>
+                  {isHost && player.submitted && !isSelf && member ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      disabled={busyPlayer !== null}
+                      onClick={() => void rejectHint(player.playerId)}
+                      aria-label={`Reject ${player.name}'s hint`}
+                    >
+                      Reject hint
+                    </Button>
+                  ) : null}
+                  {canRemove ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      disabled={busyPlayer !== null}
+                      onClick={() =>
+                        void removePlayer(player.playerId, player.name)
+                      }
+                      aria-label={`Remove ${player.name} from this game`}
+                    >
+                      Remove player
+                    </Button>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
 
           {isHost ? (
             <div className="host-control">
               <p className="host-control-label">Host control</p>
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Start when all hints are locked.
+                Review clues as they arrive, reject any that need revision, or
+                start guessing once everyone is ready.
               </p>
               <Button
                 className="mt-4 w-full"
@@ -295,9 +393,24 @@ export function HintPhaseScreen({
             </div>
           ) : (
             <p className="sidebar-note">
-              The host will start guessing when everyone is ready.
+              Submitted clues appear here as players lock them in. The host will
+              start guessing when everyone is ready.
             </p>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 w-full"
+            disabled={isLeaving}
+            onClick={() => void leave()}
+          >
+            {isLeaving ? 'Leaving…' : 'Leave room'}
+          </Button>
+          {leaveError ? (
+            <p className="form-message" role="alert">
+              {leaveError}
+            </p>
+          ) : null}
         </aside>
       </div>
     </GamePageShell>
@@ -308,6 +421,7 @@ export function GuessingScreen({
   view,
   onClaimCard,
   onFinishGuessing,
+  onRemovePlayer,
   onAdvanceTurn,
 }: {
   view: GuessingView
@@ -316,11 +430,13 @@ export function GuessingScreen({
     turnId: string,
   ) => Promise<CommandResult<{ kind: CardKind }>>
   onFinishGuessing: () => Promise<CommandResult>
+  onRemovePlayer: (playerId: string) => Promise<CommandResult>
   onAdvanceTurn: () => Promise<CommandResult>
 }) {
   const [busyCard, setBusyCard] = useState<string | null>(null)
   const [isFinishing, setIsFinishing] = useState(false)
   const [isAdvancing, setIsAdvancing] = useState(false)
+  const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const isClueGiver = view.player.playerId === view.clueGiverId
   const fullyRevealed = view.board.every(
@@ -362,6 +478,18 @@ export function GuessingScreen({
     const result = await onAdvanceTurn()
     if (result.status !== 'success') setFeedback(result.message)
     setIsAdvancing(false)
+  }
+
+  const removePlayer = async (playerId: string, name: string) => {
+    const confirmed = window.confirm(
+      `Remove ${name}? They will no longer be able to guess or rejoin this room. Their board, clue, turn, and score history will remain in the game.`,
+    )
+    if (!confirmed) return
+    setBusyPlayer(playerId)
+    setFeedback(null)
+    const result = await onRemovePlayer(playerId)
+    if (result.status !== 'success') setFeedback(result.message)
+    setBusyPlayer(null)
   }
 
   return (
@@ -458,24 +586,50 @@ export function GuessingScreen({
           <h2 className="sidebar-title">Scorecard</h2>
           <ol className="mt-4 grid gap-2">
             {players.map((player) => {
+              const activeMember = view.members.find(
+                ({ playerId }) => playerId === player.playerId,
+              )
               const turnState = view.turnPlayers.find(
                 ({ playerId }) => playerId === player.playerId,
               )?.state
+              const canRemove =
+                view.player.role === 'host' &&
+                activeMember?.role !== 'host' &&
+                activeMember !== undefined
               return (
-                <li className="score-row" key={player.playerId}>
+                <li
+                  className="score-row flex-wrap gap-x-3 gap-y-2"
+                  key={player.playerId}
+                >
                   <div className="min-w-0">
                     <span className="block truncate font-semibold">
                       {player.name}
                     </span>
                     <span className="text-xs text-[var(--muted-foreground)]">
-                      {turnState === 'clue-giver'
-                        ? 'Clue-giver'
-                        : turnState === 'done'
-                          ? 'Done this turn'
-                          : 'Guessing'}
+                      {!activeMember
+                        ? 'No longer active'
+                        : turnState === 'clue-giver'
+                          ? 'Clue-giver'
+                          : turnState === 'done'
+                            ? 'Done this turn'
+                            : 'Guessing'}
                     </span>
                   </div>
                   <span className="score-value">{player.score}</span>
+                  {canRemove ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      disabled={busyPlayer !== null}
+                      onClick={() =>
+                        void removePlayer(player.playerId, player.name)
+                      }
+                      aria-label={`Remove ${player.name} from this game`}
+                    >
+                      Remove player
+                    </Button>
+                  ) : null}
                 </li>
               )
             })}

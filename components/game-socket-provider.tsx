@@ -22,6 +22,7 @@ import {
   type CommandResult,
   type FinishGuessingPayload,
   type RoomSnapshot,
+  type RejectHintPayload,
   type ServerToClientEvents,
   type SubmitHintPayload,
 } from '@/lib/game-protocol'
@@ -39,10 +40,15 @@ type GameSocketContextValue = {
     name: string,
   ) => Promise<CommandResult<{ roomCode: string }>>
   leaveRoom: (roomCode: string) => Promise<CommandResult>
-  removePlayer: (roomCode: string, playerId: string) => Promise<CommandResult>
+  removePlayer: (
+    roomCode: string,
+    playerId: string,
+    allowRoundReset?: boolean,
+  ) => Promise<CommandResult>
   startGame: (roomCode: string) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
   unlockHint: (roomCode: string) => Promise<CommandResult>
+  rejectHint: (payload: RejectHintPayload) => Promise<CommandResult>
   startGuessing: (roomCode: string) => Promise<CommandResult>
   claimCard: (
     payload: ClaimCardPayload,
@@ -282,9 +288,17 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     [],
   )
   const removePlayer = useCallback(
-    async (roomCode: string, playerId: string): Promise<CommandResult> =>
+    async (
+      roomCode: string,
+      playerId: string,
+      allowRoundReset = false,
+    ): Promise<CommandResult> =>
       await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
-        socket.emitWithAck('room:remove-player', { roomCode, playerId }),
+        socket.emitWithAck('room:remove-player', {
+          roomCode,
+          playerId,
+          allowRoundReset,
+        }),
       ),
     [],
   )
@@ -299,6 +313,13 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     async (roomCode: string): Promise<CommandResult> =>
       await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:unlock-hint', { roomCode }),
+      ),
+    [],
+  )
+  const rejectHint = useCallback(
+    async (payload: RejectHintPayload): Promise<CommandResult> =>
+      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
+        socket.emitWithAck('game:reject-hint', payload),
       ),
     [],
   )
@@ -345,6 +366,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       startGame,
       submitHint,
       unlockHint,
+      rejectHint,
       startGuessing,
       claimCard,
       finishGuessing,
@@ -359,6 +381,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       leaveRoom,
       finishGuessing,
       removePlayer,
+      rejectHint,
       snapshots,
       startGame,
       startGuessing,

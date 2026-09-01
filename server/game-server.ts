@@ -5,6 +5,7 @@ import type {
   CommandResult,
   FinishGuessingPayload,
   RoomSnapshot,
+  RejectHintPayload,
   SubmitHintPayload,
 } from '../lib/game-protocol'
 import { GameRoom } from './game-room'
@@ -95,10 +96,11 @@ export class GameServer {
     token: string,
     roomCode: string,
     playerId: string,
+    allowRoundReset = false,
     now = Date.now(),
   ) {
     return this.withRoom(roomCode, (room) =>
-      room.removePlayer(token, playerId, now),
+      room.removePlayer(token, playerId, allowRoundReset, now),
     )
   }
 
@@ -114,6 +116,12 @@ export class GameServer {
 
   unlockHint(token: string, roomCode: string, now = Date.now()) {
     return this.withRoom(roomCode, (room) => room.unlockHint(token, now))
+  }
+
+  rejectHint(token: string, payload: RejectHintPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.rejectHint(token, payload, now),
+    )
   }
 
   startGuessing(token: string, roomCode: string, now = Date.now()) {
