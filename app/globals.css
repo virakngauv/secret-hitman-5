@@ -416,7 +416,7 @@ button.word-card:focus-visible {
 /* Chromium 150+ can fit single words exactly without a heuristic. */
 @supports (text-fit: shrink) {
   .word-card-word-single:not(.word-card-word-break) {
-    text-fit: shrink 59%;
+    text-fit: shrink 55%;
   }
 
   .word-card-word-compact,
