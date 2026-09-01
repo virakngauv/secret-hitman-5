@@ -110,8 +110,8 @@ export class GameRoom {
       this.touch(now)
       return { status: 'success' }
     }
-    // Starting players keep their seats even while inactive. Spectators may
-    // use only the remaining capacity, so reconnects never exceed the limit.
+    // Guessing players keep their established seats while inactive. Spectators
+    // and hinting leavers use only remaining capacity when they return.
     const occupiedSlots = this.members.filter(
       (member) => member.active || member.game !== null,
     ).length
@@ -133,6 +133,15 @@ export class GameRoom {
     if (existing) {
       existing.name = name
       existing.active = true
+      if (
+        !existing.game &&
+        this.phase === 'hinting' &&
+        this.gamePlayers().length < MAX_STARTING_PLAYERS
+      ) {
+        this.addGameSeat(existing)
+      } else if (!existing.game && this.phase !== 'lobby') {
+        existing.participation = 'spectator'
+      }
     } else {
       const member = this.createMember(token, name, 'player', now)
       if (
@@ -165,13 +174,7 @@ export class GameRoom {
       const index = this.members.indexOf(member)
       if (index >= 0) this.members.splice(index, 1)
     } else if (member.game) {
-      if (this.phase === 'hinting' && !member.game.hintSubmitted) {
-        member.game.hint = 'PASS'
-        applyTargets(member.game.board, [])
-        member.game.targetCount = 0
-        member.game.hintSubmitted = true
-        member.game.hintRejected = false
-      }
+      if (this.phase === 'hinting') this.removeGameSeat(member)
       if (this.phase === 'guessing') member.game.turnState = 'done'
     }
 
@@ -241,15 +244,9 @@ export class GameRoom {
       this.touch(now)
       return { status: 'success', removedToken: target.token }
     }
-    if (target.game) {
-      const game = this.requireGame()
-      game.playerOrder = game.playerOrder.filter(
-        (candidate) => candidate !== target.playerId,
-      )
-    }
+    if (target.game) this.removeGameSeat(target)
     this.members.splice(this.members.indexOf(target), 1)
     if (roundReset) this.resetRoundToLobby()
-    else if (this.game) this.reindexGameSeats()
     this.touch(now)
     return { status: 'success', removedToken: target.token }
   }
@@ -450,6 +447,12 @@ export class GameRoom {
       return {
         status: 'invalid',
         message: 'Wait for every player to lock in a hint.',
+      }
+    }
+    if (this.gamePlayers().length < MIN_STARTING_PLAYERS) {
+      return {
+        status: 'invalid',
+        message: `At least ${MIN_STARTING_PLAYERS} players are required to start guessing.`,
       }
     }
 
@@ -793,6 +796,16 @@ export class GameRoom {
       turnState: 'waiting',
     }
     game.playerOrder.push(member.playerId)
+  }
+
+  private removeGameSeat(member: Member) {
+    const game = this.requireGame()
+    game.playerOrder = game.playerOrder.filter(
+      (candidate) => candidate !== member.playerId,
+    )
+    member.game = null
+    member.participation = 'spectator'
+    this.reindexGameSeats()
   }
 
   private reindexGameSeats() {
