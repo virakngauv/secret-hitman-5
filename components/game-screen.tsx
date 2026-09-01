@@ -26,6 +26,7 @@ export function HintPhaseScreen({
   onUnlockHint,
   onRejectHint,
   onRemovePlayer,
+  onLeave,
   onStartGuessing,
 }: {
   view: HintingView
@@ -39,6 +40,7 @@ export function HintPhaseScreen({
     playerId: string,
     allowRoundReset: boolean,
   ) => Promise<CommandResult>
+  onLeave: () => Promise<CommandResult>
   onStartGuessing: () => Promise<CommandResult>
 }) {
   const [hint, setHint] = useState(view.hint ?? '')
@@ -58,8 +60,10 @@ export function HintPhaseScreen({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
   const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [leaveError, setLeaveError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
   const readyCount = view.hintStatuses.filter(
     ({ submitted }) => submitted,
@@ -124,6 +128,14 @@ export function HintPhaseScreen({
     const result = await onRemovePlayer(playerId, resetsRound)
     if (result.status !== 'success') setError(result.message)
     setBusyPlayer(null)
+  }
+
+  const leave = async () => {
+    setIsLeaving(true)
+    setLeaveError(null)
+    const result = await onLeave()
+    if (result.status !== 'success') setLeaveError(result.message)
+    setIsLeaving(false)
   }
 
   return (
@@ -385,6 +397,20 @@ export function HintPhaseScreen({
               start guessing when everyone is ready.
             </p>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 w-full"
+            disabled={isLeaving}
+            onClick={() => void leave()}
+          >
+            {isLeaving ? 'Leaving…' : 'Leave room'}
+          </Button>
+          {leaveError ? (
+            <p className="form-message" role="alert">
+              {leaveError}
+            </p>
+          ) : null}
         </aside>
       </div>
     </GamePageShell>

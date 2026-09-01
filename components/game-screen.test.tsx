@@ -92,6 +92,7 @@ describe('HintPhaseScreen', () => {
         onUnlockHint={vi.fn()}
         onRejectHint={vi.fn()}
         onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -135,6 +136,7 @@ describe('HintPhaseScreen', () => {
         onUnlockHint={vi.fn()}
         onRejectHint={vi.fn()}
         onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -172,6 +174,7 @@ describe('HintPhaseScreen', () => {
       onUnlockHint: vi.fn(),
       onRejectHint: vi.fn(),
       onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const first = render(<HintPhaseScreen {...props} />)
@@ -218,6 +221,7 @@ describe('HintPhaseScreen', () => {
         onUnlockHint={vi.fn()}
         onRejectHint={vi.fn()}
         onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
       />,
     )
@@ -254,6 +258,7 @@ describe('HintPhaseScreen', () => {
         onUnlockHint={vi.fn()}
         onRejectHint={vi.fn()}
         onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -345,6 +350,7 @@ describe('HintPhaseScreen', () => {
       onUnlockHint: vi.fn().mockResolvedValue({ status: 'success' }),
       onRejectHint: vi.fn(),
       onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const view = render(<HintPhaseScreen view={submittedView} {...props} />)
@@ -416,6 +422,7 @@ describe('HintPhaseScreen', () => {
       onUnlockHint,
       onRejectHint: vi.fn(),
       onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const view = render(<HintPhaseScreen view={lockedView} {...props} />)
@@ -514,6 +521,7 @@ describe('HintPhaseScreen', () => {
         onUnlockHint={vi.fn()}
         onRejectHint={onRejectHint}
         onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -544,6 +552,7 @@ describe('HintPhaseScreen', () => {
         onUnlockHint={vi.fn()}
         onRejectHint={vi.fn()}
         onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -600,6 +609,7 @@ describe('HintPhaseScreen', () => {
         onUnlockHint={vi.fn()}
         onRejectHint={vi.fn()}
         onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
         onStartGuessing={vi.fn()}
       />,
     )
@@ -630,6 +640,7 @@ describe('HintPhaseScreen', () => {
       onUnlockHint: vi.fn(),
       onRejectHint: vi.fn(),
       onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
       onStartGuessing: vi.fn(),
     }
     const view = render(

@@ -114,6 +114,11 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onRemovePlayer={(playerId, allowRoundReset) =>
             game.removePlayer(roomCode, playerId, allowRoundReset)
           }
+          onLeave={async () => {
+            const result = await game.leaveRoom(roomCode)
+            if (result.status === 'success') router.push('/home')
+            return result
+          }}
           onStartGuessing={() => game.startGuessing(roomCode)}
         />,
       )
