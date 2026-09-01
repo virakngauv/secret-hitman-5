@@ -96,10 +96,11 @@ export class GameServer {
     token: string,
     roomCode: string,
     playerId: string,
+    allowRoundReset = false,
     now = Date.now(),
   ) {
     return this.withRoom(roomCode, (room) =>
-      room.removePlayer(token, playerId, now),
+      room.removePlayer(token, playerId, allowRoundReset, now),
     )
   }
 

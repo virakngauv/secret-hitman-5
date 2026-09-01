@@ -40,7 +40,11 @@ type GameSocketContextValue = {
     name: string,
   ) => Promise<CommandResult<{ roomCode: string }>>
   leaveRoom: (roomCode: string) => Promise<CommandResult>
-  removePlayer: (roomCode: string, playerId: string) => Promise<CommandResult>
+  removePlayer: (
+    roomCode: string,
+    playerId: string,
+    allowRoundReset?: boolean,
+  ) => Promise<CommandResult>
   startGame: (roomCode: string) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
   unlockHint: (roomCode: string) => Promise<CommandResult>
@@ -284,9 +288,17 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     [],
   )
   const removePlayer = useCallback(
-    async (roomCode: string, playerId: string): Promise<CommandResult> =>
+    async (
+      roomCode: string,
+      playerId: string,
+      allowRoundReset = false,
+    ): Promise<CommandResult> =>
       await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
-        socket.emitWithAck('room:remove-player', { roomCode, playerId }),
+        socket.emitWithAck('room:remove-player', {
+          roomCode,
+          playerId,
+          allowRoundReset,
+        }),
       ),
     [],
   )

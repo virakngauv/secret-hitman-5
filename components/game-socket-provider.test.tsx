@@ -518,6 +518,7 @@ describe('GameSocketProvider', () => {
     expect(mocks.emitWithAck).toHaveBeenCalledWith('room:remove-player', {
       roomCode: 'bcdf2',
       playerId: 'player-2',
+      allowRoundReset: false,
     })
   })
 
@@ -561,6 +562,7 @@ describe('GameSocketProvider', () => {
     expect(mocks.emitWithAck).toHaveBeenCalledWith('room:remove-player', {
       roomCode,
       playerId: 'player-2',
+      allowRoundReset: false,
     })
   })
 

@@ -111,7 +111,9 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           }
           onUnlockHint={() => game.unlockHint(roomCode)}
           onRejectHint={(playerId) => game.rejectHint({ roomCode, playerId })}
-          onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
+          onRemovePlayer={(playerId, allowRoundReset) =>
+            game.removePlayer(roomCode, playerId, allowRoundReset)
+          }
           onStartGuessing={() => game.startGuessing(roomCode)}
         />,
       )
@@ -131,6 +133,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onFinishGuessing={() =>
             game.finishGuessing({ roomCode, turnId: snapshot.turnId })
           }
+          onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
           onAdvanceTurn={() => game.advanceTurn(roomCode)}
         />,
       )

@@ -52,7 +52,7 @@ Both “Next hint” and “Finish the game” require every eligible picker on 
 
 Passing, selecting a civilian, or explicitly leaving completes that picker's turn. Claiming the last target or the first assassin completes all pickers, so no extra passes are required. The clue-giver, spectators, and inactive seats do not block advancement; a host who is also a picker must finish along with everyone else. Completion enables the host action without automatically advancing.
 
-Temporary disconnects do not change membership or guessing eligibility and therefore continue to block advancement until the picker reconnects and finishes, or all targets are found. There is no timeout-based abandonment or host force-advance override. Explicit leave preserves its existing finish-turn behavior; rejoining does not reopen guessing on that board.
+Temporary disconnects do not change membership or guessing eligibility and therefore continue to block advancement until the picker reconnects and finishes, all targets are found, or the host explicitly removes that player. There is no timeout-based abandonment or host force-advance override. Explicit leave preserves its existing finish-turn behavior; rejoining does not reopen guessing on that board.
 
 ## Membership
 
@@ -60,7 +60,9 @@ Room membership is independent from a Socket.IO connection. Disconnecting does n
 
 Explicitly leaving during guessing ends the picker's turn, like passing. Rejoining restores a finished, privately revealed view, never eligibility to guess again on that board. This reveals no more than the freely available pass action; transport disconnect alone does not finish the turn or reveal hidden roles.
 
-During hinting, a new identity becomes a participant while fewer than 12 game seats exist. The server synchronously appends a private board and turn-order seat, so a join accepted before a start-guessing command makes readiness incomplete; a start accepted first closes participation and later identities become spectators. The host may remove a non-host participant while at least two seats remain. Removal deletes that board, hint, readiness, score, and future turn and preserves the room's token ban.
+During hinting, a new identity becomes a participant while fewer than 12 game seats exist. The server synchronously appends a private board and turn-order seat, so a join accepted before a start-guessing command makes readiness incomplete; a start accepted first closes participation and later identities become spectators. The host may remove a non-host participant. Removal deletes that board, hint, readiness, score, and future turn and preserves the room's token ban. Removing the only other participant requires explicit confirmation, abandons the current round, clears all round state, and returns every remaining identity to the lobby as a player while preserving the room code and removal bans.
+
+During guessing, host removal deactivates the participant and finishes their current guessing eligibility without rewriting the established game. Their board, clue, turn-order position, score, and prior claims remain visible, and remaining players still guess a removed clue-giver's current or future board. The removed identity cannot act or rejoin, and it no longer blocks host advancement.
 
 ### Guest identity security boundary
 

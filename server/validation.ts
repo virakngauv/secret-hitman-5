@@ -81,10 +81,22 @@ export function parseFinishGuessing(
 export function parseRemovePlayer(value: unknown): RemovePlayerPayload | null {
   if (!isRecord(value)) return null
   const roomCode = parseRoomCode(value.roomCode)
+  if (
+    value.allowRoundReset !== undefined &&
+    typeof value.allowRoundReset !== 'boolean'
+  ) {
+    return null
+  }
   return roomCode &&
     typeof value.playerId === 'string' &&
     PLAYER_ID_PATTERN.test(value.playerId)
-    ? { roomCode, playerId: value.playerId }
+    ? {
+        roomCode,
+        playerId: value.playerId,
+        ...(value.allowRoundReset === undefined
+          ? {}
+          : { allowRoundReset: value.allowRoundReset }),
+      }
     : null
 }
 

@@ -224,6 +224,7 @@ export function createGameSocketServer(
           socket.data.token,
           parsed.roomCode,
           parsed.playerId,
+          parsed.allowRoundReset ?? false,
         )
         if (result.status !== 'success') return acknowledge(result)
 

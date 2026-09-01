@@ -183,6 +183,7 @@ export class GameRoom {
   removePlayer(
     token: string,
     playerId: string,
+    allowRoundReset = false,
     now = Date.now(),
   ): CommandResult<{ removedToken: string }> {
     const actor = this.findActiveMember(token)
@@ -192,17 +193,22 @@ export class GameRoom {
         message: 'Only the host can remove a player.',
       }
     }
-    if (this.phase !== 'lobby' && this.phase !== 'hinting') {
+    if (
+      this.phase !== 'lobby' &&
+      this.phase !== 'hinting' &&
+      this.phase !== 'guessing'
+    ) {
       return {
         status: 'invalid',
-        message: 'Players can only be removed before guessing starts.',
+        message: 'Players cannot be removed after the game finishes.',
       }
     }
 
     const target = this.members.find(
       (member) =>
         member.playerId === playerId &&
-        (this.phase === 'lobby' ? member.active : member.game !== null),
+        (this.phase === 'lobby' ? member.active : member.game !== null) &&
+        !this.isRemovedToken(member.token),
     )
     if (!target) {
       return {
@@ -216,17 +222,25 @@ export class GameRoom {
         message: 'The host cannot be removed from the room.',
       }
     }
-    if (
+    const roundReset =
       this.phase === 'hinting' &&
       this.gamePlayers().length <= MIN_STARTING_PLAYERS
-    ) {
+    if (roundReset && !allowRoundReset) {
       return {
         status: 'invalid',
-        message: `Keep at least ${MIN_STARTING_PLAYERS} players in the game.`,
+        message:
+          'Removing this player ends the current round. Confirm the removal again to return everyone to the lobby.',
       }
     }
 
     this.removedTokenFingerprints.add(fingerprintClientToken(target.token))
+    this.commandResults.delete(target.token)
+    if (this.phase === 'guessing') {
+      target.active = false
+      if (target.game) target.game.turnState = 'done'
+      this.touch(now)
+      return { status: 'success', removedToken: target.token }
+    }
     if (target.game) {
       const game = this.requireGame()
       game.playerOrder = game.playerOrder.filter(
@@ -234,10 +248,20 @@ export class GameRoom {
       )
     }
     this.members.splice(this.members.indexOf(target), 1)
-    if (this.game) this.reindexGameSeats()
-    this.commandResults.delete(target.token)
+    if (roundReset) this.resetRoundToLobby()
+    else if (this.game) this.reindexGameSeats()
     this.touch(now)
     return { status: 'success', removedToken: target.token }
+  }
+
+  private resetRoundToLobby() {
+    this.phase = 'lobby'
+    this.game = null
+    for (const member of this.members) {
+      member.participation = 'player'
+      member.game = null
+    }
+    this.commandResults.clear()
   }
 
   start(token: string, now = Date.now()): CommandResult {

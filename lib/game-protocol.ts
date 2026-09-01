@@ -149,7 +149,10 @@ export type CreateRoomPayload = { name: string }
 export type JoinRoomPayload = { roomCode: string; name: string }
 export type RoomCommandPayload = { roomCode: string }
 export type FinishGuessingPayload = RoomCommandPayload & { turnId: string }
-export type RemovePlayerPayload = RoomCommandPayload & { playerId: string }
+export type RemovePlayerPayload = RoomCommandPayload & {
+  playerId: string
+  allowRoundReset?: boolean
+}
 export type RejectHintPayload = RoomCommandPayload & { playerId: string }
 export type SubmitHintPayload = RoomCommandPayload & {
   hint: string

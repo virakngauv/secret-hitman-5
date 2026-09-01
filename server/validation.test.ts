@@ -143,6 +143,17 @@ describe('parseRemovePlayer', () => {
     expect(
       parseRemovePlayer({ roomCode: ' BCDF2 ', playerId: 'player-2' }),
     ).toEqual({ roomCode: 'bcdf2', playerId: 'player-2' })
+    expect(
+      parseRemovePlayer({
+        roomCode: 'bcdf2',
+        playerId: 'player-2',
+        allowRoundReset: true,
+      }),
+    ).toEqual({
+      roomCode: 'bcdf2',
+      playerId: 'player-2',
+      allowRoundReset: true,
+    })
   })
 
   it('rejects missing, malformed, and oversized player ids', () => {
@@ -152,6 +163,13 @@ describe('parseRemovePlayer', () => {
     ).toBeNull()
     expect(
       parseRemovePlayer({ roomCode: 'bcdf2', playerId: 'a'.repeat(65) }),
+    ).toBeNull()
+    expect(
+      parseRemovePlayer({
+        roomCode: 'bcdf2',
+        playerId: 'player-2',
+        allowRoundReset: 'yes',
+      }),
     ).toBeNull()
   })
 })
