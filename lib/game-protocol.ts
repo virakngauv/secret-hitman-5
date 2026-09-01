@@ -68,6 +68,7 @@ type ActiveGameSnapshotBase = MemberSnapshotBase & {
 
 export type RoomSnapshot =
   | { status: 'not_found'; roomCode: string }
+  | { status: 'expired'; roomCode: string }
   | { status: 'joinable'; roomCode: string; joinsAsSpectator: boolean }
   | { status: 'removed_from_room'; roomCode: string }
   | ({ status: 'lobby'; minimumPlayers: number } & MemberSnapshotBase)
@@ -219,8 +220,6 @@ export type ClientToServerEvents = {
 
 export type ServerToClientEvents = {
   'room:snapshot': (snapshot: RoomSnapshot) => void
-  'room:removed': (payload: { roomCode: string }) => void
-  'room:expired': (payload: { roomCode: string; reason: 'idle' }) => void
   'server:shutdown': () => void
 }
 

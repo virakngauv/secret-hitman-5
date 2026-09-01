@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import {
   FinishedScreen,
@@ -19,11 +19,7 @@ import {
   RoomInviteCard,
 } from '@/components/room-invite-card'
 import { Button } from '@/components/ui/button'
-import {
-  isMemberSnapshot,
-  MAX_STARTING_PLAYERS,
-  type RoomSnapshot,
-} from '@/lib/game-protocol'
+import { MAX_STARTING_PLAYERS, type RoomSnapshot } from '@/lib/game-protocol'
 import { generateClientToken } from '@/lib/player-session'
 
 type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
@@ -34,20 +30,14 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
   const router = useRouter()
   const [actionError, setActionError] = useState<string | null>(null)
   const [isActing, setIsActing] = useState(false)
-  const { snapshot, endedReason, connectionStatus } = channel
-
-  if (endedReason) {
-    return <RoomMessage title="This room ended" body={endedCopy(endedReason)} />
-  }
+  const { snapshot, connectionStatus } = channel
   if (!snapshot) return <RoomLoading />
-  if (connectionStatus !== 'connected' && isMemberSnapshot(snapshot)) {
-    return (
-      <RoomMessage
-        title="Reconnecting"
-        body="Restoring your seat and the latest board…"
-      />
-    )
-  }
+
+  const retainScreen = (screen: ReactNode) => (
+    <RoomConnectionBoundary connectionStatus={connectionStatus}>
+      {screen}
+    </RoomConnectionBoundary>
+  )
 
   switch (snapshot.status) {
     case 'not_found':
@@ -55,6 +45,15 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
         <RoomMessage
           title="Room not found"
           body={`There is no active room named ${roomCode.toUpperCase()}.`}
+          showRoomRecovery
+        />
+      )
+    case 'expired':
+      return (
+        <RoomMessage
+          title="This room ended"
+          body="The room expired after a period without game activity."
+          showRoomRecovery
         />
       )
     case 'removed_from_room':
@@ -73,7 +72,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
         />
       )
     case 'lobby':
-      return (
+      return retainScreen(
         <LobbyScreen
           view={snapshot}
           error={actionError}
@@ -100,10 +99,10 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             const result = await game.removePlayer(roomCode, playerId)
             if (result.status !== 'success') setActionError(result.message)
           }}
-        />
+        />,
       )
     case 'hinting':
-      return (
+      return retainScreen(
         <HintPhaseScreen
           view={snapshot}
           onSubmitHint={(hint, targetCardIds) =>
@@ -120,10 +119,10 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onStartGuessing={() =>
             game.startGuessing({ roomCode, gameId: snapshot.gameId })
           }
-        />
+        />,
       )
     case 'guessing':
-      return (
+      return retainScreen(
         <GuessingScreen
           key={snapshot.turnId}
           view={snapshot}
@@ -149,16 +148,16 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onShowScoreboard={() =>
             game.showScoreboard({ roomCode, gameId: snapshot.gameId })
           }
-        />
+        />,
       )
     case 'finished':
-      return (
+      return retainScreen(
         <FinishedScreen
           view={snapshot}
           onReturnToLobby={() =>
             game.returnToLobby({ roomCode, gameId: snapshot.gameId })
           }
-        />
+        />,
       )
     default:
       return assertNever(snapshot)
@@ -294,7 +293,72 @@ function RoomLoading() {
   )
 }
 
-function RoomMessage({ title, body }: { title: string; body: string }) {
+function RoomConnectionBoundary({
+  children,
+  connectionStatus,
+}: {
+  children: ReactNode
+  connectionStatus: 'connecting' | 'connected' | 'disconnected'
+}) {
+  const reconnecting = connectionStatus !== 'connected'
+  const interruptedRef = useRef(false)
+  const liveRegionRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (connectionStatus === 'disconnected') {
+      interruptedRef.current = true
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent =
+          'Connection interrupted. Reconnecting; room details may be out of date.'
+      }
+    } else if (
+      connectionStatus === 'connected' &&
+      interruptedRef.current &&
+      liveRegionRef.current
+    ) {
+      interruptedRef.current = false
+      liveRegionRef.current.textContent =
+        'Connection restored. Room details are up to date.'
+    }
+  }, [connectionStatus])
+
+  return (
+    <>
+      <fieldset
+        className="m-0 min-w-0 border-0 p-0"
+        disabled={reconnecting}
+        aria-describedby="room-connection-status"
+      >
+        {children}
+      </fieldset>
+      <div
+        ref={liveRegionRef}
+        id="room-connection-status"
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      />
+      {reconnecting ? (
+        <div
+          className="pointer-events-none fixed right-4 bottom-4 z-50 max-w-[calc(100vw-2rem)] rounded-full border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-sm font-bold shadow-lg"
+          aria-hidden="true"
+        >
+          Reconnecting · updates may be delayed
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+function RoomMessage({
+  title,
+  body,
+  showRoomRecovery = false,
+}: {
+  title: string
+  body: string
+  showRoomRecovery?: boolean
+}) {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <section className="game-panel w-full max-w-lg text-center">
@@ -303,20 +367,24 @@ function RoomMessage({ title, body }: { title: string; body: string }) {
         </span>
         <h1 className="mt-5 text-4xl font-black tracking-tight">{title}</h1>
         <p className="mt-3 text-[var(--muted-foreground)]">{body}</p>
-        <Button asChild className="mt-7">
-          <Link href="/home">Back to home</Link>
-        </Button>
+        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+          <Button asChild>
+            <Link href="/home">Back to home</Link>
+          </Button>
+          {showRoomRecovery ? (
+            <Button asChild variant="outline">
+              <Link href="/create">Create a room</Link>
+            </Button>
+          ) : null}
+        </div>
+        {showRoomRecovery ? (
+          <Button asChild variant="outline" className="mt-3 w-full">
+            <Link href="/join">Join another room</Link>
+          </Button>
+        ) : null}
       </section>
     </main>
   )
-}
-
-function endedCopy(reason: 'expired' | 'removed' | 'server_restart') {
-  if (reason === 'expired')
-    return 'The room expired after a period without game activity.'
-  if (reason === 'removed')
-    return 'The host removed this browser from the room.'
-  return 'The game server restarted, so this in-memory room is no longer available.'
 }
 
 function assertNever(value: never): never {
