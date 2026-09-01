@@ -132,6 +132,9 @@ export class GameRoom {
     if (existing) {
       existing.name = name
       existing.active = true
+      if (this.phase !== 'lobby' && !existing.game) {
+        existing.participation = 'spectator'
+      }
     } else {
       const member = this.createMember(token, name, 'player', now)
       if (this.phase !== 'lobby') member.participation = 'spectator'

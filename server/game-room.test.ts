@@ -1288,9 +1288,13 @@ describe('GameRoom single-round flow', () => {
   it('reopens the same lobby, resets game state, admits a late visitor, and rejects prior-game commands', () => {
     const room = startTwoPlayerGame()
     const lateToken = thirdToken
+    const departedToken = 'e'.repeat(32)
     const removedToken = 'd'.repeat(32)
     room.join(lateToken, 'Linus', 1_004)
     expect(guessing(room, lateToken).player.participation).toBe('spectator')
+    room.join(departedToken, 'Margaret', 1_004)
+    expect(guessing(room, departedToken).player.participation).toBe('spectator')
+    expect(room.leave(departedToken, 1_004)).toEqual({ status: 'success' })
 
     finishGameAndShowScoreboard(room)
     const results = room.snapshotFor(hostToken)
@@ -1343,6 +1347,14 @@ describe('GameRoom single-round flow', () => {
     expect(room.start(hostToken, 1_007)).toEqual({ status: 'success' })
     const secondHinting = hinting(room)
     expect(secondHinting.gameId).not.toBe(firstGameId)
+    expect(room.join(departedToken, 'Margaret', 1_008)).toEqual({
+      status: 'success',
+    })
+    expect(hinting(room, departedToken)).toMatchObject({
+      player: { participation: 'spectator' },
+      board: null,
+    })
+    const secondHintingAfterRejoin = hinting(room)
     expect(
       room.submitHint(hostToken, {
         roomCode: room.code,
@@ -1358,8 +1370,8 @@ describe('GameRoom single-round flow', () => {
         targetCardIds: [secondHinting.board![0].id],
       }),
     ).toMatchObject({ status: 'stale' })
-    expect(hinting(room)).toEqual(secondHinting)
-    expect(room.join(removedToken, 'Removed again', 1_008)).toMatchObject({
+    expect(hinting(room)).toEqual(secondHintingAfterRejoin)
+    expect(room.join(removedToken, 'Removed again', 1_009)).toMatchObject({
       status: 'removed_from_room',
     })
 
@@ -1373,12 +1385,18 @@ describe('GameRoom single-round flow', () => {
     expect(room.startGuessing(hostToken, gameCommand(room))).toEqual({
       status: 'success',
     })
-    expect(guessing(room).scoreboard.map(({ score }) => score)).toEqual([
-      0, 0, 0,
-    ])
-    expect(guessing(room).scoreboard.map(({ score }) => score)).not.toEqual(
-      firstScores,
+    expect(guessing(room, departedToken).scoreboard).toContainEqual(
+      expect.objectContaining({
+        name: 'Margaret',
+        participation: 'spectator',
+        score: null,
+      }),
     )
+    const secondScores = guessing(room)
+      .scoreboard.filter(({ participation }) => participation === 'player')
+      .map(({ score }) => score)
+    expect(secondScores).toEqual([0, 0, 0])
+    expect(secondScores).not.toEqual(firstScores)
     finishGameAndShowScoreboard(room)
     const secondResults = room.snapshotFor(hostToken)
     if (secondResults.status !== 'finished')
