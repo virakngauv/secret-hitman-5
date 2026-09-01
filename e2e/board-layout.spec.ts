@@ -1,6 +1,11 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
 const widths = [320, 359, 360, 361, 375, 390, 414, 639, 640, 928, 1216, 1280]
+const mobileViewportHeights = new Map([
+  [360, 640],
+  [375, 667],
+  [390, 844],
+])
 const longPickerName = 'Grace Hopper With An Extraordinarily Long Picker N'
 
 test('boards remain readable through hinting, guessing, and final reveal at mobile and desktop widths', async ({
@@ -249,8 +254,10 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
 async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
   for (const width of widths) {
     await test.step(`${phase} at ${width}px`, async () => {
-      await page.setViewportSize({ width, height: 900 })
+      const height = mobileViewportHeights.get(width) ?? 900
+      await page.setViewportSize({ width, height })
       await page.mouse.move(0, 0)
+      await page.evaluate(() => window.scrollTo(0, 0))
       const grid = page.locator('.word-grid')
       await expect(grid.locator('.word-card')).toHaveCount(12)
       const columns = width < 360 ? 2 : width >= 1216 ? 4 : 3
@@ -268,6 +275,17 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
         )
         .toEqual({ columns, rows: 12 / columns })
       await assertCardContentFits(page)
+      await assertResponsiveCardGeometry(page, width)
+      if (mobileViewportHeights.has(width)) {
+        await expect(page.locator('.game-intro .page-subtitle')).toHaveCSS(
+          'clip-path',
+          'inset(50%)',
+        )
+        await assertBoardFitsViewport(page, height)
+        await page.screenshot({
+          path: testInfo.outputPath(`${phase}-${width}-viewport.png`),
+        })
+      }
 
       // Layout-only stress fixtures exercise real deck words and wrapping,
       // without changing game state, roles, or interactions.
@@ -385,6 +403,32 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
       }
     })
   }
+}
+
+async function assertResponsiveCardGeometry(page: Page, width: number) {
+  const dimensions = await page.locator('.word-card').evaluateAll((cards) =>
+    cards.map((card) => {
+      const { width, height } = card.getBoundingClientRect()
+      return { width, height }
+    }),
+  )
+  const roundedHeights = new Set(
+    dimensions.map(({ height }) => Math.round(height)),
+  )
+  expect(roundedHeights.size).toBe(1)
+
+  if (width <= 414) {
+    for (const card of dimensions) {
+      expect(card.width).toBeGreaterThanOrEqual(card.height)
+    }
+  }
+}
+
+async function assertBoardFitsViewport(page: Page, viewportHeight: number) {
+  const board = await page.locator('.word-grid').boundingBox()
+  if (!board) throw new Error('Board is not visible')
+  expect(board.y).toBeGreaterThanOrEqual(0)
+  expect(board.y + board.height).toBeLessThanOrEqual(viewportHeight)
 }
 
 async function assertCardContentFits(page: Page) {
