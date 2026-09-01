@@ -276,6 +276,15 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
         .toEqual({ columns, rows: 12 / columns })
       await assertCardContentFits(page)
       await assertResponsiveCardGeometry(page, width)
+      if (phase === 'hinting' && width < 640) {
+        const clueNumberLabel = page.locator('.hint-number-label')
+        await expect(clueNumberLabel).toHaveCSS('white-space', 'nowrap')
+        expect(
+          await clueNumberLabel.evaluate(
+            (label) => label.scrollWidth <= label.parentElement!.clientWidth,
+          ),
+        ).toBe(true)
+      }
       if (mobileViewportHeights.has(width)) {
         await expect(page.locator('.game-intro .page-subtitle')).toHaveCSS(
           'clip-path',
