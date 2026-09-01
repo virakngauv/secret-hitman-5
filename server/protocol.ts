@@ -161,7 +161,6 @@ export function createGameSocketServer(
             message: 'Too many commands.',
           })
         }
-        socket.emit('room:snapshot', snapshot)
         acknowledge({ status: 'success', snapshot })
       })
     })
