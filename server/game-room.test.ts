@@ -1225,6 +1225,10 @@ describe('GameRoom single-round flow', () => {
 
   it('keeps the final board until the host explicitly shows the scoreboard', () => {
     const room = startTwoPlayerGame()
+    const spectatorToken = 'd'.repeat(32)
+    expect(room.join(spectatorToken, 'Spectator')).toEqual({
+      status: 'success',
+    })
     expect(room.advanceTurn(guestToken, gameCommand(room))).toMatchObject({
       status: 'forbidden',
     })
@@ -1260,6 +1264,11 @@ describe('GameRoom single-round flow', () => {
     expect(reviewedBoard.canViewScoreboard).toBe(true)
     expect(
       reviewedBoard.board.every(({ revealedKind }) => revealedKind !== null),
+    ).toBe(true)
+    const spectatorReview = guessing(room, spectatorToken)
+    expect(spectatorReview.canViewScoreboard).toBe(false)
+    expect(
+      spectatorReview.board.every(({ revealedKind }) => revealedKind !== null),
     ).toBe(true)
     expect(
       room.showScoreboard(hostToken, {

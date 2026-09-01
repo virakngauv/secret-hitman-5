@@ -642,8 +642,10 @@ export class GameRoom {
     const clueSeat = clueGiver.game
     if (!clueSeat?.hint)
       throw new Error('Current clue giver is missing a hint.')
+    const finalTurnReview = this.isFinalTurn() && !this.hasActiveGuessers()
     const revealAll =
       this.requireGame().turnCompleted ||
+      finalTurnReview ||
       member === clueGiver ||
       member.game?.turnState === 'done'
     const board = clueSeat.board.map((card) => {
