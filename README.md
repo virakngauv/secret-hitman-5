@@ -8,7 +8,7 @@ A one-round, host-driven multiplayer word game built with Next.js, React, TypeSc
 2. Starting players each receive a private board of 12 words. Three civilians and the assassin are randomly locked for the lifetime of the board; the other eight words are editable.
 3. Every participant writes a hint and selects 1–5 editable words it should describe. Selected words become targets and every other non-assassin word becomes a civilian. New players may join during this phase, and a departed player who has not submitted receives an internal `PASS · 0` fallback.
 4. Players can review and unlock their private submitted hint and board while clue creation remains open. When every hint is locked, the host starts guessing and manually advances each player’s clue-giver turn.
-5. A target awards 2 points to both picker and clue-giver. A civilian removes 1 point from both and ends only that picker’s turn. The first assassin removes 3 points from its picker and the clue-giver, completes the board for everyone, and reveals every role and claimant.
+5. A target awards 3 points to both picker and clue-giver. A civilian removes 1 point from both and ends only that picker’s turn. The first assassin removes 5 points from its picker and the clue-giver, completes the board for everyone, and reveals every role and claimant.
 6. After every participant gives one hint, the single round ends and final standings are revealed.
 
 There are no gameplay timers. New identities join as participants while clue creation remains open, then enter in read-only spectator mode after guessing starts. Reconnecting browsers recover their original seat from a private local token while the in-memory room still exists.
