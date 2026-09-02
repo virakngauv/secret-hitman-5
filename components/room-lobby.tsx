@@ -14,6 +14,7 @@ import {
   useRoomSnapshot,
 } from '@/components/game-socket-provider'
 import { JoinRoomScreen } from '@/components/join-room-screen'
+import { LeaveRoomControl } from '@/components/leave-room-control'
 import {
   RoomInviteActions,
   RoomInviteCard,
@@ -32,6 +33,40 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [isActing, setIsActing] = useState(false)
   const { snapshot, connectionStatus } = channel
+  const [roundTransition, setRoundTransition] = useState<{
+    snapshot: RoomSnapshot | null
+    inferredRoundEndedEarly: boolean
+    suppressInference: boolean
+  }>({
+    snapshot: null,
+    inferredRoundEndedEarly: false,
+    suppressInference: false,
+  })
+
+  if (snapshot !== roundTransition.snapshot) {
+    const previousSnapshot = roundTransition.snapshot
+    const inferredRoundEndedEarly =
+      snapshot?.status === 'lobby' &&
+      previousSnapshot !== null &&
+      (previousSnapshot.status === 'hinting' ||
+        previousSnapshot.status === 'guessing') &&
+      previousSnapshot.members.length > snapshot.members.length &&
+      !roundTransition.suppressInference
+    setRoundTransition({
+      snapshot,
+      inferredRoundEndedEarly,
+      suppressInference:
+        snapshot?.status === 'lobby'
+          ? false
+          : roundTransition.suppressInference,
+    })
+  }
+
+  const showRoundEndedEarly =
+    snapshot?.status === 'lobby' &&
+    (snapshot.lobbyNotice === 'player_left' ||
+      roundTransition.inferredRoundEndedEarly)
+
   if (!snapshot) return <RoomLoading />
 
   const retainScreen = (screen: ReactNode) => (
@@ -78,6 +113,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           view={snapshot}
           error={actionError}
           isActing={isActing}
+          showRoundEndedEarly={showRoundEndedEarly}
           onStart={async () => {
             setIsActing(true)
             setActionError(null)
@@ -128,9 +164,26 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
               playerId,
             })
           }
-          onRemovePlayer={(playerId, allowRoundReset) =>
-            game.removePlayer(roomCode, playerId, allowRoundReset)
-          }
+          onRemovePlayer={async (playerId, allowRoundReset) => {
+            if (allowRoundReset) {
+              setRoundTransition((current) => ({
+                ...current,
+                suppressInference: true,
+              }))
+            }
+            const result = await game.removePlayer(
+              roomCode,
+              playerId,
+              allowRoundReset,
+            )
+            if (result.status !== 'success') {
+              setRoundTransition((current) => ({
+                ...current,
+                suppressInference: false,
+              }))
+            }
+            return result
+          }}
           onLeave={async () => {
             const result = await game.leaveRoom(roomCode)
             if (result.status === 'success') router.push('/home')
@@ -199,6 +252,7 @@ function LobbyScreen({
   view,
   error,
   isActing,
+  showRoundEndedEarly,
   onStart,
   onLeave,
   onRemove,
@@ -206,6 +260,7 @@ function LobbyScreen({
   view: LobbyView
   error: string | null
   isActing: boolean
+  showRoundEndedEarly: boolean
   onStart: () => Promise<void>
   onLeave: () => Promise<void>
   onRemove: (playerId: string) => Promise<void>
@@ -313,20 +368,18 @@ function LobbyScreen({
             ) : (
               <div className="waiting-host">Waiting for the host to start</div>
             )}
-            <Button
-              variant="outline"
-              className="mt-3 w-full"
-              disabled={isActing}
-              onClick={() => void onLeave()}
-            >
-              Leave room
-            </Button>
+            <LeaveRoomControl
+              busy={isActing}
+              confirmationRequired={!isHost || view.members.length > 1}
+              error={error}
+              gameInProgress={false}
+              isHost={isHost}
+              onConfirm={() => void onLeave()}
+            />
           </section>
         </div>
         <ConfirmationDialog
-          open={
-            view.lobbyNotice === 'player_left' && !roundResetNoticeDismissed
-          }
+          open={showRoundEndedEarly && !roundResetNoticeDismissed}
           eyebrow="Round update"
           title="The round ended early"
           description="Another player left, leaving fewer than two players in the game. The current round was ended and everyone remaining was returned to the lobby. Invite another player to start a new game."

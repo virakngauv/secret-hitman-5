@@ -35,6 +35,7 @@ export const MAX_ROOM_MEMBERS = 32
 // Bound retained identities without ever evicting a room's removal restrictions.
 export const MAX_ROOM_IDENTITIES = 1_024
 const MAX_REMEMBERED_COMMANDS_PER_PLAYER = 100
+const KICKED_PLAYER_NAME = 'xxxx'
 
 type Member = {
   playerId: string
@@ -45,6 +46,7 @@ type Member = {
   joinedAt: number
   active: boolean
   departedGame: boolean
+  kicked: boolean
   lobbyNotice?: 'player_left'
   game: GameSeat | null
 }
@@ -68,7 +70,8 @@ type GameState = {
   turnIndex: number
   turnId: string
   turnCompleted: boolean
-  latestActivity: Omit<TurnActivitySnapshot, 'message'> | null
+  latestActivity:
+    (Omit<TurnActivitySnapshot, 'message'> & { playerId: string }) | null
 }
 
 export type GameRoomOptions = {
@@ -252,6 +255,7 @@ export class GameRoom {
     }
 
     this.removedTokenFingerprints.add(fingerprintClientToken(target.token))
+    target.kicked = true
     this.commandResults.delete(target.token)
     if (this.phase === 'guessing') {
       this.departGuessingPlayer(target)
@@ -563,6 +567,7 @@ export class GameRoom {
 
     this.requireGame().latestActivity = {
       type: card.kind,
+      playerId: member.playerId,
       playerName: member.name,
       word: card.word,
     }
@@ -600,6 +605,7 @@ export class GameRoom {
     member.game.turnState = 'done'
     this.requireGame().latestActivity = {
       type: 'pass',
+      playerId: member.playerId,
       playerName: member.name,
       word: null,
     }
@@ -838,8 +844,12 @@ export class GameRoom {
           card.kind === 'assassin' && !revealAll
             ? card.claimers
                 .filter(({ playerId }) => playerId === member.playerId)
-                .map(({ name }) => name)
-            : card.claimers.map(({ name }) => name),
+                .map(({ playerId, name }) =>
+                  this.publicPlayerName(playerId, name),
+                )
+            : card.claimers.map(({ playerId, name }) =>
+                this.publicPlayerName(playerId, name),
+              ),
         selectedByYou,
         disabled:
           !canGuess ||
@@ -857,7 +867,7 @@ export class GameRoom {
       turnNumber: this.requireGame().turnIndex + 1,
       totalTurns: this.requireGame().playerOrder.length,
       clueGiverId: clueGiver.playerId,
-      clueGiverName: clueGiver.name,
+      clueGiverName: this.publicPlayerName(clueGiver.playerId, clueGiver.name),
       hint: clueSeat.hint,
       hintNumber: clueSeat.targetCount,
       boardCompleted: this.requireGame().turnCompleted || finalTurnReview,
@@ -865,7 +875,7 @@ export class GameRoom {
       board,
       turnPlayers: this.gamePlayers().map((player) => ({
         playerId: player.playerId,
-        name: player.name,
+        name: this.publicPlayerName(player.playerId, player.name),
         state:
           player === clueGiver
             ? 'clue-giver'
@@ -910,6 +920,7 @@ export class GameRoom {
       joinedAt,
       active: true,
       departedGame: false,
+      kicked: false,
       lobbyNotice: undefined,
       game: null,
     }
@@ -982,12 +993,14 @@ export class GameRoom {
   }
 
   private scoreboard(): ScoreboardEntry[] {
-    const players: ScoreboardEntry[] = this.gamePlayers().map((member) => ({
-      ...this.identity(member),
-      participation: 'player',
-      position: member.game?.position ?? null,
-      score: member.game?.score ?? null,
-    }))
+    const players: ScoreboardEntry[] = this.gamePlayers()
+      .filter(({ kicked }) => !kicked)
+      .map((member) => ({
+        ...this.identity(member),
+        participation: 'player',
+        position: member.game?.position ?? null,
+        score: member.game?.score ?? null,
+      }))
     const spectators: ScoreboardEntry[] = this.activeMembers()
       .filter(
         ({ participation, game }) =>
@@ -1056,6 +1069,9 @@ export class GameRoom {
     const activity = this.requireGame().latestActivity
     if (!activity) return null
 
+    const { playerId, ...publicActivity } = activity
+    const playerName = this.publicPlayerName(playerId, activity.playerName)
+
     const next = this.isCurrentTurnSettled()
       ? 'The host can move on.'
       : 'Waiting for the other players to finish guessing.'
@@ -1063,15 +1079,21 @@ export class GameRoom {
     const message =
       activity.type === 'target'
         ? this.requireGame().turnCompleted
-          ? `${activity.playerName} found target${quotedWord}. The board is complete. ${next}`
-          : `${activity.playerName} found target${quotedWord} and may keep guessing.`
+          ? `${playerName} found target${quotedWord}. The board is complete. ${next}`
+          : `${playerName} found target${quotedWord} and may keep guessing.`
         : activity.type === 'civilian'
-          ? `${activity.playerName} found civilian${quotedWord} and is done guessing. ${next}`
+          ? `${playerName} found civilian${quotedWord} and is done guessing. ${next}`
           : activity.type === 'assassin'
-            ? `${activity.playerName} found assassin${quotedWord}. The board is complete. ${next}`
-            : `${activity.playerName} passed and is done guessing. ${next}`
+            ? `${playerName} found assassin${quotedWord}. The board is complete. ${next}`
+            : `${playerName} passed and is done guessing. ${next}`
 
-    return { ...activity, message }
+    return { ...publicActivity, playerName, message }
+  }
+
+  private publicPlayerName(playerId: string, fallback: string) {
+    return this.members.find((member) => member.playerId === playerId)?.kicked
+      ? KICKED_PLAYER_NAME
+      : fallback
   }
 
   private allTargetsClaimed() {

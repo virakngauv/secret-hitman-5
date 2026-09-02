@@ -511,7 +511,7 @@ test.describe('Secret Hitman single round', () => {
         host.getByRole('alertdialog', {
           name: 'Remove Linus from this game?',
         }),
-      ).toContainText(/future authored turn will be skipped/i)
+      ).toContainText(/submitted hint and board will be skipped/i)
       await host
         .getByRole('alertdialog', { name: 'Remove Linus from this game?' })
         .getByRole('button', { name: 'Remove', exact: true })
@@ -530,17 +530,17 @@ test.describe('Secret Hitman single round', () => {
         host.getByRole('heading', { name: 'Grace is the clue-giver' }),
       ).toBeVisible()
       await expect(host.getByText('Turn 2 of 2')).toBeVisible()
-      await expect(host.getByText('Linus', { exact: true })).toBeVisible()
-      await expect(host.getByText('No longer active')).toBeVisible()
+      await expect(host.getByText('Linus', { exact: true })).toHaveCount(0)
+      await expect(host.getByText('No longer active')).toHaveCount(0)
 
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await host.getByRole('button', { name: 'View scoreboard' }).click()
       await expect(host.getByText('Final standings')).toBeVisible()
-      await expect(host.getByText('Linus', { exact: true })).toBeVisible()
+      await expect(host.getByText('Linus', { exact: true })).toHaveCount(0)
       await host.getByRole('button', { name: 'Return to lobby' }).click()
-      await host.getByRole('button', { name: 'Leave room' }).click()
+      await leaveRoom(host)
       await expect(host).toHaveURL(/\/home$/)
-      await guest.getByRole('button', { name: 'Leave room' }).click()
+      await leaveRoom(guest)
       await expect(guest).toHaveURL(/\/home$/)
       await removed.goto('/home')
     } finally {
@@ -566,7 +566,7 @@ test.describe('Secret Hitman single round', () => {
       await joinRoom(guest, roomCode, 'Grace')
       await host.getByRole('button', { name: 'Start game' }).click()
 
-      await guest.getByRole('button', { name: 'Leave room' }).click()
+      await leaveRoom(guest)
       await expect(guest).toHaveURL(/\/home$/)
 
       const dialog = host.getByRole('alertdialog', {
@@ -616,10 +616,10 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'Start guessing' }).click()
       await joinRoom(spectator, roomCode, 'Sofia')
 
-      await host.getByRole('button', { name: 'Leave room' }).click()
+      await leaveRoom(host)
       await expect(host).toHaveURL(/\/home$/)
       await expect(guest.getByText('Host control')).toBeVisible()
-      await guest.getByRole('button', { name: 'Leave room' }).click()
+      await leaveRoom(guest)
       await expect(guest).toHaveURL(/\/home$/)
 
       await expect(
@@ -636,7 +636,7 @@ test.describe('Secret Hitman single round', () => {
       await spectator.getByRole('button', { name: 'View scoreboard' }).click()
       await expect(spectator.getByText('Final standings')).toBeVisible()
       await spectator.getByRole('button', { name: 'Return to lobby' }).click()
-      await spectator.getByRole('button', { name: 'Leave room' }).click()
+      await leaveRoom(spectator)
       await expect(spectator).toHaveURL(/\/home$/)
     } finally {
       for (const context of contexts) await context.close()
@@ -662,6 +662,15 @@ async function makeHint(page: Page, hint: string, count: number) {
   }
   await page.getByRole('button', { name: `Lock in hint · ${count}` }).click()
   await expect(page.getByText('Hint locked in')).toBeVisible()
+}
+
+async function leaveRoom(page: Page) {
+  await page.getByRole('button', { name: 'Leave room' }).click()
+  const dialog = page.getByRole('alertdialog', {
+    name: /Leave (?:as host|this room)\?/,
+  })
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await dialog.getByRole('button', { name: 'Leave room' }).click()
 }
 
 async function joinRoom(page: Page, roomCode: string, name: string) {

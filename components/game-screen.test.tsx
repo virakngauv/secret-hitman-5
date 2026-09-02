@@ -810,7 +810,7 @@ describe('HintPhaseScreen', () => {
 })
 
 describe('GuessingScreen messages', () => {
-  it('shows the shared turn narrative and explains inherited spectator host controls', () => {
+  it('hides latest activity and explains inherited spectator host controls', () => {
     const spectatorHost = {
       playerId: 'spectator-1',
       name: 'Linus',
@@ -858,9 +858,10 @@ describe('GuessingScreen messages', () => {
       />,
     )
 
-    expect(screen.getByLabelText('Latest turn activity')).toHaveTextContent(
-      'Grace found civilian “RIVER” and is done guessing. Waiting for the other players to finish guessing.',
-    )
+    expect(screen.queryByText('Latest activity')).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText('Latest turn activity'),
+    ).not.toBeInTheDocument()
     expect(
       screen.getByText(/inherited operational host duties/i),
     ).toHaveTextContent(
@@ -904,31 +905,48 @@ describe('GuessingScreen messages', () => {
       onClaimCard: vi.fn(),
       onFinishGuessing: vi.fn(),
       onRemovePlayer,
-      onAdvanceTurn: vi.fn(),
+      onAdvanceTurn: vi.fn().mockResolvedValue({
+        status: 'invalid',
+        message: 'Target found. You and the clue-giver each gain 3 points.',
+      }),
     }
-    const rendered = render(<GuessingScreen view={view} {...props} />)
+    const rendered = render(
+      <GuessingScreen view={{ ...view, canAdvanceTurn: true }} {...props} />,
+    )
 
     expect(
       screen.queryByRole('button', { name: 'Remove Ada from this game' }),
     ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next hint' }))
+    expect(
+      screen.getByText(
+        'Target found. You and the clue-giver each gain 3 points.',
+      ),
+    ).toBeVisible()
     await user.click(
       screen.getByRole('button', { name: 'Remove Grace from this game' }),
     )
-    expect(screen.getByRole('alertdialog')).toHaveTextContent(
-      /no longer be able to guess or rejoin.*accepted scores, claims, and completed game history.*future authored turn will be skipped/i,
+    const removalDialog = screen.getByRole('alertdialog')
+    expect(removalDialog).toHaveTextContent(
+      /no longer be able to guess or rejoin.*score and name will be removed.*points already earned by other players and completed game history will remain.*submitted hint and board will be skipped/i,
     )
+    expect(removalDialog).not.toHaveTextContent(/target found/i)
     await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(onRemovePlayer).toHaveBeenCalledWith('player-2')
 
     rendered.rerender(
       <GuessingScreen
-        view={{ ...view, members: [hintingView.members[0]] }}
+        view={{
+          ...view,
+          members: [hintingView.members[0]],
+          scoreboard: view.scoreboard.filter(({ name }) => name !== 'Grace'),
+          canAdvanceTurn: true,
+        }}
         {...props}
       />,
     )
-    expect(screen.getByText('No longer active')).toBeVisible()
-    expect(screen.getByText('Grace')).toBeVisible()
-    expect(screen.getByText('1', { selector: '.score-value' })).toBeVisible()
+    expect(screen.queryByText('No longer active')).not.toBeInTheDocument()
+    expect(screen.queryByText('Grace')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Remove Grace from this game' }),
     ).not.toBeInTheDocument()

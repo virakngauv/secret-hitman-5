@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
+import { LeaveRoomControl } from '@/components/leave-room-control'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { Input } from '@/components/ui/input'
@@ -405,20 +406,14 @@ export function HintPhaseScreen({
               start guessing when everyone is ready.
             </p>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-3 w-full"
-            disabled={isLeaving}
-            onClick={() => void leave()}
-          >
-            {isLeaving ? 'Leaving…' : 'Leave room'}
-          </Button>
-          {leaveError ? (
-            <p className="form-message" role="alert">
-              {leaveError}
-            </p>
-          ) : null}
+          <LeaveRoomControl
+            busy={isLeaving}
+            confirmationRequired={!isHost || view.members.length > 1}
+            error={leaveError}
+            gameInProgress
+            isHost={isHost}
+            onConfirm={() => void leave()}
+          />
         </aside>
       </div>
       {view.hintRejected ? <HintRejectionNotice /> : null}
@@ -483,6 +478,7 @@ export function GuessingScreen({
   const [isFinishing, setIsFinishing] = useState(false)
   const [isAdvancing, setIsAdvancing] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
+  const [leaveError, setLeaveError] = useState<string | null>(null)
   const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
   const [removalTarget, setRemovalTarget] = useState<{
     playerId: string
@@ -490,6 +486,7 @@ export function GuessingScreen({
   } | null>(null)
   const [confirmAdvance, setConfirmAdvance] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [removalError, setRemovalError] = useState<string | null>(null)
   const isClueGiver = view.player.playerId === view.clueGiverId
   const fullyRevealed = view.board.every(
     ({ revealedKind }) => revealedKind !== null,
@@ -548,6 +545,7 @@ export function GuessingScreen({
   }
 
   const removePlayer = async (playerId: string, name: string) => {
+    setRemovalError(null)
     setRemovalTarget({ playerId, name })
   }
 
@@ -555,19 +553,19 @@ export function GuessingScreen({
     if (!removalTarget) return
     const { playerId } = removalTarget
     setBusyPlayer(playerId)
-    setFeedback(null)
+    setRemovalError(null)
     const result = await onRemovePlayer(playerId)
-    if (result.status !== 'success') setFeedback(result.message)
+    if (result.status !== 'success') setRemovalError(result.message)
     else setRemovalTarget(null)
     setBusyPlayer(null)
   }
 
   const leave = async () => {
     if (!onLeave) return
-    setFeedback(null)
+    setLeaveError(null)
     setIsLeaving(true)
     const result = await onLeave()
-    if (result.status !== 'success') setFeedback(result.message)
+    if (result.status !== 'success') setLeaveError(result.message)
     setIsLeaving(false)
   }
 
@@ -664,16 +662,6 @@ export function GuessingScreen({
         </section>
 
         <aside className="game-panel game-sidebar">
-          {view.latestActivity ? (
-            <section
-              className="turn-activity"
-              aria-label="Latest turn activity"
-              aria-live="polite"
-            >
-              <p className="host-control-label">Latest activity</p>
-              <p>{view.latestActivity.message}</p>
-            </section>
-          ) : null}
           <h2 className="sidebar-title">Scorecard</h2>
           <ol className="mt-4 grid gap-2">
             {players.map((player) => {
@@ -762,15 +750,16 @@ export function GuessingScreen({
             </div>
           ) : null}
           {onLeave ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-3 w-full"
-              disabled={isLeaving}
-              onClick={() => void leave()}
-            >
-              {isLeaving ? 'Leaving…' : 'Leave room'}
-            </Button>
+            <LeaveRoomControl
+              busy={isLeaving}
+              confirmationRequired={
+                view.player.role !== 'host' || view.members.length > 1
+              }
+              error={leaveError}
+              gameInProgress
+              isHost={view.player.role === 'host'}
+              onConfirm={() => void leave()}
+            />
           ) : null}
         </aside>
       </div>
@@ -789,11 +778,11 @@ export function GuessingScreen({
         title={
           removalTarget ? `Remove ${removalTarget.name} from this game?` : ''
         }
-        description={`${removalTarget?.name ?? 'This player'} will no longer be able to guess or rejoin this room. Accepted scores, claims, and completed game history will remain unchanged; any future authored turn will be skipped.`}
+        description={`${removalTarget?.name ?? 'This player'} will no longer be able to guess or rejoin this room. Their score and name will be removed from the game. Points already earned by other players and completed game history will remain. If their clue-giver turn has not happened yet, their submitted hint and board will be skipped.`}
         cancelLabel="Cancel"
         confirmLabel="Remove"
         busy={busyPlayer !== null}
-        error={removalTarget ? feedback : null}
+        error={removalTarget ? removalError : null}
         onCancel={() => setRemovalTarget(null)}
         onConfirm={() => void confirmRemoval()}
       />

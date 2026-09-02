@@ -1584,7 +1584,7 @@ describe('GameRoom single-round flow', () => {
     })
   })
 
-  it('removes a guesser from future turns while preserving accepted score history', () => {
+  it('removes a kicked guesser from public standings and anonymizes retained history', () => {
     const room = createRoom()
     room.join(guestToken, 'Grace', 1_001)
     room.join(thirdToken, 'Linus', 1_002)
@@ -1613,17 +1613,25 @@ describe('GameRoom single-round flow', () => {
 
     const after = guessing(room)
     expect(after.totalTurns).toBe(before.totalTurns - 1)
-    expect(after.board).toEqual(before.board)
-    expect(after.scoreboard.map(({ name }) => name)).toEqual([
-      'Ada',
-      'Grace',
-      'Linus',
-    ])
+    expect(
+      after.board.map(({ id, revealedKind }) => ({ id, revealedKind })),
+    ).toEqual(
+      before.board.map(({ id, revealedKind }) => ({ id, revealedKind })),
+    )
+    expect(
+      after.board.find(({ id }) => id === currentTarget.id)?.claimedBy,
+    ).toEqual(['xxxx'])
+    expect(after.scoreboard.map(({ name }) => name)).toEqual(['Ada', 'Linus'])
     expect(after.turnPlayers).toContainEqual({
       playerId: guestId,
-      name: 'Grace',
+      name: 'xxxx',
       state: 'done',
     })
+    expect(after.latestActivity).toMatchObject({
+      playerName: 'xxxx',
+      message: expect.stringContaining('xxxx found target'),
+    })
+    expect(JSON.stringify(after)).not.toContain('Grace')
     expect(room.snapshotFor(guestToken)).toEqual({
       status: 'removed_from_room',
       roomCode: room.code,
@@ -1652,7 +1660,41 @@ describe('GameRoom single-round flow', () => {
     })
     expect(
       guessing(room).scoreboard.find(({ playerId }) => playerId === guestId),
-    ).toMatchObject({ name: 'Grace', score: 3 })
+    ).toBeUndefined()
+  })
+
+  it('anonymizes a kicked current clue-giver while their board remains in play', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.join(thirdToken, 'Linus', 1_002)
+    room.start(hostToken, 1_003)
+    submitFirstHint(room, hostToken, 'Orbit')
+    submitFirstHint(room, guestToken, 'Garden')
+    submitFirstHint(room, thirdToken, 'Metal')
+    room.startGuessing(hostToken, gameCommand(room), 1_004)
+    finishActiveGuessers(room)
+    room.advanceTurn(hostToken, gameCommand(room), 1_005)
+
+    const guestId = guessing(room, guestToken).player.playerId
+    expect(guessing(room).clueGiverName).toBe('Grace')
+    expect(room.removePlayer(hostToken, guestId, false, 1_006)).toEqual({
+      status: 'success',
+      removedToken: guestToken,
+    })
+
+    const after = guessing(room)
+    expect(after).toMatchObject({
+      clueGiverId: guestId,
+      clueGiverName: 'xxxx',
+      hint: 'Garden',
+    })
+    expect(after.scoreboard.map(({ name }) => name)).toEqual(['Ada', 'Linus'])
+    expect(after.turnPlayers).toContainEqual({
+      playerId: guestId,
+      name: 'xxxx',
+      state: 'clue-giver',
+    })
+    expect(JSON.stringify(after)).not.toContain('Grace')
   })
 
   it('never reuses a private board index after removal and reindexing', () => {

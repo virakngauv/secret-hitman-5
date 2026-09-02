@@ -63,7 +63,6 @@
   margin-top: 1.5rem;
 }
 
-.turn-activity,
 .operational-host-notice {
   border: 1px solid var(--border);
   border-radius: 1rem;
@@ -71,14 +70,6 @@
   color: var(--foreground);
 }
 
-.turn-activity {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0 0 1rem;
-  padding: 0.85rem 1rem;
-}
-
-.turn-activity p,
 .operational-host-notice {
   font-size: 0.875rem;
   line-height: 1.5;
