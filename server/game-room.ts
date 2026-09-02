@@ -185,7 +185,7 @@ export class GameRoom {
     } else if (member.game) {
       if (this.phase === 'hinting') {
         this.removeGameSeat(member)
-        if (!wasHost && this.gamePlayers().length < MIN_STARTING_PLAYERS) {
+        if (this.gamePlayers().length < MIN_STARTING_PLAYERS) {
           this.resetRoundToLobby()
         }
       }

@@ -33,6 +33,8 @@
 
 .app-dialog {
   width: min(100%, 32rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 1.5rem;
   background: var(--card);

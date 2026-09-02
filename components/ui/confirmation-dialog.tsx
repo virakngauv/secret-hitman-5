@@ -68,7 +68,11 @@ export function ConfirmationDialog({
       (element): element is HTMLButtonElement =>
         element instanceof HTMLButtonElement && !element.disabled,
     )
-    if (focusable.length === 0) return
+    if (focusable.length === 0) {
+      event.preventDefault()
+      dialogRef.current?.focus()
+      return
+    }
     const first = focusable[0]
     const last = focusable[focusable.length - 1]
     if (event.shiftKey && document.activeElement === first) {

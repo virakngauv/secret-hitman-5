@@ -158,28 +158,46 @@ describe('GameRoom single-round flow', () => {
     })
   })
 
-  it('removes a departed hinting seat and gives that identity a fresh seat on rejoin', () => {
+  it('returns a two-player hinting room to a recoverable lobby when the host leaves', () => {
     const room = createRoom()
     room.join(guestToken, 'Grace', 1_001)
     room.start(hostToken, 1_002)
-    const originalBoardIds = hinting(room).board!.map(({ id }) => id)
 
     expect(room.leave(hostToken, 1_003)).toEqual({ status: 'success' })
+    expect(room.snapshotFor(guestToken)).toMatchObject({
+      status: 'lobby',
+      minimumPlayers: 2,
+      members: [{ name: 'Grace', role: 'host' }],
+    })
+    expect(room.start(guestToken, 1_004)).toMatchObject({
+      status: 'invalid',
+      message: 'At least 2 players are required to start.',
+    })
+  })
+
+  it('removes a departed hinting seat and gives that identity a fresh seat on rejoin', () => {
+    const room = createRoom()
+    room.join(guestToken, 'Grace', 1_001)
+    room.join(thirdToken, 'Lin', 1_002)
+    room.start(hostToken, 1_003)
+    const originalBoardIds = hinting(room).board!.map(({ id }) => id)
+
+    expect(room.leave(hostToken, 1_004)).toEqual({ status: 'success' })
     expect(hinting(room, guestToken)).toMatchObject({
       player: { role: 'host' },
       hintStatuses: [
         expect.objectContaining({ name: 'Grace', submitted: false }),
+        expect.objectContaining({ name: 'Lin', submitted: false }),
       ],
     })
     expect(submitFirstHint(room, guestToken, 'Garden')).toEqual({
       status: 'success',
     })
-    expect(room.startGuessing(guestToken, gameCommand(room))).toMatchObject({
-      status: 'invalid',
-      message: 'At least 2 players are required to start guessing.',
+    expect(submitFirstHint(room, thirdToken, 'Harbor')).toEqual({
+      status: 'success',
     })
 
-    expect(room.join(hostToken, 'Ada', 1_004)).toEqual({ status: 'success' })
+    expect(room.join(hostToken, 'Ada', 1_005)).toEqual({ status: 'success' })
     const returned = hinting(room)
     expect(returned.player).toMatchObject({
       name: 'Ada',
@@ -194,21 +212,23 @@ describe('GameRoom single-round flow', () => {
     })
     expect(returned.hintStatuses.map(({ name }) => name)).toEqual([
       'Grace',
+      'Lin',
       'Ada',
     ])
     expect(submitFirstHint(room, hostToken, 'Orbit')).toEqual({
       status: 'success',
     })
-    expect(room.startGuessing(guestToken, gameCommand(room), 1_005)).toEqual({
+    expect(room.startGuessing(guestToken, gameCommand(room), 1_006)).toEqual({
       status: 'success',
     })
-    expect(guessing(room).totalTurns).toBe(2)
+    expect(guessing(room).totalTurns).toBe(3)
   })
 
   it('rejects locked-role and target-count tampering atomically', () => {
     const room = createRoom()
     room.join(guestToken, 'Grace', 1_001)
-    room.start(hostToken, 1_002)
+    room.join(fourthToken, 'Temporary player', 1_002)
+    room.start(hostToken, 1_003)
     const before = hinting(room)
     const board = before.board!
     const neutral = board.find(({ kind }) => kind === 'neutral')!
@@ -259,6 +279,7 @@ describe('GameRoom single-round flow', () => {
     ).toMatchObject({ status: 'invalid' })
     room.leave(hostToken)
     room.join(hostToken, 'Ada')
+    room.leave(fourthToken)
     const replacement = hinting(room)
     expect(replacement.board).not.toEqual(submittedBoard)
     expect(replacement.hintSubmitted).toBe(false)
@@ -417,7 +438,8 @@ describe('GameRoom single-round flow', () => {
   it('removes an explicitly departed unlocked hint and board', () => {
     const room = createRoom()
     room.join(guestToken, 'Grace', 1_001)
-    room.start(hostToken, 1_002)
+    room.join(thirdToken, 'Lin', 1_002)
+    room.start(hostToken, 1_003)
     const targetIds = hinting(room)
       .board!.filter(({ kind }) => kind === 'neutral')
       .slice(0, 2)
@@ -432,8 +454,10 @@ describe('GameRoom single-round flow', () => {
     expect(room.leave(hostToken)).toEqual({ status: 'success' })
     expect(hinting(room, guestToken).hintStatuses).toEqual([
       expect.objectContaining({ name: 'Grace', submitted: false }),
+      expect.objectContaining({ name: 'Lin', submitted: false }),
     ])
     expect(room.join(hostToken, 'Ada')).toEqual({ status: 'success' })
+    expect(room.leave(thirdToken)).toEqual({ status: 'success' })
     expect(hinting(room)).toMatchObject({
       hint: null,
       hintSubmitted: false,
@@ -2051,13 +2075,13 @@ describe('GameRoom single-round flow', () => {
       for (const token of originalPlayers.slice(1)) room.leave(token, 1_400)
       room.leave(hostToken, 1_500)
 
-      expect(hinting(room, returningToken).player).toMatchObject({
-        role: 'host',
-        participation: 'player',
+      expect(room.snapshotFor(returningToken)).toMatchObject({
+        status: 'lobby',
+        player: { role: 'host', participation: 'player' },
       })
-      expect(hinting(room, spectatorToken).player).toMatchObject({
-        role: 'player',
-        participation: 'spectator',
+      expect(room.snapshotFor(spectatorToken)).toMatchObject({
+        status: 'lobby',
+        player: { role: 'player', participation: 'player' },
       })
     })
 

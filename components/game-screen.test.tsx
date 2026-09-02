@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -577,6 +577,43 @@ describe('HintPhaseScreen', () => {
     expect(onRemovePlayer).toHaveBeenCalledWith('player-2', true)
   })
 
+  it('keeps focus trapped in a removal dialog while its action is busy', async () => {
+    const user = userEvent.setup()
+    let finishRemoval!: (result: { status: 'success' }) => void
+    const onRemovePlayer = vi.fn(
+      () =>
+        new Promise<{ status: 'success' }>((resolve) => {
+          finishRemoval = resolve
+        }),
+    )
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toHaveFocus()
+
+    await user.tab()
+    expect(dialog).toHaveFocus()
+
+    finishRemoval({ status: 'success' })
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
+  })
+
   it('uses the ordinary removal warning when the round keeps two players', async () => {
     const user = userEvent.setup()
     const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
@@ -730,6 +767,30 @@ describe('HintPhaseScreen', () => {
     expect(await screen.findByLabelText('Your hint')).toHaveValue('')
     expect(screen.getByLabelText('Your hint')).not.toHaveAttribute('readonly')
     expect(screen.getByText('NEW MOON')).toBeVisible()
+  })
+
+  it('opens the rejection dialog when a later snapshot marks the hint rejected', () => {
+    const props = {
+      onSubmitHint: vi.fn(),
+      onUnlockHint: vi.fn(),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
+      onStartGuessing: vi.fn(),
+    }
+    const view = render(<HintPhaseScreen view={hintingView} {...props} />)
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    view.rerender(
+      <HintPhaseScreen
+        view={{ ...hintingView, hintRejected: true }}
+        {...props}
+      />,
+    )
+
+    expect(
+      screen.getByRole('alertdialog', { name: 'Your hint was rejected' }),
+    ).toBeVisible()
   })
 })
 
