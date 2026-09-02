@@ -7,8 +7,10 @@ import {
   MIN_TARGET_COUNT,
   type CardKind,
   type ClaimCardPayload,
+  type CommandFailure,
   type CommandResult,
   type FinishGuessingPayload,
+  type GameCommandPayload,
   type Participation,
   type PlayerIdentity,
   type PlayerRole,
@@ -55,6 +57,7 @@ type GameSeat = {
 }
 
 type GameState = {
+  gameId: string
   boardSeed: string
   nextBoardIndex: number
   playerOrder: string[]
@@ -290,6 +293,7 @@ export class GameRoom {
       }
     }
 
+    const gameId = randomUUID()
     const seed = `${this.initialSeed}:${now}`
     players.forEach((member, position) => {
       member.participation = 'player'
@@ -305,6 +309,7 @@ export class GameRoom {
       }
     })
     this.game = {
+      gameId,
       boardSeed: seed,
       nextBoardIndex: players.length,
       playerOrder: players.map(({ playerId }) => playerId),
@@ -323,6 +328,7 @@ export class GameRoom {
     payload: SubmitHintPayload,
     now = Date.now(),
   ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'hinting') {
@@ -362,7 +368,12 @@ export class GameRoom {
     return { status: 'success' }
   }
 
-  unlockHint(token: string, now = Date.now()): CommandResult {
+  unlockHint(
+    token: string,
+    payload: GameCommandPayload,
+    now = Date.now(),
+  ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'hinting') {
@@ -387,6 +398,7 @@ export class GameRoom {
     payload: RejectHintPayload,
     now = Date.now(),
   ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
@@ -435,7 +447,12 @@ export class GameRoom {
     return { status: 'success' }
   }
 
-  startGuessing(token: string, now = Date.now()): CommandResult {
+  startGuessing(
+    token: string,
+    payload: GameCommandPayload,
+    now = Date.now(),
+  ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
@@ -468,6 +485,7 @@ export class GameRoom {
     payload: ClaimCardPayload,
     now = Date.now(),
   ): CommandResult<{ kind: CardKind }> {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     const seat = member?.game
     if (!member || !seat || this.phase !== 'guessing') {
@@ -540,6 +558,7 @@ export class GameRoom {
     payload: FinishGuessingPayload,
     now = Date.now(),
   ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const member = this.findActiveMember(token)
     if (!member?.game || this.phase !== 'guessing') {
       return { status: 'forbidden', message: 'You are not an active guesser.' }
@@ -562,7 +581,12 @@ export class GameRoom {
     return { status: 'success' }
   }
 
-  advanceTurn(token: string, now = Date.now()): CommandResult {
+  advanceTurn(
+    token: string,
+    payload: GameCommandPayload,
+    now = Date.now(),
+  ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
@@ -585,13 +609,79 @@ export class GameRoom {
 
     const game = this.requireGame()
     if (game.turnIndex >= game.playerOrder.length - 1) {
-      this.phase = 'finished'
-    } else {
-      game.turnIndex += 1
-      game.turnId = randomUUID()
-      game.turnCompleted = false
-      this.prepareCurrentTurn()
+      return {
+        status: 'invalid',
+        message: 'Use View scoreboard after the final turn.',
+      }
     }
+    game.turnIndex += 1
+    game.turnId = randomUUID()
+    game.turnCompleted = false
+    this.prepareCurrentTurn()
+    this.commandResults.clear()
+    this.touch(now)
+    return { status: 'success' }
+  }
+
+  showScoreboard(
+    token: string,
+    payload: GameCommandPayload,
+    now = Date.now(),
+  ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
+    const actor = this.findActiveMember(token)
+    if (!actor || actor.role !== 'host') {
+      return {
+        status: 'forbidden',
+        message: 'Only the host can show the scoreboard.',
+      }
+    }
+    if (this.phase !== 'guessing' || !this.isFinalTurn()) {
+      return {
+        status: 'invalid',
+        message: 'The scoreboard is available only after the final turn.',
+      }
+    }
+    if (this.hasActiveGuessers()) {
+      return {
+        status: 'invalid',
+        message: 'Waiting for players to finish guessing.',
+      }
+    }
+
+    this.phase = 'finished'
+    this.commandResults.clear()
+    this.touch(now)
+    return { status: 'success' }
+  }
+
+  returnToLobby(
+    token: string,
+    payload: GameCommandPayload,
+    now = Date.now(),
+  ): CommandResult {
+    const actor = this.findActiveMember(token)
+    if (!actor || actor.role !== 'host') {
+      return {
+        status: 'forbidden',
+        message: 'Only the host can return the room to the lobby.',
+      }
+    }
+    if (this.phase === 'lobby') return { status: 'success' }
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
+    if (this.phase !== 'finished') {
+      return {
+        status: 'invalid',
+        message: 'The room can return to the lobby only from final results.',
+      }
+    }
+
+    for (const member of this.members) {
+      member.participation = 'player'
+      member.game = null
+    }
+    this.game = null
+    this.phase = 'lobby'
     this.commandResults.clear()
     this.touch(now)
     return { status: 'success' }
@@ -630,6 +720,7 @@ export class GameRoom {
       const allHintsSubmitted = this.allHintsSubmitted()
       return {
         status: 'hinting',
+        gameId: this.requireGame().gameId,
         ...base,
         hintStatuses: this.gamePlayers().map((player) => {
           const seat = player.game
@@ -659,16 +750,30 @@ export class GameRoom {
       }
     }
 
+    if (this.phase === 'finished') {
+      const scoreboard = this.scoreboard()
+      const playerScores = scoreboard.filter(
+        (entry): entry is ScoreboardEntry & { score: number } =>
+          entry.participation === 'player' && entry.score !== null,
+      )
+      const winningScore = Math.max(...playerScores.map(({ score }) => score))
+      return {
+        status: 'finished',
+        gameId: this.requireGame().gameId,
+        ...base,
+        scoreboard,
+        winners: playerScores.filter(({ score }) => score === winningScore),
+      }
+    }
+
     const clueGiver = this.currentClueGiver()
     const clueSeat = clueGiver.game
     if (!clueSeat?.hint)
       throw new Error('Current clue giver is missing a hint.')
     const turnSettled = this.isCurrentTurnSettled()
+    const finalTurnReview = this.isFinalTurn() && turnSettled
     const revealAll =
-      this.phase === 'finished' ||
-      turnSettled ||
-      member === clueGiver ||
-      member.game?.turnState === 'done'
+      turnSettled || member === clueGiver || member.game?.turnState === 'done'
     const board = clueSeat.board.map((card) => {
       const selectedByYou = card.claimers.some(
         ({ playerId }) => playerId === member.playerId,
@@ -704,28 +809,11 @@ export class GameRoom {
       }
     })
 
-    if (this.phase === 'finished') {
-      const scoreboard = this.scoreboard()
-      const playerScores = scoreboard.filter(
-        (entry): entry is ScoreboardEntry & { score: number } =>
-          entry.participation === 'player' && entry.score !== null,
-      )
-      const winningScore = Math.max(...playerScores.map(({ score }) => score))
-      return {
-        status: 'finished',
-        ...base,
-        scoreboard,
-        winners: playerScores.filter(({ score }) => score === winningScore),
-        lastClueGiverName: clueGiver.name,
-        lastHint: clueSeat.hint,
-        lastHintNumber: clueSeat.targetCount,
-        board,
-      }
-    }
-
     return {
       status: 'guessing',
+      gameId: this.requireGame().gameId,
       turnId: this.requireGame().turnId,
+      isFinalTurn: this.isFinalTurn(),
       ...base,
       turnNumber: this.requireGame().turnIndex + 1,
       totalTurns: this.requireGame().playerOrder.length,
@@ -733,7 +821,7 @@ export class GameRoom {
       clueGiverName: clueGiver.name,
       hint: clueSeat.hint,
       hintNumber: clueSeat.targetCount,
-      boardCompleted: this.requireGame().turnCompleted,
+      boardCompleted: this.requireGame().turnCompleted || finalTurnReview,
       turnSettled,
       board,
       turnPlayers: this.gamePlayers().map((player) => ({
@@ -755,7 +843,10 @@ export class GameRoom {
         Boolean(member.game) &&
         member !== clueGiver &&
         member.game?.turnState === 'guessing',
-      canAdvanceTurn: member.role === 'host' && turnSettled,
+      canAdvanceTurn:
+        member.role === 'host' && !this.isFinalTurn() && turnSettled,
+      canViewScoreboard:
+        member.role === 'host' && this.isFinalTurn() && turnSettled,
     }
   }
 
@@ -912,6 +1003,22 @@ export class GameRoom {
     const clueGiver = this.currentClueGiver()
     for (const player of this.gamePlayers()) {
       if (player !== clueGiver && player.game) player.game.turnState = 'done'
+    }
+  }
+
+  private isFinalTurn() {
+    const game = this.requireGame()
+    return game.turnIndex === game.playerOrder.length - 1
+  }
+
+  private isCurrentGame(gameId: string) {
+    return this.game?.gameId === gameId
+  }
+
+  private staleGame(): CommandFailure {
+    return {
+      status: 'stale',
+      message: 'That command belongs to a previous game.',
     }
   }
 

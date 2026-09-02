@@ -4,6 +4,7 @@ import type {
   ClaimCardPayload,
   CommandResult,
   FinishGuessingPayload,
+  GameCommandPayload,
   RoomSnapshot,
   RejectHintPayload,
   SubmitHintPayload,
@@ -114,8 +115,10 @@ export class GameServer {
     )
   }
 
-  unlockHint(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.unlockHint(token, now))
+  unlockHint(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.unlockHint(token, payload, now),
+    )
   }
 
   rejectHint(token: string, payload: RejectHintPayload, now = Date.now()) {
@@ -124,8 +127,10 @@ export class GameServer {
     )
   }
 
-  startGuessing(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.startGuessing(token, now))
+  startGuessing(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.startGuessing(token, payload, now),
+    )
   }
 
   claimCard(token: string, payload: ClaimCardPayload, now = Date.now()) {
@@ -144,8 +149,22 @@ export class GameServer {
     )
   }
 
-  advanceTurn(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.advanceTurn(token, now))
+  advanceTurn(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.advanceTurn(token, payload, now),
+    )
+  }
+
+  showScoreboard(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.showScoreboard(token, payload, now),
+    )
+  }
+
+  returnToLobby(token: string, payload: GameCommandPayload, now = Date.now()) {
+    return this.withRoom(payload.roomCode, (room) =>
+      room.returnToLobby(token, payload, now),
+    )
   }
 
   snapshot(token: string, roomCode: string, now = Date.now()): RoomSnapshot {

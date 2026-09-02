@@ -65,6 +65,7 @@ try {
       .timeout(ACK_TIMEOUT_MS)
       .emitWithAck('game:submit-hint', {
         roomCode,
+        gameId: hostHintState.gameId,
         hint,
         targetCardIds,
       })
@@ -75,7 +76,10 @@ try {
   const guestGuessing = nextSnapshot(guest, 'guessing')
   const guessingStarted = await host
     .timeout(ACK_TIMEOUT_MS)
-    .emitWithAck('game:start-guessing', { roomCode })
+    .emitWithAck('game:start-guessing', {
+      roomCode,
+      gameId: hostHintState.gameId,
+    })
   if (guessingStarted.status !== 'success')
     throw new Error(guessingStarted.message)
   const [hostState, guestState] = await Promise.all([
@@ -89,6 +93,7 @@ try {
     .timeout(ACK_TIMEOUT_MS)
     .emitWithAck('game:claim-card', {
       roomCode,
+      gameId: guestState.gameId,
       commandId: randomUUID(),
       turnId: guestState.turnId,
       cardId: hostTargets[0]!,
