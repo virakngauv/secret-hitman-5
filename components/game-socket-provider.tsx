@@ -84,6 +84,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const synchronizationGenerationRef = useRef(0)
   const receiveSnapshotRef = useRef<(snapshot: RoomSnapshot) => void>(() => {})
   const resumeWatchedRoomsRef = useRef<() => void>(() => {})
+  const sendLeaveIntentRef = useRef<(roomCodes: string[]) => void>(() => {})
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting')
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({})
@@ -206,11 +207,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     const handleShutdown = () => {
       markDisconnected()
     }
-    const handlePageHide = (event: PageTransitionEvent) => {
-      if (event.persisted || !socket.id) return
-      const roomCodes = [...watchedRoomsRef.current.keys()]
-      if (roomCodes.length === 0) return
-
+    const sendLeaveIntent = (roomCodes: string[]) => {
+      if (!socket.id || roomCodes.length === 0) return
       const body = new URLSearchParams({
         token: clientToken,
         socketId: socket.id,
@@ -224,6 +222,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
           keepalive: true,
         }).catch(() => {})
       }
+    }
+    sendLeaveIntentRef.current = sendLeaveIntent
+    const handlePageHide = (event: PageTransitionEvent) => {
+      if (event.persisted) return
+      sendLeaveIntent([...watchedRoomsRef.current.keys()])
     }
 
     socket.on('connect', resumeWatchedRooms)
@@ -241,6 +244,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       synchronizedRef.current = false
       receiveSnapshotRef.current = () => {}
       resumeWatchedRoomsRef.current = () => {}
+      sendLeaveIntentRef.current = () => {}
       clearResumeRetry()
       window.removeEventListener('pagehide', handlePageHide)
       setSnapshots({})
@@ -259,8 +263,10 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
 
     return () => {
       const count = watchers.get(roomCode) ?? 0
-      if (count <= 1) watchers.delete(roomCode)
-      else watchers.set(roomCode, count - 1)
+      if (count <= 1) {
+        watchers.delete(roomCode)
+        sendLeaveIntentRef.current([roomCode])
+      } else watchers.set(roomCode, count - 1)
     }
   }, [])
 

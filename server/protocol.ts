@@ -111,6 +111,7 @@ export function createGameSocketServer(
     {
       timer: ReturnType<typeof setTimeout>
       generation: symbol
+      initiatingSocketId: string
     }
   >()
 
@@ -451,6 +452,9 @@ export function createGameSocketServer(
           candidate.id !== initiatingSocketId && candidate.data.token === token,
       )
       if (hasAnotherSocket) {
+        await sockets
+          .find((candidate) => candidate.id === initiatingSocketId)
+          ?.leave(roomCode)
         cancelLeaveIntent(token, roomCode)
         continue
       }
@@ -466,7 +470,11 @@ export function createGameSocketServer(
         )
       }, options.leaveIntentGraceMs ?? LEAVE_INTENT_GRACE_MS)
       timer.unref()
-      pendingLeaveIntents.set(key, { timer, generation })
+      pendingLeaveIntents.set(key, {
+        timer,
+        generation,
+        initiatingSocketId,
+      })
     }
   }
 
@@ -477,16 +485,28 @@ export function createGameSocketServer(
   ) {
     const sockets = await io.fetchSockets()
     const key = leaveIntentKey(token, roomCode)
-    if (pendingLeaveIntents.get(key)?.generation !== generation) return
+    const intent = pendingLeaveIntents.get(key)
+    if (intent?.generation !== generation) return
 
     const reconnected = sockets.some(
-      (candidate) => candidate.data.token === token,
+      (candidate) =>
+        candidate.id !== intent.initiatingSocketId &&
+        candidate.data.token === token,
     )
     pendingLeaveIntents.delete(key)
-    if (reconnected) return
+    const initiatingSocket = sockets.find(
+      (candidate) => candidate.id === intent.initiatingSocketId,
+    )
+    if (reconnected) {
+      await initiatingSocket?.leave(roomCode)
+      return
+    }
 
     const result = gameServer.leaveRoom(token, roomCode)
-    if (result.status === 'success') broadcastSnapshots(roomCode)
+    if (result.status === 'success') {
+      await initiatingSocket?.leave(roomCode)
+      broadcastSnapshots(roomCode)
+    }
   }
 
   async function notifyRemovedPlayer(roomCode: string, token: string) {
