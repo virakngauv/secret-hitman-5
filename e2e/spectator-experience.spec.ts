@@ -152,13 +152,13 @@ test.describe('spectator experience audit', () => {
         spectator.getByLabel('Completed and fully revealed board'),
       ).toBeVisible()
       await expect(
-        spectator.getByRole('button', { name: 'Finish the game' }),
+        spectator.getByRole('button', { name: 'View scoreboard' }),
       ).toHaveCount(0)
 
       await expect(
-        host.getByRole('button', { name: 'Finish the game' }),
+        host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeEnabled()
-      await host.getByRole('button', { name: 'Finish the game' }).click()
+      await host.getByRole('button', { name: 'View scoreboard' }).click()
       await expect(spectator.getByText('Final standings')).toBeVisible()
       await expect(spectator.locator('[data-card-kind="hidden"]')).toHaveCount(
         0,
@@ -168,14 +168,12 @@ test.describe('spectator experience audit', () => {
       await spectator.reload()
       await expect(spectator.getByText('Final standings')).toBeVisible()
       await expect(
-        spectator.getByLabel('Fully revealed final board'),
-      ).toBeVisible()
-      await expect(
         spectator.locator('button[data-card-kind="hidden"]'),
       ).toHaveCount(0)
+      await expect(spectator.locator('.word-grid')).toHaveCount(0)
       await expect(
         spectator.getByRole('button', {
-          name: /^(Start guessing|Next hint|Finish the game)$/,
+          name: /^(Start guessing|Next hint|View scoreboard)$/,
         }),
       ).toHaveCount(0)
     } finally {

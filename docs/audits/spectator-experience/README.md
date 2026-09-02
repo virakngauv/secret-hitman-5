@@ -40,8 +40,9 @@ Grace saw the board as classified.
 | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
 | ![Private clue-giver board](assets/00a-player-private-board.png) | ![Classified guessing board](assets/00b-player-hidden-board.png) |
 
-The completed manual session ended with a fully revealed board and locked final
-scores.
+The completed manual-session capture below predates the dedicated board-free
+scoreboard introduced by #56. It remains historical audit evidence rather than
+current-flow evidence.
 
 ![Final standings from the completed player session](assets/00c-player-final-standings.png)
 
@@ -54,20 +55,21 @@ and are committed beside this report.
 
 | Step | Scenario                                   | Captured spectator evidence                                                                                      |
 | ---- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| 1    | Join after guessing starts                 | [Current clue and number, classified disabled board, no player controls](assets/02-first-turn-desktop.png)       |
-| 2    | Same guessing turn after refresh           | Automated assertion confirms spectator identity and the disabled board persist                                   |
+| 1    | Join after guessing starts                 | [Current clue and number, classified disabled board, no player controls](assets/01-hinting-waiting-desktop.png)  |
+| 2    | Same guessing turn after refresh           | [Spectator identity and the disabled board persist](assets/02-first-turn-desktop.png)                            |
 | 3    | Same turn at 390 x 844                     | [Readable responsive view; the scorecard remains below the visible board](assets/03-first-turn-mobile.png)       |
 | 4    | Target claimed and remaining guessers pass | [Settled turn reveals the full board alongside picker, score, and done states](assets/04-target-and-passes.png)  |
 | 5    | Civilian selected                          | [Public role and picker appear; affected guesser becomes done](assets/05-civilian-turn.png)                      |
 | 6    | Assassin selected                          | [Board completes and every role becomes public](assets/06-assassin-reveal.png)                                   |
 | 7    | Temporary network loss                     | [Inline reconnect status preserves the board](assets/07-reconnecting.png); restored identity remains a spectator |
-| 8    | Host finishes the game                     | [Final standings and revealed board](assets/08-final-standings.png) persist after refresh                        |
+| 8    | Host selects View scoreboard               | [Board-free final standings](assets/08-final-standings.png) persist after refresh                                |
 
 The clue-phase roster work from #38 and #39 is included in this baseline. A late
 arrival during clue creation now receives a player seat, so the spectator audit
 begins after guessing starts. Shared hint verification from #10 is also present.
-The checked-in `01-hinting-waiting-desktop.png` remains as a historical pre-roster
-comparison and is no longer current-flow evidence.
+The `01-hinting-waiting-desktop.png` filename is retained for audit-history
+continuity; the regenerated image now shows the current post-hint spectator
+entry point.
 The reconnect interruption is already tracked by #37, the dedicated scoreboard
 by #17, and mobile board density by #26 and #54; this audit does not duplicate
 those tickets.
