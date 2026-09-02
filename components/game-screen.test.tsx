@@ -626,6 +626,33 @@ describe('HintPhaseScreen', () => {
     expect(onRemovePlayer).toHaveBeenCalledWith('player-2', false)
   })
 
+  it('keeps a failed hinting removal open with its error visible', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({
+      status: 'rate_limited',
+      message: 'Try removing this player again shortly.',
+    })
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'Try removing this player again shortly.',
+    )
+  })
+
   it('clears the rejected clue when the server replaces its private board', async () => {
     const user = userEvent.setup()
     const lockedBoard = hintingView.board!.map((card, index) =>
@@ -829,6 +856,56 @@ describe('GuessingScreen messages', () => {
     expect(
       screen.queryByRole('button', { name: 'Remove Grace from this game' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('keeps a failed guessing removal open with its error visible', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({
+      status: 'rate_limited',
+      message: 'Try removing this player again shortly.',
+    })
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      gameId: '10000000-0000-4000-8000-000000000001',
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: hintingView.player,
+      members: hintingView.members,
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-1',
+      clueGiverName: 'Ada',
+      hint: 'Orbit',
+      hintNumber: 2,
+      boardCompleted: false,
+      turnSettled: false,
+      board: [],
+      turnPlayers: [],
+      scoreboard: [
+        { ...hintingView.members[0], position: 0, score: 0 },
+        { ...hintingView.members[1], position: 1, score: 0 },
+      ],
+      canGuess: false,
+      canMarkDone: false,
+      canAdvanceTurn: false,
+    }
+    render(
+      <GuessingScreen
+        view={view}
+        onClaimCard={vi.fn()}
+        onFinishGuessing={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onAdvanceTurn={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'Try removing this player again shortly.',
+    )
   })
 
   it('shows scores for claimed cards without exposing unclaimed values', () => {

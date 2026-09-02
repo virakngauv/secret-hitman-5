@@ -446,6 +446,7 @@ export function HintPhaseScreen({
         cancelLabel="Cancel"
         confirmLabel="Remove"
         busy={busyPlayer !== null}
+        error={removalTarget ? error : null}
         onCancel={() => setRemovalTarget(null)}
         onConfirm={() => void confirmRemoval()}
       />
@@ -787,6 +788,7 @@ export function GuessingScreen({
         cancelLabel="Cancel"
         confirmLabel="Remove"
         busy={busyPlayer !== null}
+        error={removalTarget ? feedback : null}
         onCancel={() => setRemovalTarget(null)}
         onConfirm={() => void confirmRemoval()}
       />

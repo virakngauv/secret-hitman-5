@@ -453,26 +453,19 @@ export function createGameSocketServer(
       const key = leaveIntentKey(token, roomCode)
       const timer = setTimeout(() => {
         pendingLeaveIntents.delete(key)
-        void finalizeLeaveIntent(token, roomCode, initiatingSocketId).catch(
-          (error: unknown) => {
-            logFailure('leave_intent_failed', error)
-          },
-        )
+        void finalizeLeaveIntent(token, roomCode).catch((error: unknown) => {
+          logFailure('leave_intent_failed', error)
+        })
       }, options.leaveIntentGraceMs ?? LEAVE_INTENT_GRACE_MS)
       timer.unref()
       pendingLeaveIntents.set(key, timer)
     }
   }
 
-  async function finalizeLeaveIntent(
-    token: string,
-    roomCode: string,
-    initiatingSocketId: string,
-  ) {
+  async function finalizeLeaveIntent(token: string, roomCode: string) {
     const sockets = await io.fetchSockets()
     const reconnected = sockets.some(
-      (candidate) =>
-        candidate.id !== initiatingSocketId && candidate.data.token === token,
+      (candidate) => candidate.data.token === token,
     )
     if (reconnected) return
 

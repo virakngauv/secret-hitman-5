@@ -125,6 +125,19 @@ describe('Socket.IO Secret Hitman protocol', () => {
     )
   })
 
+  it('keeps a player while the initiating socket remains connected', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+
+    await socketServer.receiveLeaveIntent(guestToken, [roomCode], guest.id!)
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
+      {
+        members: [{ name: 'Ada' }, { name: 'Grace' }],
+      },
+    )
+  })
+
   it('keeps a player when another active tab shares the same identity', async () => {
     const { guest, roomCode } = await createTwoPlayerLobby()
     const otherTab = await connect(guestToken)

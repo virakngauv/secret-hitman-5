@@ -12,6 +12,7 @@ export function ConfirmationDialog({
   confirmLabel,
   cancelLabel,
   busy = false,
+  error,
   onConfirm,
   onCancel,
 }: {
@@ -22,6 +23,7 @@ export function ConfirmationDialog({
   confirmLabel: string
   cancelLabel?: string
   busy?: boolean
+  error?: string | null
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -91,6 +93,11 @@ export function ConfirmationDialog({
         <p id={descriptionId} className="app-dialog-description">
           {description}
         </p>
+        {error ? (
+          <p className="form-message" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className="app-dialog-actions">
           {cancelLabel ? (
             <Button
