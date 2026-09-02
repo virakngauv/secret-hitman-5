@@ -449,7 +449,9 @@ export function createGameSocketServer(
       const sockets = await io.fetchSockets()
       const hasAnotherSocket = sockets.some(
         (candidate) =>
-          candidate.id !== initiatingSocketId && candidate.data.token === token,
+          candidate.id !== initiatingSocketId &&
+          candidate.data.token === token &&
+          candidate.rooms.has(roomCode),
       )
       if (hasAnotherSocket) {
         await sockets
@@ -491,7 +493,8 @@ export function createGameSocketServer(
     const reconnected = sockets.some(
       (candidate) =>
         candidate.id !== intent.initiatingSocketId &&
-        candidate.data.token === token,
+        candidate.data.token === token &&
+        candidate.rooms.has(roomCode),
     )
     pendingLeaveIntents.delete(key)
     const initiatingSocket = sockets.find(

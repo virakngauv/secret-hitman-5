@@ -276,6 +276,23 @@ describe('Socket.IO Secret Hitman protocol', () => {
     )
   })
 
+  it('does not preserve a room for a same-identity socket outside that room', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+    const otherPage = await connect(guestToken)
+
+    await socketServer.receiveLeaveIntent(guestToken, [roomCode], guest.id!)
+    guest.disconnect()
+
+    await vi.waitFor(() =>
+      expect(
+        socketServer.gameServer.snapshot(hostToken, roomCode),
+      ).toMatchObject({
+        members: [{ name: 'Ada' }],
+      }),
+    )
+    expect(otherPage.connected).toBe(true)
+  })
+
   it.each([true, false])(
     'trusts the provider header only when explicitly enabled: %s',
     async (enabled) => {
