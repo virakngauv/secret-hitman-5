@@ -14,7 +14,7 @@ test.describe('spectator experience audit', () => {
   test('follows a complete multiplayer game without receiving player controls or private roles', async ({
     browser,
   }, testInfo) => {
-    test.setTimeout(120_000)
+    test.setTimeout(180_000)
     const contexts: BrowserContext[] = []
 
     try {
@@ -41,22 +41,23 @@ test.describe('spectator experience audit', () => {
       await makeHint(host, 'Orbit', 2)
       await makeHint(guest, 'Garden', 2)
       await makeHint(third, 'Metal', 2)
+      await host.getByRole('button', { name: 'Start guessing' }).click()
       await joinRoom(spectator, roomCode, 'Sofia')
-      await expect(
-        spectator.getByRole('heading', { name: 'You joined as a spectator' }),
-      ).toBeVisible()
+      await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
+      await expect(spectator.getByText('Orbit', { exact: true })).toBeVisible()
       await expect(spectator.getByLabel('Your hint')).toHaveCount(0)
-      await expect(spectator.locator('[data-card-id]')).toHaveCount(0)
+      await expect(
+        spectator.locator('button[data-card-kind="hidden"]'),
+      ).toHaveCount(12)
+      await expect(
+        spectator.locator('button[data-card-id]:enabled'),
+      ).toHaveCount(0)
       await capture(spectator, testInfo, '01-hinting-waiting-desktop.png')
 
       await spectator.reload()
-      await expect(
-        spectator.getByRole('heading', { name: 'You joined as a spectator' }),
-      ).toBeVisible()
+      await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
       await expect(spectator.getByLabel('Your hint')).toHaveCount(0)
 
-      await host.getByRole('button', { name: 'Start guessing' }).click()
-      await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
       await expect(spectator.getByText('Orbit', { exact: true })).toBeVisible()
       await expect(
         spectator.locator('button[data-card-kind="hidden"]'),

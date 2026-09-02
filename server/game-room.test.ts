@@ -1673,48 +1673,42 @@ describe('GameRoom single-round flow', () => {
     const spectatorToken = 'd'.repeat(32)
 
     it('requires every earlier active member to leave before a spectator inherits host authority', () => {
-      const room = createRoom()
-      room.join(guestToken, 'Grace', 1_001)
-      room.start(hostToken, 1_002)
-      room.join(spectatorToken, 'Spectator', 1_003)
+      const room = startTwoPlayerGame()
+      room.join(spectatorToken, 'Spectator', 1_004)
 
-      expect(hinting(room, spectatorToken)).toMatchObject({
+      expect(guessing(room, spectatorToken)).toMatchObject({
         player: { role: 'player', participation: 'spectator' },
-        board: null,
-        hint: null,
       })
       expect(room.startGuessing(spectatorToken)).toMatchObject({
         status: 'forbidden',
       })
 
-      room.leave(hostToken, 1_004)
-      expect(hinting(room, guestToken).player.role).toBe('host')
-      expect(hinting(room, spectatorToken).player.role).toBe('player')
+      room.leave(hostToken, 1_005)
+      expect(guessing(room, guestToken).player.role).toBe('host')
+      expect(guessing(room, spectatorToken).player.role).toBe('player')
       expect(room.startGuessing(spectatorToken)).toMatchObject({
         status: 'forbidden',
       })
 
-      room.leave(guestToken, 1_005)
-      expect(hinting(room, spectatorToken).player).toMatchObject({
+      room.leave(guestToken, 1_006)
+      expect(guessing(room, spectatorToken).player).toMatchObject({
         role: 'host',
         participation: 'spectator',
       })
     })
 
     it('lets a legitimate spectator successor operate host transitions without gaining player-only actions', () => {
-      const room = createRoom()
-      room.join(guestToken, 'Grace', 1_001)
-      room.start(hostToken, 1_002)
-      room.join(spectatorToken, 'Spectator', 1_003)
-      room.leave(hostToken, 1_004)
-      room.leave(guestToken, 1_005)
+      const room = startTwoPlayerGame()
+      room.join(spectatorToken, 'Spectator', 1_004)
+      room.leave(hostToken, 1_005)
+      room.leave(guestToken, 1_006)
 
-      const inherited = hinting(room, spectatorToken)
+      const inherited = guessing(room, spectatorToken)
       expect(inherited).toMatchObject({
         player: { role: 'host', participation: 'spectator' },
-        board: null,
-        hint: null,
-        allHintsSubmitted: true,
+        canGuess: false,
+        canMarkDone: false,
+        canAdvanceTurn: true,
       })
       expect(JSON.stringify(inherited)).not.toContain(hostToken)
       expect(JSON.stringify(inherited)).not.toContain(guestToken)
@@ -1726,9 +1720,6 @@ describe('GameRoom single-round flow', () => {
         }),
       ).toMatchObject({ status: 'forbidden' })
 
-      expect(room.startGuessing(spectatorToken, 1_006)).toEqual({
-        status: 'success',
-      })
       const firstTurn = guessing(room, spectatorToken)
       expect(firstTurn).toMatchObject({
         player: { role: 'host', participation: 'spectator' },

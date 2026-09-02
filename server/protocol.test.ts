@@ -935,9 +935,29 @@ describe('Socket.IO Secret Hitman protocol', () => {
 
     await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
     await firstHostSocket.emitWithAck('game:start', { roomCode })
+    for (const [token, hint] of [
+      [hostToken, 'Orbit'],
+      [guestToken, 'Garden'],
+    ] as const) {
+      const view = socketServer.gameServer.snapshot(token, roomCode)
+      if (view.status !== 'hinting' || !view.board)
+        throw new Error('Expected hinting board.')
+      const target = view.board.find(({ kind }) => kind === 'neutral')!
+      expect(
+        socketServer.gameServer.submitHint(token, {
+          roomCode,
+          hint,
+          targetCardIds: [target.id],
+        }),
+      ).toEqual({ status: 'success' })
+    }
+    expect(socketServer.gameServer.startGuessing(hostToken, roomCode)).toEqual({
+      status: 'success',
+    })
     await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
     const before = socketServer.gameServer.snapshot(hostToken, roomCode)
-    if (before.status !== 'hinting') throw new Error('Expected hinting phase.')
+    if (before.status !== 'guessing')
+      throw new Error('Expected guessing phase.')
 
     expect(
       await secondHostSocket.emitWithAck('session:resume', { roomCode }),
