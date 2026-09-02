@@ -877,6 +877,7 @@ export function FinishedScreen({
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
   const ranks = getDenseRanks(players.map(({ score }) => score))
   const winnerNames = view.winners.map(({ name }) => name).join(' & ')
+  const hasWinner = view.winners.length > 0
   const isHost = view.player.role === 'host'
 
   const returnToLobby = async () => {
@@ -892,42 +893,61 @@ export function FinishedScreen({
     <GamePageShell
       roomCode={view.roomCode}
       eyebrow="Game complete"
-      title={`${winnerNames} ${view.winners.length === 1 ? 'wins' : 'win'}`}
-      subtitle="Every player gave one hint. Final scores are locked."
+      title={
+        hasWinner
+          ? `${winnerNames} ${view.winners.length === 1 ? 'wins' : 'win'}`
+          : 'No winner'
+      }
+      subtitle={
+        hasWinner
+          ? 'Every player gave one hint. Final scores are locked.'
+          : 'No players remain in the final standings.'
+      }
     >
       <div className="mx-auto max-w-2xl">
         <section className="game-panel">
           <h2 className="sidebar-title">Final standings</h2>
-          <ol className="mt-4 grid gap-2">
-            {players.map((player, index) => {
-              const place = ranks[index]
-              const medal = ['🥇', '🥈', '🥉'][place - 1]
-              const placeName = ['First', 'Second', 'Third'][place - 1]
-              const placeLabel = medal ? `${placeName} place` : `Place ${place}`
-              return (
-                <li
-                  className={cn('score-row', place === 1 && 'score-row-winner')}
-                  key={player.playerId}
-                >
-                  <div className="min-w-0">
-                    <span className="block truncate font-semibold">
-                      {player.name}
-                    </span>
-                    <span className="score-placement text-xs text-[var(--muted-foreground)]">
-                      {medal ? (
-                        <>
-                          <span aria-hidden="true">{medal}</span> {placeLabel}
-                        </>
-                      ) : (
-                        placeLabel
-                      )}
-                    </span>
-                  </div>
-                  <span className="score-value">{player.score}</span>
-                </li>
-              )
-            })}
-          </ol>
+          {players.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--muted-foreground)]">
+              No players remain in the final standings.
+            </p>
+          ) : (
+            <ol className="mt-4 grid gap-2">
+              {players.map((player, index) => {
+                const place = ranks[index]
+                const medal = ['🥇', '🥈', '🥉'][place - 1]
+                const placeName = ['First', 'Second', 'Third'][place - 1]
+                const placeLabel = medal
+                  ? `${placeName} place`
+                  : `Place ${place}`
+                return (
+                  <li
+                    className={cn(
+                      'score-row',
+                      place === 1 && 'score-row-winner',
+                    )}
+                    key={player.playerId}
+                  >
+                    <div className="min-w-0">
+                      <span className="block truncate font-semibold">
+                        {player.name}
+                      </span>
+                      <span className="score-placement text-xs text-[var(--muted-foreground)]">
+                        {medal ? (
+                          <>
+                            <span aria-hidden="true">{medal}</span> {placeLabel}
+                          </>
+                        ) : (
+                          placeLabel
+                        )}
+                      </span>
+                    </div>
+                    <span className="score-value">{player.score}</span>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
           {isHost ? (
             <>
               <OperationalHostNotice view={view} />

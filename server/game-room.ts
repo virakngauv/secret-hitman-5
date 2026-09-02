@@ -798,13 +798,19 @@ export class GameRoom {
         (entry): entry is ScoreboardEntry & { score: number } =>
           entry.participation === 'player' && entry.score !== null,
       )
-      const winningScore = Math.max(...playerScores.map(({ score }) => score))
+      const winningScore =
+        playerScores.length > 0
+          ? Math.max(...playerScores.map(({ score }) => score))
+          : null
       return {
         status: 'finished',
         gameId: this.requireGame().gameId,
         ...base,
         scoreboard,
-        winners: playerScores.filter(({ score }) => score === winningScore),
+        winners:
+          winningScore === null
+            ? []
+            : playerScores.filter(({ score }) => score === winningScore),
       }
     }
 

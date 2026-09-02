@@ -2065,6 +2065,41 @@ describe('GameRoom single-round flow', () => {
   })
 
   describe('spectator host succession', () => {
+    it('returns an explicit empty winner set after every player is removed', () => {
+      const room = startTwoPlayerGame()
+      const hostId = guessing(room, hostToken).player.playerId
+      const guestId = guessing(room, guestToken).player.playerId
+      room.join(spectatorToken, 'Spectator', 1_004)
+      room.leave(hostToken, 1_005)
+      room.leave(guestToken, 1_006)
+      room.join(hostToken, 'Ada', 1_007)
+      room.join(guestToken, 'Grace', 1_008)
+
+      expect(room.removePlayer(spectatorToken, hostId, false, 1_009)).toEqual({
+        status: 'success',
+        removedToken: hostToken,
+      })
+      expect(room.removePlayer(spectatorToken, guestId, false, 1_010)).toEqual({
+        status: 'success',
+        removedToken: guestToken,
+      })
+      expect(
+        room.showScoreboard(spectatorToken, gameCommand(room), 1_011),
+      ).toEqual({ status: 'success' })
+
+      expect(room.snapshotFor(spectatorToken)).toMatchObject({
+        status: 'finished',
+        scoreboard: [
+          {
+            name: 'Spectator',
+            participation: 'spectator',
+            score: null,
+          },
+        ],
+        winners: [],
+      })
+    })
+
     it('requires every earlier active member to leave before a spectator inherits host authority', () => {
       const room = startTwoPlayerGame()
       room.join(spectatorToken, 'Spectator', 1_004)

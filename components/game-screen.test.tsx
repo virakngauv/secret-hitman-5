@@ -1431,6 +1431,34 @@ describe('GuessingScreen messages', () => {
 })
 
 describe('FinishedScreen', () => {
+  it('shows an explicit no-winner result when no players remain', () => {
+    const spectator = {
+      playerId: 'spectator',
+      name: 'Spectator',
+      role: 'host' as const,
+      participation: 'spectator' as const,
+      position: null,
+      score: null,
+    }
+    const view: Extract<RoomSnapshot, { status: 'finished' }> = {
+      status: 'finished',
+      gameId: hintingView.gameId,
+      roomCode: 'bcdf2',
+      player: spectator,
+      members: [spectator],
+      scoreboard: [spectator],
+      winners: [],
+    }
+
+    render(<FinishedScreen view={view} />)
+
+    expect(screen.getByRole('heading', { name: 'No winner' })).toBeVisible()
+    expect(
+      screen.getAllByText('No players remain in the final standings.'),
+    ).toHaveLength(2)
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
   it('shows board-free results and lets only the host return to the lobby', async () => {
     const user = userEvent.setup()
     const onReturnToLobby = vi.fn().mockResolvedValue({ status: 'success' })
