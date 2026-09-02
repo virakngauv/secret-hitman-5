@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   showScoreboard: vi.fn(),
   returnToLobby: vi.fn(),
   removePlayer: vi.fn(),
+  leaveRoom: vi.fn(),
   routerPush: vi.fn(),
 }))
 
@@ -30,6 +31,7 @@ vi.mock('@/components/game-socket-provider', () => ({
     showScoreboard: mocks.showScoreboard,
     returnToLobby: mocks.returnToLobby,
     removePlayer: mocks.removePlayer,
+    leaveRoom: mocks.leaveRoom,
   }),
   useRoomSnapshot: () => ({
     snapshot: mocks.view,
@@ -104,6 +106,28 @@ function guessingView(): Extract<RoomSnapshot, { status: 'guessing' }> {
   }
 }
 
+function hintingView(): Extract<RoomSnapshot, { status: 'hinting' }> {
+  const lobby = readyLobby()
+  return {
+    ...lobby,
+    status: 'hinting',
+    gameId: '10000000-0000-4000-8000-000000000001',
+    hintStatuses: lobby.members.map(({ playerId, name }) => ({
+      playerId,
+      name,
+      submitted: false,
+      needsRevision: false,
+      hint: null,
+      hintNumber: null,
+    })),
+    allHintsSubmitted: false,
+    hint: null,
+    hintSubmitted: false,
+    hintRejected: false,
+    board: [{ id: 'p0-card-0', word: 'MOON', kind: 'neutral', locked: false }],
+  }
+}
+
 describe('RoomLobby invite prompt', () => {
   beforeEach(() => {
     mocks.view = lobbyView()
@@ -114,7 +138,36 @@ describe('RoomLobby invite prompt', () => {
       .mockResolvedValue({ status: 'success', kind: 'target' })
     mocks.finishGuessing.mockReset().mockResolvedValue({ status: 'success' })
     mocks.removePlayer.mockReset().mockResolvedValue({ status: 'success' })
+    mocks.leaveRoom.mockReset().mockResolvedValue({ status: 'success' })
     mocks.routerPush.mockReset()
+  })
+
+  it('lets an active hinting participant leave the round and returns home', async () => {
+    const user = userEvent.setup()
+    mocks.view = hintingView()
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Leave room' }))
+
+    expect(mocks.leaveRoom).toHaveBeenCalledWith('bcdf2')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/home')
+  })
+
+  it('keeps a hinting participant in place when leaving fails', async () => {
+    const user = userEvent.setup()
+    mocks.view = hintingView()
+    mocks.leaveRoom.mockResolvedValue({
+      status: 'server_unavailable',
+      message: 'Could not leave this room.',
+    })
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Leave room' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not leave this room.',
+    )
+    expect(mocks.routerPush).not.toHaveBeenCalled()
   })
 
   it('sends the displayed turn identity with claims and passes after a snapshot change', async () => {

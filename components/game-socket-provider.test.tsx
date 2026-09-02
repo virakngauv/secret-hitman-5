@@ -96,7 +96,7 @@ function MembershipProbe({
 }
 
 function UnlockHintProbe({ roomCode }: { roomCode: string }) {
-  const { unlockHint } = useGameSocket()
+  const { rejectHint, unlockHint } = useGameSocket()
   const [resultStatus, setResultStatus] = useState('pending')
   return (
     <>
@@ -112,6 +112,19 @@ function UnlockHintProbe({ roomCode }: { roomCode: string }) {
         }}
       >
         Unlock hint
+      </button>
+      <button
+        type="button"
+        onClick={async () => {
+          const result = await rejectHint({
+            roomCode,
+            gameId: '10000000-0000-4000-8000-000000000001',
+            playerId: 'player-2',
+          })
+          setResultStatus(result.status)
+        }}
+      >
+        Reject hint
       </button>
     </>
   )
@@ -174,6 +187,24 @@ describe('GameSocketProvider', () => {
     expect(mocks.emitWithAck).toHaveBeenCalledWith('game:unlock-hint', {
       roomCode: 'bcdf2',
       gameId: '10000000-0000-4000-8000-000000000001',
+    })
+    expect(screen.getByTestId('unlock-status')).toHaveTextContent('success')
+  })
+
+  it('sends the host hint-rejection command for the selected player', async () => {
+    const user = userEvent.setup()
+    render(
+      <GameSocketProvider>
+        <UnlockHintProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Reject hint' }))
+
+    expect(mocks.emitWithAck).toHaveBeenCalledWith('game:reject-hint', {
+      roomCode: 'bcdf2',
+      gameId: '10000000-0000-4000-8000-000000000001',
+      playerId: 'player-2',
     })
     expect(screen.getByTestId('unlock-status')).toHaveTextContent('success')
   })
@@ -496,6 +527,7 @@ describe('GameSocketProvider', () => {
     expect(mocks.emitWithAck).toHaveBeenCalledWith('room:remove-player', {
       roomCode: 'bcdf2',
       playerId: 'player-2',
+      allowRoundReset: false,
     })
   })
 
@@ -539,6 +571,7 @@ describe('GameSocketProvider', () => {
     expect(mocks.emitWithAck).toHaveBeenCalledWith('room:remove-player', {
       roomCode,
       playerId: 'player-2',
+      allowRoundReset: false,
     })
   })
 

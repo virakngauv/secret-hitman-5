@@ -104,6 +104,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
     case 'hinting':
       return retainScreen(
         <HintPhaseScreen
+          key={snapshot.board?.[0]?.id ?? 'spectator'}
           view={snapshot}
           onSubmitHint={(hint, targetCardIds) =>
             game.submitHint({
@@ -119,6 +120,21 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onStartGuessing={() =>
             game.startGuessing({ roomCode, gameId: snapshot.gameId })
           }
+          onRejectHint={(playerId) =>
+            game.rejectHint({
+              roomCode,
+              gameId: snapshot.gameId,
+              playerId,
+            })
+          }
+          onRemovePlayer={(playerId, allowRoundReset) =>
+            game.removePlayer(roomCode, playerId, allowRoundReset)
+          }
+          onLeave={async () => {
+            const result = await game.leaveRoom(roomCode)
+            if (result.status === 'success') router.push('/home')
+            return result
+          }}
         />,
       )
     case 'guessing':
@@ -148,6 +164,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onShowScoreboard={() =>
             game.showScoreboard({ roomCode, gameId: snapshot.gameId })
           }
+          onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
         />,
       )
     case 'finished':

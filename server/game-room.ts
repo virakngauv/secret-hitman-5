@@ -14,6 +14,7 @@ import {
   type Participation,
   type PlayerIdentity,
   type PlayerRole,
+  type RejectHintPayload,
   type RoomPhase,
   type RoomSnapshot,
   type ScoreboardEntry,
@@ -51,11 +52,14 @@ type GameSeat = {
   hint: string | null
   targetCount: number
   hintSubmitted: boolean
+  hintRejected: boolean
   turnState: 'waiting' | 'guessing' | 'done'
 }
 
 type GameState = {
   gameId: string
+  boardSeed: string
+  nextBoardIndex: number
   playerOrder: string[]
   turnIndex: number
   turnId: string
@@ -109,8 +113,8 @@ export class GameRoom {
       this.touch(now)
       return { status: 'success' }
     }
-    // Starting players keep their seats even while inactive. Spectators may
-    // use only the remaining capacity, so reconnects never exceed the limit.
+    // Guessing players keep their established seats while inactive. Spectators
+    // and hinting leavers use only remaining capacity when they return.
     const occupiedSlots = this.members.filter(
       (member) => member.active || member.game !== null,
     ).length
@@ -132,12 +136,25 @@ export class GameRoom {
     if (existing) {
       existing.name = name
       existing.active = true
-      if (this.phase !== 'lobby' && !existing.game) {
+      if (
+        !existing.game &&
+        this.phase === 'hinting' &&
+        this.gamePlayers().length < MAX_STARTING_PLAYERS
+      ) {
+        this.addGameSeat(existing)
+      } else if (!existing.game && this.phase !== 'lobby') {
         existing.participation = 'spectator'
       }
     } else {
       const member = this.createMember(token, name, 'player', now)
-      if (this.phase !== 'lobby') member.participation = 'spectator'
+      if (
+        this.phase === 'hinting' &&
+        this.gamePlayers().length < MAX_STARTING_PLAYERS
+      ) {
+        this.addGameSeat(member)
+      } else if (this.phase !== 'lobby') {
+        member.participation = 'spectator'
+      }
       this.members.push(member)
     }
 
@@ -160,12 +177,7 @@ export class GameRoom {
       const index = this.members.indexOf(member)
       if (index >= 0) this.members.splice(index, 1)
     } else if (member.game) {
-      if (this.phase === 'hinting' && !member.game.hintSubmitted) {
-        member.game.hint = 'PASS'
-        applyTargets(member.game.board, [])
-        member.game.targetCount = 0
-        member.game.hintSubmitted = true
-      }
+      if (this.phase === 'hinting') this.removeGameSeat(member)
       if (this.phase === 'guessing') member.game.turnState = 'done'
     }
 
@@ -177,6 +189,7 @@ export class GameRoom {
   removePlayer(
     token: string,
     playerId: string,
+    allowRoundReset = false,
     now = Date.now(),
   ): CommandResult<{ removedToken: string }> {
     const actor = this.findActiveMember(token)
@@ -186,20 +199,27 @@ export class GameRoom {
         message: 'Only the host can remove a player.',
       }
     }
-    if (this.phase !== 'lobby') {
+    if (
+      this.phase !== 'lobby' &&
+      this.phase !== 'hinting' &&
+      this.phase !== 'guessing'
+    ) {
       return {
         status: 'invalid',
-        message: 'Players can only be removed from the lobby.',
+        message: 'Players cannot be removed after the game finishes.',
       }
     }
 
     const target = this.members.find(
-      (member) => member.active && member.playerId === playerId,
+      (member) =>
+        member.playerId === playerId &&
+        (this.phase === 'lobby' ? member.active : member.game !== null) &&
+        !this.isRemovedToken(member.token),
     )
     if (!target) {
       return {
         status: 'stale',
-        message: 'That player is no longer in the lobby.',
+        message: 'That player is no longer available to remove.',
       }
     }
     if (target === actor || target.role === 'host') {
@@ -208,12 +228,40 @@ export class GameRoom {
         message: 'The host cannot be removed from the room.',
       }
     }
+    const roundReset =
+      this.phase === 'hinting' &&
+      this.gamePlayers().length <= MIN_STARTING_PLAYERS
+    if (roundReset && !allowRoundReset) {
+      return {
+        status: 'invalid',
+        message:
+          'Removing this player ends the current round. Confirm the removal again to return everyone to the lobby.',
+      }
+    }
 
     this.removedTokenFingerprints.add(fingerprintClientToken(target.token))
-    this.members.splice(this.members.indexOf(target), 1)
     this.commandResults.delete(target.token)
+    if (this.phase === 'guessing') {
+      target.active = false
+      if (target.game) target.game.turnState = 'done'
+      this.touch(now)
+      return { status: 'success', removedToken: target.token }
+    }
+    if (target.game) this.removeGameSeat(target)
+    this.members.splice(this.members.indexOf(target), 1)
+    if (roundReset) this.resetRoundToLobby()
     this.touch(now)
     return { status: 'success', removedToken: target.token }
+  }
+
+  private resetRoundToLobby() {
+    this.phase = 'lobby'
+    this.game = null
+    for (const member of this.members) {
+      member.participation = 'player'
+      member.game = null
+    }
+    this.commandResults.clear()
   }
 
   start(token: string, now = Date.now()): CommandResult {
@@ -256,11 +304,14 @@ export class GameRoom {
         hint: null,
         targetCount: 0,
         hintSubmitted: false,
+        hintRejected: false,
         turnState: 'waiting',
       }
     })
     this.game = {
       gameId,
+      boardSeed: seed,
+      nextBoardIndex: players.length,
       playerOrder: players.map(({ playerId }) => playerId),
       turnIndex: 0,
       turnId: randomUUID(),
@@ -312,6 +363,7 @@ export class GameRoom {
     seat.hint = payload.hint
     seat.targetCount = targetIds.size
     seat.hintSubmitted = true
+    seat.hintRejected = false
     this.touch(now)
     return { status: 'success' }
   }
@@ -336,6 +388,61 @@ export class GameRoom {
     }
 
     seat.hintSubmitted = false
+    seat.hintRejected = false
+    this.touch(now)
+    return { status: 'success' }
+  }
+
+  rejectHint(
+    token: string,
+    payload: RejectHintPayload,
+    now = Date.now(),
+  ): CommandResult {
+    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
+    const actor = this.findActiveMember(token)
+    if (!actor || actor.role !== 'host') {
+      return {
+        status: 'forbidden',
+        message: 'Only the host can reject a hint.',
+      }
+    }
+    if (this.phase !== 'hinting') {
+      return {
+        status: 'invalid',
+        message: 'Hints can only be rejected during clue creation.',
+      }
+    }
+
+    const target = this.members.find(
+      (member) =>
+        member.playerId === payload.playerId &&
+        member.game !== null &&
+        member.active,
+    )
+    if (!target) {
+      return { status: 'stale', message: 'That hint is no longer available.' }
+    }
+    if (target === actor) {
+      return {
+        status: 'forbidden',
+        message: 'Unlock your own hint to revise it.',
+      }
+    }
+    if (!target.game?.hintSubmitted) {
+      return {
+        status: 'stale',
+        message: 'That player does not have a submitted hint to reject.',
+      }
+    }
+
+    const game = this.requireGame()
+    const boardIndex = game.nextBoardIndex
+    game.nextBoardIndex += 1
+    target.game.board = createPlayerBoard(game.boardSeed, boardIndex)
+    target.game.hint = null
+    target.game.targetCount = 0
+    target.game.hintSubmitted = false
+    target.game.hintRejected = true
     this.touch(now)
     return { status: 'success' }
   }
@@ -357,6 +464,12 @@ export class GameRoom {
       return {
         status: 'invalid',
         message: 'Wait for every player to lock in a hint.',
+      }
+    }
+    if (this.gamePlayers().length < MIN_STARTING_PLAYERS) {
+      return {
+        status: 'invalid',
+        message: `At least ${MIN_STARTING_PLAYERS} players are required to start guessing.`,
       }
     }
 
@@ -583,7 +696,11 @@ export class GameRoom {
       return {
         status: 'joinable',
         roomCode: this.code,
-        joinsAsSpectator: this.phase !== 'lobby',
+        joinsAsSpectator:
+          !this.findMember(token)?.game &&
+          this.phase !== 'lobby' &&
+          (this.phase !== 'hinting' ||
+            this.gamePlayers().length >= MAX_STARTING_PLAYERS),
       }
     }
 
@@ -600,16 +717,23 @@ export class GameRoom {
     }
 
     if (this.phase === 'hinting') {
+      const allHintsSubmitted = this.allHintsSubmitted()
       return {
         status: 'hinting',
         gameId: this.requireGame().gameId,
         ...base,
-        hintStatuses: this.gamePlayers().map((player) => ({
-          playerId: player.playerId,
-          name: player.name,
-          submitted: player.game?.hintSubmitted ?? false,
-        })),
-        allHintsSubmitted: this.allHintsSubmitted(),
+        hintStatuses: this.gamePlayers().map((player) => {
+          const seat = player.game
+          return {
+            playerId: player.playerId,
+            name: player.name,
+            submitted: seat?.hintSubmitted ?? false,
+            needsRevision: seat?.hintRejected ?? false,
+            hint: seat?.hintSubmitted ? (seat.hint ?? null) : null,
+            hintNumber: seat?.hintSubmitted ? seat.targetCount : null,
+          }
+        }),
+        allHintsSubmitted,
         board:
           member.game?.board.map(({ id, word, kind, locked }) => ({
             id,
@@ -622,6 +746,7 @@ export class GameRoom {
           })) ?? null,
         hint: member.game?.hint ?? null,
         hintSubmitted: member.game?.hintSubmitted ?? false,
+        hintRejected: member.game?.hintRejected ?? false,
       }
     }
 
@@ -749,6 +874,41 @@ export class GameRoom {
       joinedAt,
       active: true,
       game: null,
+    }
+  }
+
+  private addGameSeat(member: Member) {
+    const game = this.requireGame()
+    const position = game.playerOrder.length
+    const boardIndex = game.nextBoardIndex
+    game.nextBoardIndex += 1
+    member.participation = 'player'
+    member.game = {
+      position,
+      score: 0,
+      board: createPlayerBoard(game.boardSeed, boardIndex),
+      hint: null,
+      targetCount: 0,
+      hintSubmitted: false,
+      hintRejected: false,
+      turnState: 'waiting',
+    }
+    game.playerOrder.push(member.playerId)
+  }
+
+  private removeGameSeat(member: Member) {
+    const game = this.requireGame()
+    game.playerOrder = game.playerOrder.filter(
+      (candidate) => candidate !== member.playerId,
+    )
+    member.game = null
+    member.participation = 'spectator'
+    this.reindexGameSeats()
+  }
+
+  private reindexGameSeats() {
+    for (const [position, player] of this.gamePlayers().entries()) {
+      if (player.game) player.game.position = position
     }
   }
 

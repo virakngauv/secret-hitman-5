@@ -7,6 +7,7 @@ import {
   type FinishGuessingPayload,
   type GameCommandPayload,
   type JoinRoomPayload,
+  type RejectHintPayload,
   type RemovePlayerPayload,
   type RoomCommandPayload,
   type SessionResumePayload,
@@ -22,7 +23,7 @@ export const PLAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 export const TURN_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 export const GAME_ID_PATTERN = TURN_ID_PATTERN
-export const CARD_ID_PATTERN = /^p\d{1,2}-card-\d{1,2}$/
+export const CARD_ID_PATTERN = /^p\d+-card-\d{1,2}$/
 export const MAX_PLAYER_NAME_LENGTH = 50
 export const MAX_HINT_LENGTH = 40
 const UNSAFE_TEXT_CHARACTERS =
@@ -93,10 +94,32 @@ export function parseFinishGuessing(
 export function parseRemovePlayer(value: unknown): RemovePlayerPayload | null {
   if (!isRecord(value)) return null
   const roomCode = parseRoomCode(value.roomCode)
+  if (
+    value.allowRoundReset !== undefined &&
+    typeof value.allowRoundReset !== 'boolean'
+  ) {
+    return null
+  }
   return roomCode &&
     typeof value.playerId === 'string' &&
     PLAYER_ID_PATTERN.test(value.playerId)
-    ? { roomCode, playerId: value.playerId }
+    ? {
+        roomCode,
+        playerId: value.playerId,
+        ...(value.allowRoundReset === undefined
+          ? {}
+          : { allowRoundReset: value.allowRoundReset }),
+      }
+    : null
+}
+
+export function parseRejectHint(value: unknown): RejectHintPayload | null {
+  if (!isRecord(value)) return null
+  const game = parseGameCommand(value)
+  return game &&
+    typeof value.playerId === 'string' &&
+    PLAYER_ID_PATTERN.test(value.playerId)
+    ? { ...game, playerId: value.playerId }
     : null
 }
 

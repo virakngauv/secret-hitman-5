@@ -94,7 +94,7 @@ describe('GameServer', () => {
     const guestId = lobby.members[1]?.playerId
     if (!guestId) throw new Error('Expected guest player id.')
 
-    expect(server.removePlayer(host, roomCode, guestId, 1_002)).toEqual({
+    expect(server.removePlayer(host, roomCode, guestId, false, 1_002)).toEqual({
       status: 'success',
       removedToken: guest,
     })

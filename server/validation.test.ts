@@ -8,6 +8,7 @@ import {
   parseHandshakeAuth,
   parseHint,
   parsePlayerName,
+  parseRejectHint,
   parseRemovePlayer,
   parseSubmitHint,
 } from './validation'
@@ -110,6 +111,38 @@ describe('parseHint', () => {
     })
   })
 
+  it('accepts card IDs from boards created after index 99', () => {
+    const turnId = 'abcdef01-2345-4abc-8def-0123456789ab'
+    expect(
+      parseSubmitHint({
+        roomCode: 'bcdf2',
+        gameId,
+        hint: 'Orbit',
+        targetCardIds: ['p100-card-11'],
+      }),
+    ).toEqual({
+      roomCode: 'bcdf2',
+      gameId,
+      hint: 'Orbit',
+      targetCardIds: ['p100-card-11'],
+    })
+    expect(
+      parseClaimCard({
+        roomCode: 'bcdf2',
+        gameId,
+        commandId: 'claim-100',
+        turnId,
+        cardId: 'p100-card-11',
+      }),
+    ).toEqual({
+      roomCode: 'bcdf2',
+      gameId,
+      commandId: 'claim-100',
+      turnId,
+      cardId: 'p100-card-11',
+    })
+  })
+
   it('accepts one through five targets and rejects empty or larger selections', () => {
     expect(
       parseSubmitHint({
@@ -164,6 +197,17 @@ describe('parseRemovePlayer', () => {
     expect(
       parseRemovePlayer({ roomCode: ' BCDF2 ', playerId: 'player-2' }),
     ).toEqual({ roomCode: 'bcdf2', playerId: 'player-2' })
+    expect(
+      parseRemovePlayer({
+        roomCode: 'bcdf2',
+        playerId: 'player-2',
+        allowRoundReset: true,
+      }),
+    ).toEqual({
+      roomCode: 'bcdf2',
+      playerId: 'player-2',
+      allowRoundReset: true,
+    })
   })
 
   it('rejects missing, malformed, and oversized player ids', () => {
@@ -173,6 +217,31 @@ describe('parseRemovePlayer', () => {
     ).toBeNull()
     expect(
       parseRemovePlayer({ roomCode: 'bcdf2', playerId: 'a'.repeat(65) }),
+    ).toBeNull()
+    expect(
+      parseRemovePlayer({
+        roomCode: 'bcdf2',
+        playerId: 'player-2',
+        allowRoundReset: 'yes',
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('parseRejectHint', () => {
+  it('requires the current game identity with a bounded player id', () => {
+    expect(
+      parseRejectHint({
+        roomCode: ' BCDF2 ',
+        gameId,
+        playerId: 'player-2',
+      }),
+    ).toEqual({ roomCode: 'bcdf2', gameId, playerId: 'player-2' })
+    expect(
+      parseRejectHint({ roomCode: 'bcdf2', playerId: 'player-2' }),
+    ).toBeNull()
+    expect(
+      parseRejectHint({ roomCode: 'bcdf2', gameId, playerId: 'player 2' }),
     ).toBeNull()
   })
 })
