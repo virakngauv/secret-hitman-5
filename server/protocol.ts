@@ -111,7 +111,7 @@ export function createGameSocketServer(
     {
       timer: ReturnType<typeof setTimeout> | null
       generation: symbol
-      initiatingSocketId: string
+      initiatingSocketIds: Set<string>
     }
   >()
 
@@ -462,13 +462,18 @@ export function createGameSocketServer(
       const snapshot = gameServer.snapshot(token, roomCode)
       if (!isMemberSnapshot(snapshot)) continue
 
-      cancelLeaveIntent(token, roomCode)
       const key = leaveIntentKey(token, roomCode)
+      const existingIntent = pendingLeaveIntents.get(key)
+      if (existingIntent?.timer) clearTimeout(existingIntent.timer)
+      const initiatingSocketIds = new Set(
+        existingIntent?.initiatingSocketIds ?? [],
+      )
+      initiatingSocketIds.add(initiatingSocketId)
       const generation = Symbol(key)
       pendingLeaveIntents.set(key, {
         timer: null,
         generation,
-        initiatingSocketId,
+        initiatingSocketIds,
       })
 
       let sockets: Awaited<ReturnType<typeof io.fetchSockets>>
@@ -484,14 +489,16 @@ export function createGameSocketServer(
 
       const hasAnotherSocket = sockets.some(
         (candidate) =>
-          candidate.id !== initiatingSocketId &&
+          !initiatingSocketIds.has(candidate.id) &&
           candidate.data.token === token &&
           candidate.rooms.has(roomCode),
       )
       if (hasAnotherSocket) {
-        await sockets
-          .find((candidate) => candidate.id === initiatingSocketId)
-          ?.leave(roomCode)
+        await Promise.all(
+          sockets
+            .filter((candidate) => initiatingSocketIds.has(candidate.id))
+            .map((candidate) => candidate.leave(roomCode)),
+        )
         cancelLeaveIntent(token, roomCode)
         continue
       }
@@ -511,7 +518,7 @@ export function createGameSocketServer(
       pendingLeaveIntents.set(key, {
         timer,
         generation,
-        initiatingSocketId,
+        initiatingSocketIds,
       })
     }
   }
@@ -528,22 +535,26 @@ export function createGameSocketServer(
 
     const reconnected = sockets.some(
       (candidate) =>
-        candidate.id !== intent.initiatingSocketId &&
+        !intent.initiatingSocketIds.has(candidate.id) &&
         candidate.data.token === token &&
         candidate.rooms.has(roomCode),
     )
     pendingLeaveIntents.delete(key)
-    const initiatingSocket = sockets.find(
-      (candidate) => candidate.id === intent.initiatingSocketId,
+    const initiatingSockets = sockets.filter((candidate) =>
+      intent.initiatingSocketIds.has(candidate.id),
     )
     if (reconnected) {
-      await initiatingSocket?.leave(roomCode)
+      await Promise.all(
+        initiatingSockets.map((candidate) => candidate.leave(roomCode)),
+      )
       return
     }
 
     const result = gameServer.leaveRoom(token, roomCode)
     if (result.status === 'success') {
-      await initiatingSocket?.leave(roomCode)
+      await Promise.all(
+        initiatingSockets.map((candidate) => candidate.leave(roomCode)),
+      )
       broadcastSnapshots(roomCode)
     }
   }

@@ -298,6 +298,30 @@ describe('Socket.IO Secret Hitman protocol', () => {
     ).not.toContain(guest.id)
   })
 
+  it('finalizes simultaneous route-exit intents from same-identity tabs', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+    const otherTab = await connect(guestToken)
+    await otherTab.emitWithAck('session:resume', { roomCode })
+
+    await Promise.all([
+      guest.emitWithAck('room:leave-intent', { roomCode }),
+      otherTab.emitWithAck('room:leave-intent', { roomCode }),
+    ])
+
+    await vi.waitFor(() =>
+      expect(
+        socketServer.gameServer.snapshot(hostToken, roomCode),
+      ).toMatchObject({
+        members: [{ name: 'Ada' }],
+      }),
+    )
+    const activeSocketIds = (
+      await socketServer.io.in(roomCode).fetchSockets()
+    ).map((socket) => socket.id)
+    expect(activeSocketIds).not.toContain(guest.id)
+    expect(activeSocketIds).not.toContain(otherTab.id)
+  })
+
   it('cancels a route-exit intent when the same socket resumes during setup', async () => {
     const { guest, roomCode } = await createTwoPlayerLobby()
     const fetchedSockets = await socketServer.io.fetchSockets()
