@@ -125,6 +125,122 @@ describe('Socket.IO Secret Hitman protocol', () => {
     )
   })
 
+  it('ignores an old finalizer after reconnect and honors a subsequent leave intent', async () => {
+    const { host, guest, roomCode } = await createTwoPlayerLobby()
+    const server = socketServer.gameServer
+    expect(server.startGame(hostToken, roomCode)).toEqual({ status: 'success' })
+
+    const participants = [
+      { token: hostToken, client: host, name: 'Ada' },
+      { token: guestToken, client: guest, name: 'Grace' },
+    ]
+    const targetByPlayerId = new Map<string, string>()
+    for (const token of [hostToken, guestToken]) {
+      const view = server.snapshot(token, roomCode)
+      if (view.status !== 'hinting' || !view.board)
+        throw new Error('Expected a private hinting board.')
+      const targetCardId = view.board.find(({ kind }) => kind === 'neutral')!.id
+      targetByPlayerId.set(view.player.playerId, targetCardId)
+      expect(
+        server.submitHint(token, {
+          roomCode,
+          gameId: view.gameId,
+          hint: 'Orbit',
+          targetCardIds: [targetCardId],
+        }),
+      ).toEqual({ status: 'success' })
+    }
+
+    const hinting = server.snapshot(hostToken, roomCode)
+    if (hinting.status !== 'hinting')
+      throw new Error('Expected the hinting phase.')
+    expect(
+      server.startGuessing(hostToken, {
+        roomCode,
+        gameId: hinting.gameId,
+      }),
+    ).toEqual({ status: 'success' })
+    const sharedGuessing = server.snapshot(hostToken, roomCode)
+    if (sharedGuessing.status !== 'guessing')
+      throw new Error('Expected the guessing phase.')
+    const leavingPlayer = participants.find(({ token }) => {
+      const view = server.snapshot(token, roomCode)
+      return (
+        view.status === 'guessing' &&
+        view.player.playerId !== sharedGuessing.clueGiverId
+      )
+    })!
+    const remainingPlayer = participants.find(
+      ({ token }) => token !== leavingPlayer.token,
+    )!
+    const guessing = server.snapshot(leavingPlayer.token, roomCode)
+    if (guessing.status !== 'guessing')
+      throw new Error('Expected the guessing phase.')
+    const claim = {
+      roomCode,
+      gameId: guessing.gameId,
+      turnId: guessing.turnId,
+      cardId: targetByPlayerId.get(sharedGuessing.clueGiverId)!,
+      commandId: 'leave-race-target',
+    }
+    expect(server.claimCard(leavingPlayer.token, claim)).toEqual({
+      status: 'success',
+      kind: 'target',
+    })
+    const beforeLeave = server.snapshot(leavingPlayer.token, roomCode)
+    expect(beforeLeave).toMatchObject({
+      status: 'guessing',
+      scoreboard: [{ score: 3 }, { score: 3 }],
+    })
+
+    await socketServer.receiveLeaveIntent(
+      leavingPlayer.token,
+      [roomCode],
+      leavingPlayer.client.id!,
+    )
+    leavingPlayer.client.disconnect()
+    type FetchedSockets = Awaited<
+      ReturnType<typeof socketServer.io.fetchSockets>
+    >
+    let resolveOldFetch!: (sockets: FetchedSockets) => void
+    const oldFetch = new Promise<FetchedSockets>((resolve) => {
+      resolveOldFetch = resolve
+    })
+    const fetchSockets = vi
+      .spyOn(socketServer.io, 'fetchSockets')
+      .mockImplementationOnce(() => oldFetch)
+    await vi.waitFor(() => expect(fetchSockets).toHaveBeenCalledOnce())
+
+    const reconnected = await connect(leavingPlayer.token)
+    expect(
+      await reconnected.emitWithAck('session:resume', { roomCode }),
+    ).toEqual({ status: 'success', snapshot: beforeLeave })
+    const reconnectedSocketId = reconnected.id!
+    reconnected.disconnect()
+    await socketServer.receiveLeaveIntent(
+      leavingPlayer.token,
+      [roomCode],
+      reconnectedSocketId,
+    )
+
+    const leaveRoom = vi.spyOn(server, 'leaveRoom')
+    resolveOldFetch([])
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(leaveRoom).not.toHaveBeenCalled()
+    expect(server.snapshot(leavingPlayer.token, roomCode)).toEqual(beforeLeave)
+    expect(server.claimCard(leavingPlayer.token, claim)).toEqual({
+      status: 'success',
+      kind: 'target',
+    })
+    expect(server.snapshot(leavingPlayer.token, roomCode)).toEqual(beforeLeave)
+
+    await vi.waitFor(() => expect(leaveRoom).toHaveBeenCalledOnce())
+    expect(server.snapshot(remainingPlayer.token, roomCode)).toMatchObject({
+      status: 'guessing',
+      members: [{ name: remainingPlayer.name }],
+    })
+  })
+
   it('keeps a player while the initiating socket remains connected', async () => {
     const { guest, roomCode } = await createTwoPlayerLobby()
 

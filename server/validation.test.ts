@@ -266,6 +266,9 @@ describe('parseLeaveIntentForm', () => {
   it('rejects malformed credentials, socket ids, rooms, and empty room lists', () => {
     expect(parseLeaveIntentForm('token=bad&socketId=socket_1')).toBeNull()
     expect(
+      parseLeaveIntentForm(`token=${'a'.repeat(32)}&socketId=socket_1`),
+    ).toBeNull()
+    expect(
       parseLeaveIntentForm(
         `token=${'a'.repeat(32)}&socketId=bad%20socket&roomCode=bcdf2`,
       ),

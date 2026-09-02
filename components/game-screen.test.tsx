@@ -577,6 +577,49 @@ describe('HintPhaseScreen', () => {
     expect(onRemovePlayer).toHaveBeenCalledWith('player-2', true)
   })
 
+  it('does not carry a stale hint action error into the removal dialog', async () => {
+    const user = userEvent.setup()
+    const view = {
+      ...hintingView,
+      hintStatuses: hintingView.hintStatuses.map((status) =>
+        status.playerId === 'player-2'
+          ? {
+              ...status,
+              submitted: true,
+              hint: 'Orbit',
+              hintNumber: 2,
+            }
+          : status,
+      ),
+    }
+    render(
+      <HintPhaseScreen
+        view={view}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn().mockResolvedValue({
+          status: 'server_unavailable',
+          message: 'Could not reject that hint.',
+        })}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: "Reject Grace's hint" }),
+    )
+    expect(screen.getByText('Could not reject that hint.')).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+
+    expect(screen.getByRole('alertdialog')).not.toHaveTextContent(
+      'Could not reject that hint.',
+    )
+  })
+
   it('keeps focus trapped in a removal dialog while its action is busy', async () => {
     const user = userEvent.setup()
     let finishRemoval!: (result: { status: 'success' }) => void

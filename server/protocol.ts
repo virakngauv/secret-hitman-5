@@ -106,7 +106,13 @@ export function createGameSocketServer(
     60_000,
   )
   let acceptingCommands = true
-  const pendingLeaveIntents = new Map<string, ReturnType<typeof setTimeout>>()
+  const pendingLeaveIntents = new Map<
+    string,
+    {
+      timer: ReturnType<typeof setTimeout>
+      generation: symbol
+    }
+  >()
 
   const io = new Server<
     ClientToServerEvents,
@@ -425,8 +431,8 @@ export function createGameSocketServer(
 
   function cancelLeaveIntent(token: string, roomCode: string) {
     const key = leaveIntentKey(token, roomCode)
-    const timer = pendingLeaveIntents.get(key)
-    if (timer) clearTimeout(timer)
+    const intent = pendingLeaveIntents.get(key)
+    if (intent) clearTimeout(intent.timer)
     pendingLeaveIntents.delete(key)
   }
 
@@ -451,22 +457,32 @@ export function createGameSocketServer(
 
       cancelLeaveIntent(token, roomCode)
       const key = leaveIntentKey(token, roomCode)
+      const generation = Symbol(key)
       const timer = setTimeout(() => {
-        pendingLeaveIntents.delete(key)
-        void finalizeLeaveIntent(token, roomCode).catch((error: unknown) => {
-          logFailure('leave_intent_failed', error)
-        })
+        void finalizeLeaveIntent(token, roomCode, generation).catch(
+          (error: unknown) => {
+            logFailure('leave_intent_failed', error)
+          },
+        )
       }, options.leaveIntentGraceMs ?? LEAVE_INTENT_GRACE_MS)
       timer.unref()
-      pendingLeaveIntents.set(key, timer)
+      pendingLeaveIntents.set(key, { timer, generation })
     }
   }
 
-  async function finalizeLeaveIntent(token: string, roomCode: string) {
+  async function finalizeLeaveIntent(
+    token: string,
+    roomCode: string,
+    generation: symbol,
+  ) {
     const sockets = await io.fetchSockets()
+    const key = leaveIntentKey(token, roomCode)
+    if (pendingLeaveIntents.get(key)?.generation !== generation) return
+
     const reconnected = sockets.some(
       (candidate) => candidate.data.token === token,
     )
+    pendingLeaveIntents.delete(key)
     if (reconnected) return
 
     const result = gameServer.leaveRoom(token, roomCode)
@@ -572,7 +588,8 @@ export function createGameSocketServer(
     async shutdown() {
       acceptingCommands = false
       clearInterval(sweepTimer)
-      for (const timer of pendingLeaveIntents.values()) clearTimeout(timer)
+      for (const intent of pendingLeaveIntents.values())
+        clearTimeout(intent.timer)
       pendingLeaveIntents.clear()
       io.emit('server:shutdown')
       await new Promise<void>((resolve) => io.close(() => resolve()))

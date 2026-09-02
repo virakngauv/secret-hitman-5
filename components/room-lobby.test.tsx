@@ -155,6 +155,23 @@ describe('RoomLobby invite prompt', () => {
     expect(mocks.routerPush).toHaveBeenCalledWith('/home')
   })
 
+  it('shows a failed immediate leave without opening a confirmation dialog', async () => {
+    const user = userEvent.setup()
+    mocks.leaveRoom.mockResolvedValue({
+      status: 'server_unavailable',
+      message: 'Could not leave this room.',
+    })
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Leave room' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not leave this room.',
+    )
+    expect(mocks.routerPush).not.toHaveBeenCalled()
+  })
+
   it('lets an active hinting participant leave the round and returns home', async () => {
     const user = userEvent.setup()
     mocks.view = hintingView()

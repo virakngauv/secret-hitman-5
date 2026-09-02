@@ -43,6 +43,11 @@ export function LeaveRoomControl({
       >
         {busy ? 'Leaving…' : 'Leave room'}
       </Button>
+      {!confirmationRequired && error ? (
+        <p className="form-message" role="alert">
+          {error}
+        </p>
+      ) : null}
       <ConfirmationDialog
         open={open && confirmationRequired}
         eyebrow="Room action"

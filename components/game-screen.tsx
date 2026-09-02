@@ -124,6 +124,7 @@ export function HintPhaseScreen({
 
   const removePlayer = async (playerId: string, name: string) => {
     const resetsRound = view.hintStatuses.length <= 2
+    setError(null)
     setRemovalTarget({ playerId, name, resetsRound })
   }
 

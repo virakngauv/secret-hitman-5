@@ -371,7 +371,7 @@ function LobbyScreen({
             <LeaveRoomControl
               busy={isActing}
               confirmationRequired={!isHost || view.members.length > 1}
-              error={error}
+              error={!isHost || view.members.length > 1 ? error : null}
               gameInProgress={false}
               isHost={isHost}
               onConfirm={() => void onLeave()}
