@@ -246,7 +246,7 @@ export class GameRoom {
     }
 
     const gameId = randomUUID()
-    const seed = `${this.initialSeed}:${gameId}:${now}`
+    const seed = `${this.initialSeed}:${now}`
     players.forEach((member, position) => {
       member.participation = 'player'
       member.game = {

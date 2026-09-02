@@ -480,7 +480,7 @@ describe('GameRoom single-round flow', () => {
     const oldView = guessing(previous)
     const room = startTwoPlayerGame()
     const current = guessing(room)
-    expect(current.board).not.toEqual(oldView.board)
+    expect(current.board).toEqual(oldView.board)
     expect(current.gameId).not.toBe(oldView.gameId)
     expect(current.turnId).not.toBe(oldView.turnId)
     const target = current.board.find(
