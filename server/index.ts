@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { createGameSocketServer } from './protocol'
+import { createGameSocketServer, SlidingWindowRateLimiter } from './protocol'
 import { isPrivateNetworkOrigin } from './origins'
 import { parseTrustedProxies } from './proxy-trust'
 import { parseLeaveIntentForm } from './validation'
@@ -43,6 +43,7 @@ export function startGameServer(
   const socketServerRef: {
     current?: ReturnType<typeof createGameSocketServer>
   } = {}
+  const leaveIntentCommands = new SlidingWindowRateLimiter(20, 10_000)
   const httpServer = createServer((request, response) => {
     let pathname = ''
     if (request.url) {
@@ -78,6 +79,11 @@ export function startGameServer(
                 status: intent ? 'server_unavailable' : 'invalid',
               }),
             )
+            return
+          }
+          if (!leaveIntentCommands.take(intent.token, Date.now())) {
+            response.writeHead(429, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ status: 'rate_limited' }))
             return
           }
           response.writeHead(202, { 'content-type': 'application/json' })

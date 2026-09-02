@@ -769,7 +769,8 @@ describe('HintPhaseScreen', () => {
     expect(screen.getByText('NEW MOON')).toBeVisible()
   })
 
-  it('opens the rejection dialog when a later snapshot marks the hint rejected', () => {
+  it('reopens the rejection dialog for a later rejection cycle', async () => {
+    const user = userEvent.setup()
     const props = {
       onSubmitHint: vi.fn(),
       onUnlockHint: vi.fn(),
@@ -781,6 +782,20 @@ describe('HintPhaseScreen', () => {
     const view = render(<HintPhaseScreen view={hintingView} {...props} />)
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    view.rerender(
+      <HintPhaseScreen
+        view={{ ...hintingView, hintRejected: true }}
+        {...props}
+      />,
+    )
+
+    expect(
+      screen.getByRole('alertdialog', { name: 'Your hint was rejected' }),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Got it' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+    view.rerender(<HintPhaseScreen view={hintingView} {...props} />)
     view.rerender(
       <HintPhaseScreen
         view={{ ...hintingView, hintRejected: true }}

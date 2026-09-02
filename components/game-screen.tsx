@@ -68,8 +68,6 @@ export function HintPhaseScreen({
     name: string
     resetsRound: boolean
   } | null>(null)
-  const [rejectionNoticeDismissed, setRejectionNoticeDismissed] =
-    useState(false)
   const [error, setError] = useState<string | null>(null)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
@@ -423,15 +421,7 @@ export function HintPhaseScreen({
           ) : null}
         </aside>
       </div>
-      <ConfirmationDialog
-        open={view.hintRejected && !rejectionNoticeDismissed}
-        eyebrow="Hint update"
-        title="Your hint was rejected"
-        description="The host rejected your hint! You've been given a new board. If you're not sure why your hint was rejected, ask the host!"
-        confirmLabel="Got it"
-        onConfirm={() => setRejectionNoticeDismissed(true)}
-        onCancel={() => setRejectionNoticeDismissed(true)}
-      />
+      {view.hintRejected ? <HintRejectionNotice /> : null}
       <ConfirmationDialog
         open={removalTarget !== null}
         title={
@@ -450,6 +440,22 @@ export function HintPhaseScreen({
         onConfirm={() => void confirmRemoval()}
       />
     </GamePageShell>
+  )
+}
+
+function HintRejectionNotice() {
+  const [open, setOpen] = useState(true)
+
+  return (
+    <ConfirmationDialog
+      open={open}
+      eyebrow="Hint update"
+      title="Your hint was rejected"
+      description="The host rejected your hint! You've been given a new board. If you're not sure why your hint was rejected, ask the host!"
+      confirmLabel="Got it"
+      onConfirm={() => setOpen(false)}
+      onCancel={() => setOpen(false)}
+    />
   )
 }
 

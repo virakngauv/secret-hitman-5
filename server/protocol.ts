@@ -596,7 +596,7 @@ function isLoopbackAddress(address: string) {
   )
 }
 
-class SlidingWindowRateLimiter {
+export class SlidingWindowRateLimiter {
   private readonly attempts = new Map<string, number[]>()
   private readonly maxKeys = 10_000
 
