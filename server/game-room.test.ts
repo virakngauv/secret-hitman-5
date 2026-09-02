@@ -10,6 +10,7 @@ const lastTurnIds = new WeakMap<GameRoom, string>()
 const noTurnId = '00000000-0000-4000-8000-000000000000'
 const fourthToken = 'd'.repeat(32)
 const returningToken = 'e'.repeat(32)
+const spectatorToken = 'f'.repeat(32)
 
 function createRoom() {
   let id = 0
@@ -45,6 +46,7 @@ function gameCommand(room: GameRoom) {
     thirdToken,
     fourthToken,
     returningToken,
+    spectatorToken,
   ]) {
     const snapshot = room.snapshotFor(token)
     if (
@@ -107,6 +109,7 @@ function finishActiveGuessers(room: GameRoom) {
     thirdToken,
     fourthToken,
     returningToken,
+    spectatorToken,
   ]) {
     const view = room.snapshotFor(token)
     if (view.status === 'guessing' && view.canMarkDone) {
@@ -702,7 +705,6 @@ describe('GameRoom single-round flow', () => {
 
   it('enables advancement when racing claims find every target without requiring passes', () => {
     const room = startTwoPlayerGame(true)
-    const spectatorToken = 'd'.repeat(32)
     room.join(spectatorToken, 'Spectator')
     const before = guessing(room)
     const targets = before.board.filter(
@@ -898,7 +900,6 @@ describe('GameRoom single-round flow', () => {
     'privately reveals a finished picker after %s and hides the next board',
     (ending) => {
       const room = startTwoPlayerGame(true)
-      const spectatorToken = 'd'.repeat(32)
       room.join(spectatorToken, 'Spectator')
       const before = guessing(room, hostToken)
       if (ending === 'pass') {
@@ -1812,7 +1813,6 @@ describe('GameRoom single-round flow', () => {
 
   it('lets the host explicitly show the final scoreboard with an unfinished picker', () => {
     const room = startTwoPlayerGame()
-    const spectatorToken = 'd'.repeat(32)
     expect(room.join(spectatorToken, 'Spectator')).toEqual({
       status: 'success',
     })
@@ -1996,8 +1996,6 @@ describe('GameRoom single-round flow', () => {
   })
 
   describe('spectator host succession', () => {
-    const spectatorToken = 'd'.repeat(32)
-
     it('requires every earlier active member to leave before a spectator inherits host authority', () => {
       const room = startTwoPlayerGame()
       room.join(spectatorToken, 'Spectator', 1_004)

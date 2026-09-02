@@ -42,6 +42,16 @@ export function ConfirmationDialog({
     }
   }, [open])
 
+  useLayoutEffect(() => {
+    if (!open) return
+    const enabledButton = cancelRef.current ?? primaryRef.current
+    if (busy || enabledButton?.disabled) {
+      dialogRef.current?.focus()
+    } else if (enabledButton && document.activeElement === dialogRef.current) {
+      enabledButton.focus()
+    }
+  }, [busy, open])
+
   if (!open) return null
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -84,6 +94,7 @@ export function ConfirmationDialog({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         className="app-dialog"
+        tabIndex={-1}
         onKeyDown={handleKeyDown}
       >
         <p className="page-eyebrow">{eyebrow}</p>
