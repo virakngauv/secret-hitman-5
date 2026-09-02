@@ -130,6 +130,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     const leaveIntentUrl = new URL('/leave-intent', gameServerUrl).toString()
     socketRef.current = socket
     const pendingUnwatchTimers = pendingUnwatchTimersRef.current
+    let lastConnectedSocketId = socket.id ?? null
     let resumeRetryTimer: ReturnType<typeof setTimeout> | null = null
     let resumeRetryAttempts = 0
 
@@ -206,16 +207,21 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       synchronizedRef.current = false
       setConnectionStatus('disconnected')
     }
+    const handleConnect = () => {
+      if (socket.id) lastConnectedSocketId = socket.id
+      resumeWatchedRooms()
+    }
     const handleDisconnect = () => markDisconnected()
     const handleConnectError = () => markDisconnected()
     const handleShutdown = () => {
       markDisconnected()
     }
     const sendLeaveIntent = (roomCodes: string[]) => {
-      if (!socket.id || roomCodes.length === 0) return
+      const socketId = socket.id ?? lastConnectedSocketId
+      if (!socketId || roomCodes.length === 0) return
       const body = new URLSearchParams({
         token: clientToken,
-        socketId: socket.id,
+        socketId,
       })
       for (const roomCode of roomCodes) body.append('roomCode', roomCode)
       const sent = navigator.sendBeacon?.(leaveIntentUrl, body) ?? false
@@ -233,14 +239,14 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       sendLeaveIntent([...watchedRoomsRef.current.keys()])
     }
 
-    socket.on('connect', resumeWatchedRooms)
+    socket.on('connect', handleConnect)
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectError)
     socket.on('room:snapshot', receiveSnapshot)
     socket.on('server:shutdown', handleShutdown)
     window.addEventListener('pagehide', handlePageHide)
 
-    if (socket.connected) resumeWatchedRooms()
+    if (socket.connected) handleConnect()
 
     return () => {
       socketRef.current = null

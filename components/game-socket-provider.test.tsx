@@ -141,6 +141,7 @@ describe('GameSocketProvider', () => {
     mocks.resumeCallbacks.clear()
     mocks.emitWithAck.mockReset().mockResolvedValue({ status: 'success' })
     mocks.io.mockReset().mockReturnValue(mocks.socket)
+    mocks.socket.id = 'socket-1'
     mocks.socket.connected = true
     mocks.socket.on.mockClear()
     mocks.socket.emit
@@ -328,6 +329,27 @@ describe('GameSocketProvider', () => {
     expect((body as URLSearchParams).getAll('roomCode')).toEqual(['bcdf2'])
   })
 
+  it('uses the last connected socket ID for page exit while disconnected', async () => {
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    await waitFor(() => expect(mocks.io).toHaveBeenCalled())
+    mocks.socket.id = undefined as unknown as string
+    mocks.socket.connected = false
+    act(() => mocks.handlers.get('disconnect')?.())
+
+    const event = new Event('pagehide')
+    Object.defineProperty(event, 'persisted', { value: false })
+    act(() => window.dispatchEvent(event))
+
+    expect(navigator.sendBeacon).toHaveBeenCalledOnce()
+    const [, body] = vi.mocked(navigator.sendBeacon).mock.calls[0]
+    expect((body as URLSearchParams).get('socketId')).toBe('socket-1')
+    expect((body as URLSearchParams).getAll('roomCode')).toEqual(['bcdf2'])
+  })
+
   it('leaves the room when client-side navigation removes its watcher', async () => {
     const view = render(
       <GameSocketProvider>
@@ -351,6 +373,29 @@ describe('GameSocketProvider', () => {
       ),
     )
     expect(navigator.sendBeacon).not.toHaveBeenCalled()
+  })
+
+  it('uses the last connected socket ID when a disconnected watcher exits', async () => {
+    const view = render(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    await waitFor(() => expect(mocks.io).toHaveBeenCalled())
+    mocks.socket.id = undefined as unknown as string
+    mocks.socket.connected = false
+    act(() => mocks.handlers.get('disconnect')?.())
+
+    view.rerender(
+      <GameSocketProvider>
+        <div>Home</div>
+      </GameSocketProvider>,
+    )
+
+    await waitFor(() => expect(navigator.sendBeacon).toHaveBeenCalledOnce())
+    const [, body] = vi.mocked(navigator.sendBeacon).mock.calls[0]
+    expect((body as URLSearchParams).get('socketId')).toBe('socket-1')
+    expect((body as URLSearchParams).getAll('roomCode')).toEqual(['bcdf2'])
   })
 
   it('waits for the last room watcher before sending a route-exit intent', async () => {
