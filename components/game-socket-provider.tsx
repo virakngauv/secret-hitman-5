@@ -85,6 +85,9 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const receiveSnapshotRef = useRef<(snapshot: RoomSnapshot) => void>(() => {})
   const resumeWatchedRoomsRef = useRef<() => void>(() => {})
   const sendLeaveIntentRef = useRef<(roomCodes: string[]) => void>(() => {})
+  const pendingUnwatchTimersRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  )
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting')
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({})
@@ -126,6 +129,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     })
     const leaveIntentUrl = new URL('/leave-intent', gameServerUrl).toString()
     socketRef.current = socket
+    const pendingUnwatchTimers = pendingUnwatchTimersRef.current
     let resumeRetryTimer: ReturnType<typeof setTimeout> | null = null
     let resumeRetryAttempts = 0
 
@@ -245,6 +249,10 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       receiveSnapshotRef.current = () => {}
       resumeWatchedRoomsRef.current = () => {}
       sendLeaveIntentRef.current = () => {}
+      for (const timer of pendingUnwatchTimers.values()) {
+        clearTimeout(timer)
+      }
+      pendingUnwatchTimers.clear()
       clearResumeRetry()
       window.removeEventListener('pagehide', handlePageHide)
       setSnapshots({})
@@ -254,6 +262,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
 
   const watchRoom = useCallback((roomCode: string) => {
     const watchers = watchedRoomsRef.current
+    const pendingUnwatchTimer = pendingUnwatchTimersRef.current.get(roomCode)
+    if (pendingUnwatchTimer) {
+      clearTimeout(pendingUnwatchTimer)
+      pendingUnwatchTimersRef.current.delete(roomCode)
+    }
     const existingWatchers = watchers.get(roomCode) ?? 0
     watchers.set(roomCode, existingWatchers + 1)
     const socket = socketRef.current
@@ -265,7 +278,16 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       const count = watchers.get(roomCode) ?? 0
       if (count <= 1) {
         watchers.delete(roomCode)
-        sendLeaveIntentRef.current([roomCode])
+        const timer = setTimeout(() => {
+          pendingUnwatchTimersRef.current.delete(roomCode)
+          if (watchers.has(roomCode)) return
+
+          const activeSocket = socketRef.current
+          if (activeSocket?.connected && synchronizedRef.current) {
+            activeSocket.emit('room:leave', { roomCode }, () => {})
+          } else sendLeaveIntentRef.current([roomCode])
+        }, 0)
+        pendingUnwatchTimersRef.current.set(roomCode, timer)
       } else watchers.set(roomCode, count - 1)
     }
   }, [])

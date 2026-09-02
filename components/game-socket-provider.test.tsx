@@ -328,14 +328,14 @@ describe('GameSocketProvider', () => {
     expect((body as URLSearchParams).getAll('roomCode')).toEqual(['bcdf2'])
   })
 
-  it('sends a leave intent when client-side navigation unwatches the room', async () => {
+  it('leaves the room when client-side navigation removes its watcher', async () => {
     const view = render(
       <GameSocketProvider>
         <RoomProbe roomCode="bcdf2" />
       </GameSocketProvider>,
     )
     await waitFor(() => expect(mocks.io).toHaveBeenCalled())
-    vi.mocked(navigator.sendBeacon).mockClear()
+    mocks.socket.emit.mockClear()
 
     view.rerender(
       <GameSocketProvider>
@@ -343,10 +343,14 @@ describe('GameSocketProvider', () => {
       </GameSocketProvider>,
     )
 
-    expect(navigator.sendBeacon).toHaveBeenCalledOnce()
-    const [, body] = vi.mocked(navigator.sendBeacon).mock.calls[0]
-    expect((body as URLSearchParams).get('socketId')).toBe('socket-1')
-    expect((body as URLSearchParams).getAll('roomCode')).toEqual(['bcdf2'])
+    await waitFor(() =>
+      expect(mocks.socket.emit).toHaveBeenCalledWith(
+        'room:leave',
+        { roomCode: 'bcdf2' },
+        expect.any(Function),
+      ),
+    )
+    expect(navigator.sendBeacon).not.toHaveBeenCalled()
   })
 
   it('waits for the last room watcher before sending a route-exit intent', async () => {
@@ -357,21 +361,60 @@ describe('GameSocketProvider', () => {
       </GameSocketProvider>,
     )
     await waitFor(() => expect(mocks.io).toHaveBeenCalled())
-    vi.mocked(navigator.sendBeacon).mockClear()
+    mocks.socket.emit.mockClear()
 
     view.rerender(
       <GameSocketProvider>
         <RoomProbe roomCode="bcdf2" />
       </GameSocketProvider>,
     )
-    expect(navigator.sendBeacon).not.toHaveBeenCalled()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.socket.emit).not.toHaveBeenCalledWith(
+      'room:leave',
+      expect.anything(),
+      expect.anything(),
+    )
 
     view.rerender(
       <GameSocketProvider>
         <div>Home</div>
       </GameSocketProvider>,
     )
-    expect(navigator.sendBeacon).toHaveBeenCalledOnce()
+    await waitFor(() =>
+      expect(mocks.socket.emit).toHaveBeenCalledWith(
+        'room:leave',
+        { roomCode: 'bcdf2' },
+        expect.any(Function),
+      ),
+    )
+  })
+
+  it('cancels a transient unwatch when the route watcher immediately returns', async () => {
+    const view = render(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    await waitFor(() => expect(mocks.io).toHaveBeenCalled())
+    mocks.socket.emit.mockClear()
+
+    view.rerender(
+      <GameSocketProvider>
+        <div>Transition</div>
+      </GameSocketProvider>,
+    )
+    view.rerender(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(mocks.socket.emit).not.toHaveBeenCalledWith(
+      'room:leave',
+      expect.anything(),
+      expect.anything(),
+    )
   })
 
   it('does not send a leave intent when the page enters the back-forward cache', async () => {
