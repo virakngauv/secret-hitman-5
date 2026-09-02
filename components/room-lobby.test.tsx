@@ -484,6 +484,26 @@ describe('RoomLobby invite prompt', () => {
     ).toBeVisible()
   })
 
+  it('shows the explanation again after a later round ends early', async () => {
+    const user = userEvent.setup()
+    mocks.view = { ...lobbyView(), lobbyNotice: 'player_left' }
+    const rendered = render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+    mocks.view = lobbyView()
+    rendered.rerender(<RoomLobby roomCode="bcdf2" />)
+    mocks.view = { ...lobbyView(), lobbyNotice: 'player_left' }
+    rendered.rerender(<RoomLobby roomCode="bcdf2" />)
+
+    expect(
+      await screen.findByRole('alertdialog', {
+        name: 'The round ended early',
+      }),
+    ).toBeVisible()
+  })
+
   it('infers an early round ending when the live lobby snapshot omits its notice', () => {
     mocks.view = hintingView()
     const rendered = render(<RoomLobby roomCode="bcdf2" />)

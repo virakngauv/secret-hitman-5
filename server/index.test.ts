@@ -117,6 +117,29 @@ describe('game server HTTP process', () => {
     expect(fetchSockets).toHaveBeenCalledTimes(20)
   })
 
+  it('drains an oversized leave intent before returning JSON 413', async () => {
+    server = startGameServer({
+      port: 0,
+      host: '127.0.0.1',
+      allowedOrigins: ['http://localhost:3100'],
+    })
+    await new Promise<void>((resolve) =>
+      server?.httpServer.once('listening', resolve),
+    )
+    const address = server.httpServer.address() as AddressInfo
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/leave-intent`,
+      {
+        method: 'POST',
+        headers: { Origin: 'http://localhost:3100' },
+        body: 'x'.repeat(16 * 1_024 + 1),
+      },
+    )
+
+    expect(response.status).toBe(413)
+    await expect(response.json()).resolves.toEqual({ status: 'too_large' })
+  })
+
   it('does not trust an invalid Host header when parsing health probes', async () => {
     server = startGameServer({ port: 0, host: '127.0.0.1' })
     await new Promise<void>((resolve) =>

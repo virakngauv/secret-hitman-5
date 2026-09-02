@@ -458,14 +458,16 @@ test.describe('Secret Hitman single round', () => {
         name: 'Back to home',
       })
       const removedHomeBox = await removedHomeLink.boundingBox()
-      const removedViewport = guest.viewportSize()
+      const removedPanelBox = await guest
+        .locator('section.game-panel')
+        .boundingBox()
       expect(removedHomeBox).not.toBeNull()
-      expect(removedViewport).not.toBeNull()
+      expect(removedPanelBox).not.toBeNull()
       expect(
         Math.abs(
           removedHomeBox!.x +
             removedHomeBox!.width / 2 -
-            removedViewport!.width / 2,
+            (removedPanelBox!.x + removedPanelBox!.width / 2),
         ),
       ).toBeLessThan(2)
       await expect(

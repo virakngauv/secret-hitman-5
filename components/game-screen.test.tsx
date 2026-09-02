@@ -1286,6 +1286,11 @@ describe('GuessingScreen messages', () => {
       const user = userEvent.setup()
       const onAdvanceTurn = vi.fn().mockResolvedValue({ status: 'success' })
       const onShowScoreboard = vi.fn().mockResolvedValue({ status: 'success' })
+      const activeAdvance = turnNumber === 1 ? onAdvanceTurn : onShowScoreboard
+      activeAdvance.mockResolvedValueOnce({
+        status: 'server_unavailable',
+        message: 'Could not move on yet.',
+      })
       const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
         status: 'guessing',
         gameId: hintingView.gameId,
@@ -1341,8 +1346,12 @@ describe('GuessingScreen messages', () => {
       expect(onAdvanceTurn).not.toHaveBeenCalled()
       await user.click(button)
       await user.click(screen.getByRole('button', { name: 'Move on' }))
-      if (turnNumber === 1) expect(onAdvanceTurn).toHaveBeenCalledOnce()
-      else expect(onShowScoreboard).toHaveBeenCalledOnce()
+      expect(screen.getByRole('alertdialog')).toHaveTextContent(
+        'Could not move on yet.',
+      )
+      await user.click(screen.getByRole('button', { name: 'Move on' }))
+      expect(activeAdvance).toHaveBeenCalledTimes(2)
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
       rerender(
         <GuessingScreen
           view={{ ...view, player: hintingView.members[1] }}

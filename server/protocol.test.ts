@@ -97,13 +97,13 @@ describe('Socket.IO Secret Hitman protocol', () => {
 
     await socketServer.receiveLeaveIntent(guestToken, [roomCode], guest.id!)
     guest.disconnect()
-    await new Promise((resolve) => setTimeout(resolve, 40))
-
-    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
-      {
+    await vi.waitFor(() =>
+      expect(
+        socketServer.gameServer.snapshot(hostToken, roomCode),
+      ).toMatchObject({
         status: 'lobby',
         members: [{ name: 'Ada' }],
-      },
+      }),
     )
   })
 

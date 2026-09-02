@@ -273,8 +273,13 @@ function LobbyScreen({
     name: string
   } | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
-  const [roundResetNoticeDismissed, setRoundResetNoticeDismissed] =
-    useState(false)
+  const [roundResetNotice, setRoundResetNotice] = useState({
+    active: showRoundEndedEarly,
+    dismissed: false,
+  })
+  if (roundResetNotice.active !== showRoundEndedEarly) {
+    setRoundResetNotice({ active: showRoundEndedEarly, dismissed: false })
+  }
 
   const confirmRemoval = async () => {
     if (!removalTarget) return
@@ -379,13 +384,18 @@ function LobbyScreen({
           </section>
         </div>
         <ConfirmationDialog
-          open={showRoundEndedEarly && !roundResetNoticeDismissed}
+          open={showRoundEndedEarly && !roundResetNotice.dismissed}
           eyebrow="Round update"
           title="The round ended early"
           description="Another player left, leaving fewer than two players in the game. The current round was ended and everyone remaining was returned to the lobby. Invite another player to start a new game."
           confirmLabel="Return to lobby"
           onCancel={() => {}}
-          onConfirm={() => setRoundResetNoticeDismissed(true)}
+          onConfirm={() =>
+            setRoundResetNotice((current) => ({
+              ...current,
+              dismissed: true,
+            }))
+          }
         />
         <ConfirmationDialog
           open={removalTarget !== null}

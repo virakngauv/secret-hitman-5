@@ -486,6 +486,7 @@ export function GuessingScreen({
     name: string
   } | null>(null)
   const [confirmAdvance, setConfirmAdvance] = useState(false)
+  const [advanceError, setAdvanceError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [removalError, setRemovalError] = useState<string | null>(null)
   const isClueGiver = view.player.playerId === view.clueGiverId
@@ -528,17 +529,21 @@ export function GuessingScreen({
 
   const performAdvance = async () => {
     setFeedback(null)
+    setAdvanceError(null)
     setIsAdvancing(true)
     const result = await (view.isFinalTurn && onShowScoreboard
       ? onShowScoreboard()
       : onAdvanceTurn())
-    if (result.status !== 'success') setFeedback(result.message)
-    else setConfirmAdvance(false)
+    if (result.status !== 'success') {
+      if (confirmAdvance) setAdvanceError(result.message)
+      else setFeedback(result.message)
+    } else setConfirmAdvance(false)
     setIsAdvancing(false)
   }
 
   const advance = () => {
     if (unfinishedPickerCount > 0) {
+      setAdvanceError(null)
       setConfirmAdvance(true)
       return
     }
@@ -771,7 +776,11 @@ export function GuessingScreen({
         cancelLabel="Cancel"
         confirmLabel="Move on"
         busy={isAdvancing}
-        onCancel={() => setConfirmAdvance(false)}
+        error={confirmAdvance ? advanceError : null}
+        onCancel={() => {
+          setAdvanceError(null)
+          setConfirmAdvance(false)
+        }}
         onConfirm={() => void performAdvance()}
       />
       <ConfirmationDialog

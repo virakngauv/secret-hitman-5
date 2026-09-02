@@ -64,20 +64,14 @@
 }
 
 .operational-host-notice {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: 1rem;
   background: color-mix(in srgb, var(--accent-soft) 42%, var(--card));
   color: var(--foreground);
-}
-
-.operational-host-notice {
   font-size: 0.875rem;
   line-height: 1.5;
-}
-
-.operational-host-notice {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
 }
 
 @media (max-width: 30rem) {
