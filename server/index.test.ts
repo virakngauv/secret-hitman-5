@@ -40,6 +40,106 @@ describe('game server HTTP process', () => {
     await expect(response.json()).resolves.toEqual({ status: 'ok' })
   })
 
+  it('accepts valid leave-intent beacons only from allowed origins', async () => {
+    server = startGameServer({
+      port: 0,
+      host: '127.0.0.1',
+      allowedOrigins: ['http://localhost:3100'],
+    })
+    await new Promise<void>((resolve) =>
+      server?.httpServer.once('listening', resolve),
+    )
+    const address = server.httpServer.address() as AddressInfo
+    const endpoint = `http://127.0.0.1:${address.port}/leave-intent`
+    const body = new URLSearchParams({
+      token: 'a'.repeat(32),
+      socketId: 'socket-1',
+      roomCode: 'bcdf2',
+    })
+
+    const accepted = await fetch(endpoint, {
+      method: 'POST',
+      headers: { Origin: 'http://localhost:3100' },
+      body,
+    })
+    expect(accepted.status).toBe(202)
+    await expect(accepted.json()).resolves.toEqual({ status: 'accepted' })
+
+    const forbidden = await fetch(endpoint, {
+      method: 'POST',
+      headers: { Origin: 'https://untrusted.example' },
+      body,
+    })
+    expect(forbidden.status).toBe(403)
+  })
+
+  it('rate limits leave intents per token before enumerating sockets', async () => {
+    server = startGameServer({
+      port: 0,
+      host: '127.0.0.1',
+      allowedOrigins: ['http://localhost:3100'],
+    })
+    await new Promise<void>((resolve) =>
+      server?.httpServer.once('listening', resolve),
+    )
+    const address = server.httpServer.address() as AddressInfo
+    const token = 'a'.repeat(32)
+    const created = server.gameServer.createRoom(token, 'Ada')
+    if (created.status !== 'success') throw new Error('Expected a room.')
+    const endpoint = `http://127.0.0.1:${address.port}/leave-intent`
+    const body = new URLSearchParams({
+      token,
+      socketId: 'socket-1',
+      roomCode: created.roomCode,
+    })
+    const fetchSockets = vi
+      .spyOn(server.io, 'fetchSockets')
+      .mockResolvedValue([])
+
+    for (let requestNumber = 0; requestNumber < 20; requestNumber += 1) {
+      const accepted = await fetch(endpoint, {
+        method: 'POST',
+        headers: { Origin: 'http://localhost:3100' },
+        body,
+      })
+      expect(accepted.status).toBe(202)
+    }
+    await vi.waitFor(() => expect(fetchSockets).toHaveBeenCalledTimes(20))
+
+    const blocked = await fetch(endpoint, {
+      method: 'POST',
+      headers: { Origin: 'http://localhost:3100' },
+      body,
+    })
+    expect(blocked.status).toBe(429)
+    await expect(blocked.json()).resolves.toEqual({ status: 'rate_limited' })
+    await setImmediate()
+    expect(fetchSockets).toHaveBeenCalledTimes(20)
+  })
+
+  it('drains an oversized leave intent before returning JSON 413', async () => {
+    server = startGameServer({
+      port: 0,
+      host: '127.0.0.1',
+      allowedOrigins: ['http://localhost:3100'],
+    })
+    await new Promise<void>((resolve) =>
+      server?.httpServer.once('listening', resolve),
+    )
+    const address = server.httpServer.address() as AddressInfo
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/leave-intent`,
+      {
+        method: 'POST',
+        headers: { Origin: 'http://localhost:3100' },
+        body: 'x'.repeat(16 * 1_024 + 1),
+      },
+    )
+
+    expect(response.status).toBe(413)
+    await expect(response.json()).resolves.toEqual({ status: 'too_large' })
+  })
+
   it('does not trust an invalid Host header when parsing health probes', async () => {
     server = startGameServer({ port: 0, host: '127.0.0.1' })
     await new Promise<void>((resolve) =>

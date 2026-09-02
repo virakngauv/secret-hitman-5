@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 10 as const
+export const GAME_PROTOCOL_VERSION = 12 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -59,6 +59,13 @@ export type TurnPlayerSnapshot = {
   state: 'clue-giver' | 'guessing' | 'done'
 }
 
+export type TurnActivitySnapshot = {
+  type: 'target' | 'civilian' | 'assassin' | 'pass'
+  playerName: string
+  word: string | null
+  message: string
+}
+
 type MemberSnapshotBase = {
   roomCode: string
   player: PlayerIdentity
@@ -74,7 +81,11 @@ export type RoomSnapshot =
   | { status: 'expired'; roomCode: string }
   | { status: 'joinable'; roomCode: string; joinsAsSpectator: boolean }
   | { status: 'removed_from_room'; roomCode: string }
-  | ({ status: 'lobby'; minimumPlayers: number } & MemberSnapshotBase)
+  | ({
+      status: 'lobby'
+      minimumPlayers: number
+      lobbyNotice?: 'player_left'
+    } & MemberSnapshotBase)
   | ({
       status: 'hinting'
       hintStatuses: HintStatus[]
@@ -98,6 +109,8 @@ export type RoomSnapshot =
       turnSettled: boolean
       board: GuessCardSnapshot[]
       turnPlayers: TurnPlayerSnapshot[]
+      latestActivity?: TurnActivitySnapshot | null
+      unfinishedPickerCount?: number
       scoreboard: ScoreboardEntry[]
       canGuess: boolean
       canMarkDone: boolean
@@ -153,6 +166,7 @@ export type JoinRoomPayload = { roomCode: string; name: string }
 export type RoomCommandPayload = { roomCode: string }
 export type GameCommandPayload = RoomCommandPayload & { gameId: string }
 export type FinishGuessingPayload = GameCommandPayload & { turnId: string }
+export type AdvanceTurnPayload = GameCommandPayload & { turnId: string }
 export type RemovePlayerPayload = RoomCommandPayload & {
   playerId: string
   allowRoundReset?: boolean
@@ -182,6 +196,10 @@ export type ClientToServerEvents = {
     acknowledge: (result: CommandResult<{ roomCode: string }>) => void,
   ) => void
   'room:leave': (
+    payload: RoomCommandPayload,
+    acknowledge: (result: CommandResult) => void,
+  ) => void
+  'room:leave-intent': (
     payload: RoomCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
@@ -218,11 +236,11 @@ export type ClientToServerEvents = {
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:advance-turn': (
-    payload: GameCommandPayload,
+    payload: AdvanceTurnPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:show-scoreboard': (
-    payload: GameCommandPayload,
+    payload: AdvanceTurnPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:return-to-lobby': (

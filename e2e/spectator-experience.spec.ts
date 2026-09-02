@@ -80,6 +80,7 @@ test.describe('spectator experience audit', () => {
         .getAttribute('data-card-id')
       if (!firstTargetId) throw new Error('Expected a target on Ada’s board.')
       await guest.locator(`button[data-card-id="${firstTargetId}"]`).click()
+      await expect(spectator.getByLabel('Latest turn activity')).toHaveCount(0)
       await expect(
         spectator.locator(`button[data-card-id="${firstTargetId}"]`),
       ).toHaveAttribute('data-card-kind', 'target')

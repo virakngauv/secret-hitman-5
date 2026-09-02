@@ -59,6 +59,7 @@ export type GameSocketServerOptions = {
   trustDigitalOceanProxy?: boolean
   gameServer?: GameServer
   expirationSweepMs?: number
+  leaveIntentGraceMs?: number
   entryCommandLimits?: EntryCommandLimits
   logger?: Pick<Console, 'info' | 'warn' | 'error'>
 }
@@ -69,6 +70,7 @@ const invalid = (): CommandFailure => ({
 })
 
 const GLOBAL_ENTRY_KEY = 'global'
+export const LEAVE_INTENT_GRACE_MS = 3_000
 
 export function createGameSocketServer(
   httpServer: HttpServer,
@@ -104,6 +106,14 @@ export function createGameSocketServer(
     60_000,
   )
   let acceptingCommands = true
+  const pendingLeaveIntents = new Map<
+    string,
+    {
+      timer: ReturnType<typeof setTimeout> | null
+      generation: symbol
+      initiatingSocketIds: Set<string>
+    }
+  >()
 
   const io = new Server<
     ClientToServerEvents,
@@ -154,6 +164,8 @@ export function createGameSocketServer(
         if (!parsed) return acknowledge(invalid())
         if (!parsed.roomCode) return acknowledge({ status: 'success' })
 
+        cancelLeaveIntent(socket.data.token, parsed.roomCode)
+
         const snapshot = gameServer.snapshot(socket.data.token, parsed.roomCode)
         if (isMemberSnapshot(snapshot)) {
           await socket.join(parsed.roomCode)
@@ -189,6 +201,8 @@ export function createGameSocketServer(
         const parsed = parseJoinRoom(payload)
         if (!parsed) return acknowledge(invalid())
 
+        cancelLeaveIntent(socket.data.token, parsed.roomCode)
+
         const result = gameServer.joinRoom(
           socket.data.token,
           parsed.roomCode,
@@ -208,10 +222,27 @@ export function createGameSocketServer(
         const parsed = parseRoomCommand(payload)
         if (!parsed) return acknowledge(invalid())
 
+        cancelLeaveIntent(socket.data.token, parsed.roomCode)
         const result = gameServer.leaveRoom(socket.data.token, parsed.roomCode)
         await socket.leave(parsed.roomCode)
         acknowledge(result)
         broadcastSnapshots(parsed.roomCode)
+      })
+    })
+
+    socket.on('room:leave-intent', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('room:leave-intent', acknowledge, async () => {
+        const parsed = parseRoomCommand(payload)
+        if (!parsed) return acknowledge(invalid())
+
+        await receiveLeaveIntent(
+          socket.data.token,
+          [parsed.roomCode],
+          socket.id,
+        )
+        acknowledge({ status: 'success' })
       })
     })
 
@@ -328,7 +359,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:advance-turn', acknowledge, () => {
-        const parsed = parseGameCommand(payload)
+        const parsed = parseFinishGuessing(payload)
         if (!parsed) return acknowledge(invalid())
         const result = gameServer.advanceTurn(socket.data.token, parsed)
         acknowledge(result)
@@ -340,7 +371,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:show-scoreboard', acknowledge, () => {
-        const parsed = parseGameCommand(payload)
+        const parsed = parseFinishGuessing(payload)
         if (!parsed) return acknowledge(invalid())
         const result = gameServer.showScoreboard(socket.data.token, parsed)
         acknowledge(result)
@@ -409,6 +440,125 @@ export function createGameSocketServer(
     void emitSnapshots(roomCode).catch((error: unknown) => {
       logFailure('snapshot_broadcast_failed', error)
     })
+  }
+
+  function leaveIntentKey(token: string, roomCode: string) {
+    return `${token}:${roomCode}`
+  }
+
+  function cancelLeaveIntent(token: string, roomCode: string) {
+    const key = leaveIntentKey(token, roomCode)
+    const intent = pendingLeaveIntents.get(key)
+    if (intent?.timer) clearTimeout(intent.timer)
+    pendingLeaveIntents.delete(key)
+  }
+
+  async function receiveLeaveIntent(
+    token: string,
+    roomCodes: string[],
+    initiatingSocketId: string,
+  ) {
+    for (const roomCode of roomCodes) {
+      const snapshot = gameServer.snapshot(token, roomCode)
+      if (!isMemberSnapshot(snapshot)) continue
+
+      const key = leaveIntentKey(token, roomCode)
+      const existingIntent = pendingLeaveIntents.get(key)
+      if (existingIntent?.timer) clearTimeout(existingIntent.timer)
+      const initiatingSocketIds = new Set(
+        existingIntent?.initiatingSocketIds ?? [],
+      )
+      initiatingSocketIds.add(initiatingSocketId)
+      const generation = Symbol(key)
+      pendingLeaveIntents.set(key, {
+        timer: null,
+        generation,
+        initiatingSocketIds,
+      })
+
+      let sockets: Awaited<ReturnType<typeof io.fetchSockets>>
+      try {
+        sockets = await io.fetchSockets()
+      } catch (error) {
+        if (pendingLeaveIntents.get(key)?.generation === generation) {
+          pendingLeaveIntents.delete(key)
+        }
+        throw error
+      }
+      if (pendingLeaveIntents.get(key)?.generation !== generation) continue
+
+      const hasAnotherSocket = sockets.some(
+        (candidate) =>
+          !initiatingSocketIds.has(candidate.id) &&
+          candidate.data.token === token &&
+          candidate.rooms.has(roomCode),
+      )
+      if (hasAnotherSocket) {
+        await Promise.all(
+          sockets
+            .filter((candidate) => initiatingSocketIds.has(candidate.id))
+            .map((candidate) => candidate.leave(roomCode)),
+        )
+        if (pendingLeaveIntents.get(key)?.generation === generation) {
+          cancelLeaveIntent(token, roomCode)
+        }
+        continue
+      }
+
+      const timer = setTimeout(() => {
+        void finalizeLeaveIntent(token, roomCode, generation).catch(
+          (error: unknown) => {
+            logFailure('leave_intent_failed', error)
+          },
+        )
+      }, options.leaveIntentGraceMs ?? LEAVE_INTENT_GRACE_MS)
+      timer.unref()
+      if (pendingLeaveIntents.get(key)?.generation !== generation) {
+        clearTimeout(timer)
+        continue
+      }
+      pendingLeaveIntents.set(key, {
+        timer,
+        generation,
+        initiatingSocketIds,
+      })
+    }
+  }
+
+  async function finalizeLeaveIntent(
+    token: string,
+    roomCode: string,
+    generation: symbol,
+  ) {
+    const sockets = await io.fetchSockets()
+    const key = leaveIntentKey(token, roomCode)
+    const intent = pendingLeaveIntents.get(key)
+    if (intent?.generation !== generation) return
+
+    const reconnected = sockets.some(
+      (candidate) =>
+        !intent.initiatingSocketIds.has(candidate.id) &&
+        candidate.data.token === token &&
+        candidate.rooms.has(roomCode),
+    )
+    pendingLeaveIntents.delete(key)
+    const initiatingSockets = sockets.filter((candidate) =>
+      intent.initiatingSocketIds.has(candidate.id),
+    )
+    if (reconnected) {
+      await Promise.all(
+        initiatingSockets.map((candidate) => candidate.leave(roomCode)),
+      )
+      return
+    }
+
+    const result = gameServer.leaveRoom(token, roomCode)
+    if (result.status === 'success') {
+      await Promise.all(
+        initiatingSockets.map((candidate) => candidate.leave(roomCode)),
+      )
+      broadcastSnapshots(roomCode)
+    }
   }
 
   async function notifyRemovedPlayer(roomCode: string, token: string) {
@@ -510,9 +660,14 @@ export function createGameSocketServer(
     async shutdown() {
       acceptingCommands = false
       clearInterval(sweepTimer)
+      for (const intent of pendingLeaveIntents.values()) {
+        if (intent.timer) clearTimeout(intent.timer)
+      }
+      pendingLeaveIntents.clear()
       io.emit('server:shutdown')
       await new Promise<void>((resolve) => io.close(() => resolve()))
     },
+    receiveLeaveIntent,
   }
 }
 
@@ -531,7 +686,7 @@ function isLoopbackAddress(address: string) {
   )
 }
 
-class SlidingWindowRateLimiter {
+export class SlidingWindowRateLimiter {
   private readonly attempts = new Map<string, number[]>()
   private readonly maxKeys = 10_000
 

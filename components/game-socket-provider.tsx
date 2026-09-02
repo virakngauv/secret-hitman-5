@@ -15,6 +15,7 @@ import {
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
   GAME_PROTOCOL_VERSION,
+  type AdvanceTurnPayload,
   type CardKind,
   type ClaimCardPayload,
   type ClientToServerEvents,
@@ -55,8 +56,8 @@ type GameSocketContextValue = {
     payload: ClaimCardPayload,
   ) => Promise<CommandResult<{ kind: CardKind }>>
   finishGuessing: (payload: FinishGuessingPayload) => Promise<CommandResult>
-  advanceTurn: (payload: GameCommandPayload) => Promise<CommandResult>
-  showScoreboard: (payload: GameCommandPayload) => Promise<CommandResult>
+  advanceTurn: (payload: AdvanceTurnPayload) => Promise<CommandResult>
+  showScoreboard: (payload: AdvanceTurnPayload) => Promise<CommandResult>
   returnToLobby: (payload: GameCommandPayload) => Promise<CommandResult>
 }
 
@@ -83,6 +84,10 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const synchronizationGenerationRef = useRef(0)
   const receiveSnapshotRef = useRef<(snapshot: RoomSnapshot) => void>(() => {})
   const resumeWatchedRoomsRef = useRef<() => void>(() => {})
+  const sendLeaveIntentRef = useRef<(roomCodes: string[]) => void>(() => {})
+  const pendingUnwatchTimersRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  )
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting')
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({})
@@ -122,7 +127,10 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       autoConnect: true,
       reconnection: true,
     })
+    const leaveIntentUrl = new URL('/leave-intent', gameServerUrl).toString()
     socketRef.current = socket
+    const pendingUnwatchTimers = pendingUnwatchTimersRef.current
+    let lastConnectedSocketId = socket.id ?? null
     let resumeRetryTimer: ReturnType<typeof setTimeout> | null = null
     let resumeRetryAttempts = 0
 
@@ -199,19 +207,46 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       synchronizedRef.current = false
       setConnectionStatus('disconnected')
     }
+    const handleConnect = () => {
+      if (socket.id) lastConnectedSocketId = socket.id
+      resumeWatchedRooms()
+    }
     const handleDisconnect = () => markDisconnected()
     const handleConnectError = () => markDisconnected()
     const handleShutdown = () => {
       markDisconnected()
     }
+    const sendLeaveIntent = (roomCodes: string[]) => {
+      const socketId = socket.id ?? lastConnectedSocketId
+      if (!socketId || roomCodes.length === 0) return
+      const body = new URLSearchParams({
+        token: clientToken,
+        socketId,
+      })
+      for (const roomCode of roomCodes) body.append('roomCode', roomCode)
+      const sent = navigator.sendBeacon?.(leaveIntentUrl, body) ?? false
+      if (!sent) {
+        void fetch(leaveIntentUrl, {
+          method: 'POST',
+          body,
+          keepalive: true,
+        }).catch(() => {})
+      }
+    }
+    sendLeaveIntentRef.current = sendLeaveIntent
+    const handlePageHide = (event: PageTransitionEvent) => {
+      if (event.persisted) return
+      sendLeaveIntent([...watchedRoomsRef.current.keys()])
+    }
 
-    socket.on('connect', resumeWatchedRooms)
+    socket.on('connect', handleConnect)
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectError)
     socket.on('room:snapshot', receiveSnapshot)
     socket.on('server:shutdown', handleShutdown)
+    window.addEventListener('pagehide', handlePageHide)
 
-    if (socket.connected) resumeWatchedRooms()
+    if (socket.connected) handleConnect()
 
     return () => {
       socketRef.current = null
@@ -219,7 +254,13 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       synchronizedRef.current = false
       receiveSnapshotRef.current = () => {}
       resumeWatchedRoomsRef.current = () => {}
+      sendLeaveIntentRef.current = () => {}
+      for (const timer of pendingUnwatchTimers.values()) {
+        clearTimeout(timer)
+      }
+      pendingUnwatchTimers.clear()
       clearResumeRetry()
+      window.removeEventListener('pagehide', handlePageHide)
       setSnapshots({})
       socket.disconnect()
     }
@@ -227,6 +268,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
 
   const watchRoom = useCallback((roomCode: string) => {
     const watchers = watchedRoomsRef.current
+    const pendingUnwatchTimer = pendingUnwatchTimersRef.current.get(roomCode)
+    if (pendingUnwatchTimer) {
+      clearTimeout(pendingUnwatchTimer)
+      pendingUnwatchTimersRef.current.delete(roomCode)
+    }
     const existingWatchers = watchers.get(roomCode) ?? 0
     watchers.set(roomCode, existingWatchers + 1)
     const socket = socketRef.current
@@ -236,8 +282,19 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
 
     return () => {
       const count = watchers.get(roomCode) ?? 0
-      if (count <= 1) watchers.delete(roomCode)
-      else watchers.set(roomCode, count - 1)
+      if (count <= 1) {
+        watchers.delete(roomCode)
+        const timer = setTimeout(() => {
+          pendingUnwatchTimersRef.current.delete(roomCode)
+          if (watchers.has(roomCode)) return
+
+          const activeSocket = socketRef.current
+          if (activeSocket?.connected && synchronizedRef.current) {
+            activeSocket.emit('room:leave-intent', { roomCode }, () => {})
+          } else sendLeaveIntentRef.current([roomCode])
+        }, 0)
+        pendingUnwatchTimersRef.current.set(roomCode, timer)
+      } else watchers.set(roomCode, count - 1)
     }
   }, [])
 
@@ -350,14 +407,14 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     [],
   )
   const advanceTurn = useCallback(
-    async (payload: GameCommandPayload): Promise<CommandResult> =>
+    async (payload: AdvanceTurnPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:advance-turn', payload),
       ),
     [],
   )
   const showScoreboard = useCallback(
-    async (payload: GameCommandPayload): Promise<CommandResult> =>
+    async (payload: AdvanceTurnPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:show-scoreboard', payload),
       ),

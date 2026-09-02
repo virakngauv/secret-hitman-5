@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -545,7 +545,6 @@ describe('HintPhaseScreen', () => {
   it('warns that removing the only other player resets the round', async () => {
     const user = userEvent.setup()
     const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
     render(
       <HintPhaseScreen
         view={hintingView}
@@ -562,23 +561,105 @@ describe('HintPhaseScreen', () => {
       name: 'Remove Grace from this game',
     })
     await user.click(remove)
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /Remove Grace.*fewer than two players.*end the current round.*return everyone else to the lobby.*boards, hints, readiness, scores, and turns.*not be able to rejoin/i,
-      ),
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Remove Grace from this game?',
+    })
+    expect(dialog).toHaveTextContent(
+      /fewer than two players.*end the current round.*return everyone else to the lobby.*boards, hints, readiness, scores, and turns.*not be able to rejoin/i,
     )
     expect(onRemovePlayer).not.toHaveBeenCalled()
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
 
-    confirm.mockReturnValueOnce(true)
     await user.click(remove)
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(onRemovePlayer).toHaveBeenCalledWith('player-2', true)
-    confirm.mockRestore()
+  })
+
+  it('does not carry a stale hint action error into the removal dialog', async () => {
+    const user = userEvent.setup()
+    const view = {
+      ...hintingView,
+      hintStatuses: hintingView.hintStatuses.map((status) =>
+        status.playerId === 'player-2'
+          ? {
+              ...status,
+              submitted: true,
+              hint: 'Orbit',
+              hintNumber: 2,
+            }
+          : status,
+      ),
+    }
+    render(
+      <HintPhaseScreen
+        view={view}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn().mockResolvedValue({
+          status: 'server_unavailable',
+          message: 'Could not reject that hint.',
+        })}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: "Reject Grace's hint" }),
+    )
+    expect(screen.getByText('Could not reject that hint.')).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+
+    expect(screen.getByRole('alertdialog')).not.toHaveTextContent(
+      'Could not reject that hint.',
+    )
+  })
+
+  it('keeps focus trapped in a removal dialog while its action is busy', async () => {
+    const user = userEvent.setup()
+    let finishRemoval!: (result: { status: 'success' }) => void
+    const onRemovePlayer = vi.fn(
+      () =>
+        new Promise<{ status: 'success' }>((resolve) => {
+          finishRemoval = resolve
+        }),
+    )
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toHaveFocus()
+
+    await user.tab()
+    expect(dialog).toHaveFocus()
+
+    finishRemoval({ status: 'success' })
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
   })
 
   it('uses the ordinary removal warning when the round keeps two players', async () => {
     const user = userEvent.setup()
     const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
     const thirdPlayerView = {
       ...hintingView,
       members: [
@@ -618,16 +699,42 @@ describe('HintPhaseScreen', () => {
     await user.click(
       screen.getByRole('button', { name: 'Remove Grace from this game' }),
     )
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /Remove Grace.*board, submitted hint, readiness, and remaining turn.*not be able to rejoin/i,
-      ),
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      /board, submitted hint, readiness, and remaining turn.*not be able to rejoin/i,
     )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(onRemovePlayer).toHaveBeenCalledWith('player-2', false)
-    confirm.mockRestore()
+  })
+
+  it('keeps a failed hinting removal open with its error visible', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({
+      status: 'rate_limited',
+      message: 'Try removing this player again shortly.',
+    })
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'Try removing this player again shortly.',
+    )
   })
 
   it('clears the rejected clue when the server replaces its private board', async () => {
+    const user = userEvent.setup()
     const lockedBoard = hintingView.board!.map((card, index) =>
       card.locked
         ? card
@@ -687,17 +794,128 @@ describe('HintPhaseScreen', () => {
       ),
     ).toBeVisible()
     expect(screen.getByText('Needs revision')).toBeVisible()
+    const rejectionDialog = screen.getByRole('alertdialog', {
+      name: 'Your hint was rejected',
+    })
+    expect(rejectionDialog).toHaveTextContent(
+      "The host rejected your hint! You've been given a new board. If you're not sure why your hint was rejected, ask the host!",
+    )
+    expect(
+      within(rejectionDialog).getByRole('button', { name: 'Got it' }),
+    ).toHaveFocus()
+    await user.click(
+      within(rejectionDialog).getByRole('button', { name: 'Got it' }),
+    )
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(await screen.findByLabelText('Your hint')).toHaveValue('')
     expect(screen.getByLabelText('Your hint')).not.toHaveAttribute('readonly')
     expect(screen.getByText('NEW MOON')).toBeVisible()
   })
+
+  it('reopens the rejection dialog for a later rejection cycle', async () => {
+    const user = userEvent.setup()
+    const props = {
+      onSubmitHint: vi.fn(),
+      onUnlockHint: vi.fn(),
+      onRejectHint: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onLeave: vi.fn(),
+      onStartGuessing: vi.fn(),
+    }
+    const view = render(<HintPhaseScreen view={hintingView} {...props} />)
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    view.rerender(
+      <HintPhaseScreen
+        view={{ ...hintingView, hintRejected: true }}
+        {...props}
+      />,
+    )
+
+    expect(
+      screen.getByRole('alertdialog', { name: 'Your hint was rejected' }),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Got it' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+    view.rerender(<HintPhaseScreen view={hintingView} {...props} />)
+    view.rerender(
+      <HintPhaseScreen
+        view={{ ...hintingView, hintRejected: true }}
+        {...props}
+      />,
+    )
+
+    expect(
+      screen.getByRole('alertdialog', { name: 'Your hint was rejected' }),
+    ).toBeVisible()
+  })
 })
 
 describe('GuessingScreen messages', () => {
+  it('hides latest activity and explains inherited spectator host controls', () => {
+    const spectatorHost = {
+      playerId: 'spectator-1',
+      name: 'Linus',
+      role: 'host' as const,
+      participation: 'spectator' as const,
+    }
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      gameId: hintingView.gameId,
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: spectatorHost,
+      members: [spectatorHost, ...hintingView.members],
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-1',
+      clueGiverName: 'Ada',
+      hint: 'Orbit',
+      hintNumber: 2,
+      boardCompleted: false,
+      turnSettled: false,
+      board: [],
+      turnPlayers: [],
+      latestActivity: {
+        type: 'civilian',
+        playerName: 'Grace',
+        word: 'RIVER',
+        message:
+          'Grace found civilian “RIVER” and is done guessing. Waiting for the other players to finish guessing.',
+      },
+      unfinishedPickerCount: 1,
+      scoreboard: [],
+      canGuess: false,
+      canMarkDone: false,
+      canAdvanceTurn: true,
+    }
+
+    render(
+      <GuessingScreen
+        view={view}
+        onClaimCard={vi.fn()}
+        onFinishGuessing={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onAdvanceTurn={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('Latest activity')).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText('Latest turn activity'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/inherited operational host duties/i),
+    ).toHaveTextContent(
+      /spectator privacy and player-only actions remain unchanged/i,
+    )
+    expect(screen.getByRole('button', { name: 'Next hint' })).toBeEnabled()
+  })
+
   it('lets the host remove a guesser while promising to preserve game history', async () => {
     const user = userEvent.setup()
     const onRemovePlayer = vi.fn().mockResolvedValue({ status: 'success' })
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
     const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
       status: 'guessing',
       gameId: '10000000-0000-4000-8000-000000000001',
@@ -730,36 +948,101 @@ describe('GuessingScreen messages', () => {
       onClaimCard: vi.fn(),
       onFinishGuessing: vi.fn(),
       onRemovePlayer,
-      onAdvanceTurn: vi.fn(),
+      onAdvanceTurn: vi.fn().mockResolvedValue({
+        status: 'invalid',
+        message: 'Target found. You and the clue-giver each gain 3 points.',
+      }),
     }
-    const rendered = render(<GuessingScreen view={view} {...props} />)
+    const rendered = render(
+      <GuessingScreen view={{ ...view, canAdvanceTurn: true }} {...props} />,
+    )
 
     expect(
       screen.queryByRole('button', { name: 'Remove Ada from this game' }),
     ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next hint' }))
+    expect(
+      screen.getByText(
+        'Target found. You and the clue-giver each gain 3 points.',
+      ),
+    ).toBeVisible()
     await user.click(
       screen.getByRole('button', { name: 'Remove Grace from this game' }),
     )
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /Remove Grace.*no longer be able to guess or rejoin.*board, clue, turn, and score history will remain/i,
-      ),
+    const removalDialog = screen.getByRole('alertdialog')
+    expect(removalDialog).toHaveTextContent(
+      /no longer be able to guess or rejoin.*score and name will be removed.*points already earned by other players and completed game history will remain.*submitted hint and board will be skipped/i,
     )
+    expect(removalDialog).not.toHaveTextContent(/target found/i)
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(onRemovePlayer).toHaveBeenCalledWith('player-2')
 
     rendered.rerender(
       <GuessingScreen
-        view={{ ...view, members: [hintingView.members[0]] }}
+        view={{
+          ...view,
+          members: [hintingView.members[0]],
+          scoreboard: view.scoreboard.filter(({ name }) => name !== 'Grace'),
+          canAdvanceTurn: true,
+        }}
         {...props}
       />,
     )
-    expect(screen.getByText('No longer active')).toBeVisible()
-    expect(screen.getByText('Grace')).toBeVisible()
-    expect(screen.getByText('1', { selector: '.score-value' })).toBeVisible()
+    expect(screen.queryByText('No longer active')).not.toBeInTheDocument()
+    expect(screen.queryByText('Grace')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Remove Grace from this game' }),
     ).not.toBeInTheDocument()
-    confirm.mockRestore()
+  })
+
+  it('keeps a failed guessing removal open with its error visible', async () => {
+    const user = userEvent.setup()
+    const onRemovePlayer = vi.fn().mockResolvedValue({
+      status: 'rate_limited',
+      message: 'Try removing this player again shortly.',
+    })
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      gameId: '10000000-0000-4000-8000-000000000001',
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: hintingView.player,
+      members: hintingView.members,
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-1',
+      clueGiverName: 'Ada',
+      hint: 'Orbit',
+      hintNumber: 2,
+      boardCompleted: false,
+      turnSettled: false,
+      board: [],
+      turnPlayers: [],
+      scoreboard: [
+        { ...hintingView.members[0], position: 0, score: 0 },
+        { ...hintingView.members[1], position: 1, score: 0 },
+      ],
+      canGuess: false,
+      canMarkDone: false,
+      canAdvanceTurn: false,
+    }
+    render(
+      <GuessingScreen
+        view={view}
+        onClaimCard={vi.fn()}
+        onFinishGuessing={vi.fn()}
+        onRemovePlayer={onRemovePlayer}
+        onAdvanceTurn={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Grace from this game' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'Try removing this player again shortly.',
+    )
   })
 
   it('shows scores for claimed cards without exposing unclaimed values', () => {
@@ -998,11 +1281,16 @@ describe('GuessingScreen messages', () => {
   })
 
   it.each([1, 2])(
-    'keeps the host action disabled until the server permits advancement on turn %s',
+    'warns but lets the host move on with unfinished players on turn %s',
     async (turnNumber) => {
       const user = userEvent.setup()
       const onAdvanceTurn = vi.fn().mockResolvedValue({ status: 'success' })
       const onShowScoreboard = vi.fn().mockResolvedValue({ status: 'success' })
+      const activeAdvance = turnNumber === 1 ? onAdvanceTurn : onShowScoreboard
+      activeAdvance.mockResolvedValueOnce({
+        status: 'server_unavailable',
+        message: 'Could not move on yet.',
+      })
       const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
         status: 'guessing',
         gameId: hintingView.gameId,
@@ -1024,8 +1312,9 @@ describe('GuessingScreen messages', () => {
         scoreboard: [],
         canGuess: false,
         canMarkDone: false,
-        canAdvanceTurn: false,
-        canViewScoreboard: false,
+        canAdvanceTurn: turnNumber === 1,
+        canViewScoreboard: turnNumber === 2,
+        unfinishedPickerCount: 1,
       }
       const props = {
         onClaimCard: vi.fn(),
@@ -1038,32 +1327,31 @@ describe('GuessingScreen messages', () => {
       const button = screen.getByRole('button', {
         name: turnNumber === 1 ? 'Next hint' : 'View scoreboard',
       })
-      expect(button).toBeDisabled()
-      expect(button).toHaveAccessibleDescription(
-        'Waiting for players to finish guessing.',
-      )
-      await user.click(button)
-      expect(onAdvanceTurn).not.toHaveBeenCalled()
-      rerender(
-        <GuessingScreen
-          view={{
-            ...view,
-            canAdvanceTurn: turnNumber === 1,
-            canViewScoreboard: turnNumber === 2,
-          }}
-          {...props}
-        />,
-      )
       expect(button).toBeEnabled()
       expect(button).toHaveAccessibleDescription(
-        turnNumber === 1
-          ? 'Everyone has finished guessing. Advance when the room is ready.'
-          : 'Everyone has finished guessing. Show the final scoreboard when the room is ready.',
+        '1 player is still guessing. You can move on with confirmation.',
       )
+      await user.click(button)
+      expect(onAdvanceTurn).not.toHaveBeenCalled()
+      const dialog = screen.getByRole('alertdialog', {
+        name: 'Move on from this board?',
+      })
+      expect(dialog).toHaveTextContent(
+        '1 player is still guessing. Are you sure you want to move on?',
+      )
+      expect(
+        within(dialog).getByRole('button', { name: 'Cancel' }),
+      ).toHaveFocus()
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
       expect(onAdvanceTurn).not.toHaveBeenCalled()
       await user.click(button)
-      if (turnNumber === 1) expect(onAdvanceTurn).toHaveBeenCalledOnce()
-      else expect(onShowScoreboard).toHaveBeenCalledOnce()
+      await user.click(screen.getByRole('button', { name: 'Move on' }))
+      expect(screen.getByRole('alertdialog')).toHaveTextContent(
+        'Could not move on yet.',
+      )
+      await user.click(screen.getByRole('button', { name: 'Move on' }))
+      expect(activeAdvance).toHaveBeenCalledTimes(2)
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
       rerender(
         <GuessingScreen
           view={{ ...view, player: hintingView.members[1] }}
@@ -1143,6 +1431,34 @@ describe('GuessingScreen messages', () => {
 })
 
 describe('FinishedScreen', () => {
+  it('shows an explicit no-winner result when no players remain', () => {
+    const spectator = {
+      playerId: 'spectator',
+      name: 'Spectator',
+      role: 'host' as const,
+      participation: 'spectator' as const,
+      position: null,
+      score: null,
+    }
+    const view: Extract<RoomSnapshot, { status: 'finished' }> = {
+      status: 'finished',
+      gameId: hintingView.gameId,
+      roomCode: 'bcdf2',
+      player: spectator,
+      members: [spectator],
+      scoreboard: [spectator],
+      winners: [],
+    }
+
+    render(<FinishedScreen view={view} />)
+
+    expect(screen.getByRole('heading', { name: 'No winner' })).toBeVisible()
+    expect(
+      screen.getAllByText('No players remain in the final standings.'),
+    ).toHaveLength(2)
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
   it('shows board-free results and lets only the host return to the lobby', async () => {
     const user = userEvent.setup()
     const onReturnToLobby = vi.fn().mockResolvedValue({ status: 'success' })

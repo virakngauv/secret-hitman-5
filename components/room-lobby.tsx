@@ -14,11 +14,13 @@ import {
   useRoomSnapshot,
 } from '@/components/game-socket-provider'
 import { JoinRoomScreen } from '@/components/join-room-screen'
+import { LeaveRoomControl } from '@/components/leave-room-control'
 import {
   RoomInviteActions,
   RoomInviteCard,
 } from '@/components/room-invite-card'
 import { Button } from '@/components/ui/button'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { MAX_STARTING_PLAYERS, type RoomSnapshot } from '@/lib/game-protocol'
 import { generateClientToken } from '@/lib/player-session'
 
@@ -31,6 +33,40 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [isActing, setIsActing] = useState(false)
   const { snapshot, connectionStatus } = channel
+  const [roundTransition, setRoundTransition] = useState<{
+    snapshot: RoomSnapshot | null
+    inferredRoundEndedEarly: boolean
+    suppressInference: boolean
+  }>({
+    snapshot: null,
+    inferredRoundEndedEarly: false,
+    suppressInference: false,
+  })
+
+  if (snapshot !== roundTransition.snapshot) {
+    const previousSnapshot = roundTransition.snapshot
+    const inferredRoundEndedEarly =
+      snapshot?.status === 'lobby' &&
+      previousSnapshot !== null &&
+      (previousSnapshot.status === 'hinting' ||
+        previousSnapshot.status === 'guessing') &&
+      previousSnapshot.members.length > snapshot.members.length &&
+      !roundTransition.suppressInference
+    setRoundTransition({
+      snapshot,
+      inferredRoundEndedEarly,
+      suppressInference:
+        snapshot?.status === 'lobby'
+          ? false
+          : roundTransition.suppressInference,
+    })
+  }
+
+  const showRoundEndedEarly =
+    snapshot?.status === 'lobby' &&
+    (snapshot.lobbyNotice === 'player_left' ||
+      roundTransition.inferredRoundEndedEarly)
+
   if (!snapshot) return <RoomLoading />
 
   const retainScreen = (screen: ReactNode) => (
@@ -77,6 +113,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           view={snapshot}
           error={actionError}
           isActing={isActing}
+          showRoundEndedEarly={showRoundEndedEarly}
           onStart={async () => {
             setIsActing(true)
             setActionError(null)
@@ -127,9 +164,26 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
               playerId,
             })
           }
-          onRemovePlayer={(playerId, allowRoundReset) =>
-            game.removePlayer(roomCode, playerId, allowRoundReset)
-          }
+          onRemovePlayer={async (playerId, allowRoundReset) => {
+            if (allowRoundReset) {
+              setRoundTransition((current) => ({
+                ...current,
+                suppressInference: true,
+              }))
+            }
+            const result = await game.removePlayer(
+              roomCode,
+              playerId,
+              allowRoundReset,
+            )
+            if (result.status !== 'success') {
+              setRoundTransition((current) => ({
+                ...current,
+                suppressInference: false,
+              }))
+            }
+            return result
+          }}
           onLeave={async () => {
             const result = await game.leaveRoom(roomCode)
             if (result.status === 'success') router.push('/home')
@@ -159,12 +213,25 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             })
           }
           onAdvanceTurn={() =>
-            game.advanceTurn({ roomCode, gameId: snapshot.gameId })
+            game.advanceTurn({
+              roomCode,
+              gameId: snapshot.gameId,
+              turnId: snapshot.turnId,
+            })
           }
           onShowScoreboard={() =>
-            game.showScoreboard({ roomCode, gameId: snapshot.gameId })
+            game.showScoreboard({
+              roomCode,
+              gameId: snapshot.gameId,
+              turnId: snapshot.turnId,
+            })
           }
           onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
+          onLeave={async () => {
+            const result = await game.leaveRoom(roomCode)
+            if (result.status === 'success') router.push('/home')
+            return result
+          }}
         />,
       )
     case 'finished':
@@ -185,6 +252,7 @@ function LobbyScreen({
   view,
   error,
   isActing,
+  showRoundEndedEarly,
   onStart,
   onLeave,
   onRemove,
@@ -192,6 +260,7 @@ function LobbyScreen({
   view: LobbyView
   error: string | null
   isActing: boolean
+  showRoundEndedEarly: boolean
   onStart: () => Promise<void>
   onLeave: () => Promise<void>
   onRemove: (playerId: string) => Promise<void>
@@ -199,6 +268,26 @@ function LobbyScreen({
   const isHost = view.player.role === 'host'
   const canStart = view.members.length >= view.minimumPlayers
   const missingPlayers = view.minimumPlayers - view.members.length
+  const [removalTarget, setRemovalTarget] = useState<{
+    playerId: string
+    name: string
+  } | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
+  const [roundResetNotice, setRoundResetNotice] = useState({
+    active: showRoundEndedEarly,
+    dismissed: false,
+  })
+  if (roundResetNotice.active !== showRoundEndedEarly) {
+    setRoundResetNotice({ active: showRoundEndedEarly, dismissed: false })
+  }
+
+  const confirmRemoval = async () => {
+    if (!removalTarget) return
+    setIsRemoving(true)
+    await onRemove(removalTarget.playerId)
+    setIsRemoving(false)
+    setRemovalTarget(null)
+  }
 
   return (
     <main className="min-h-screen px-4 py-7 sm:px-7 lg:px-10">
@@ -251,7 +340,12 @@ function LobbyScreen({
                     <button
                       type="button"
                       className="remove-player"
-                      onClick={() => void onRemove(member.playerId)}
+                      onClick={() =>
+                        setRemovalTarget({
+                          playerId: member.playerId,
+                          name: member.name,
+                        })
+                      }
                       aria-label={`Remove ${member.name}`}
                     >
                       ×
@@ -279,16 +373,40 @@ function LobbyScreen({
             ) : (
               <div className="waiting-host">Waiting for the host to start</div>
             )}
-            <Button
-              variant="outline"
-              className="mt-3 w-full"
-              disabled={isActing}
-              onClick={() => void onLeave()}
-            >
-              Leave room
-            </Button>
+            <LeaveRoomControl
+              busy={isActing}
+              confirmationRequired={!isHost || view.members.length > 1}
+              error={!isHost || view.members.length > 1 ? error : null}
+              gameInProgress={false}
+              isHost={isHost}
+              onConfirm={() => void onLeave()}
+            />
           </section>
         </div>
+        <ConfirmationDialog
+          open={showRoundEndedEarly && !roundResetNotice.dismissed}
+          eyebrow="Round update"
+          title="The round ended early"
+          description="Another player left, leaving fewer than two players in the game. The current round was ended and everyone remaining was returned to the lobby. Invite another player to start a new game."
+          confirmLabel="Return to lobby"
+          onCancel={() => {}}
+          onConfirm={() =>
+            setRoundResetNotice((current) => ({
+              ...current,
+              dismissed: true,
+            }))
+          }
+        />
+        <ConfirmationDialog
+          open={removalTarget !== null}
+          title={removalTarget ? `Remove ${removalTarget.name}?` : ''}
+          description={`${removalTarget?.name ?? 'This player'} will leave the lobby and will not be able to rejoin this room.`}
+          cancelLabel="Cancel"
+          confirmLabel="Remove"
+          busy={isRemoving}
+          onCancel={() => setRemovalTarget(null)}
+          onConfirm={() => void confirmRemoval()}
+        />
       </div>
     </main>
   )
@@ -384,7 +502,11 @@ function RoomMessage({
         </span>
         <h1 className="mt-5 text-4xl font-black tracking-tight">{title}</h1>
         <p className="mt-3 text-[var(--muted-foreground)]">{body}</p>
-        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+        <div
+          className={`mt-7 grid gap-3 ${
+            showRoomRecovery ? 'sm:grid-cols-2' : 'mx-auto max-w-xs'
+          }`}
+        >
           <Button asChild>
             <Link href="/home">Back to home</Link>
           </Button>

@@ -2,8 +2,10 @@ import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { createGameSocketServer } from './protocol'
+import { createGameSocketServer, SlidingWindowRateLimiter } from './protocol'
+import { isPrivateNetworkOrigin } from './origins'
 import { parseTrustedProxies } from './proxy-trust'
+import { parseLeaveIntentForm } from './validation'
 
 export function startGameServer(
   options: {
@@ -26,6 +28,10 @@ export function startGameServer(
       process.env.NODE_ENV,
     )
   const logger = createStructuredLogger(process.env.LOG_LEVEL)
+  const isOriginAllowed = (origin: string | undefined) =>
+    origin === undefined ||
+    allowedOrigins.includes(origin) ||
+    (allowPrivateNetworkOrigins && isPrivateNetworkOrigin(origin))
   const trustedProxyAddresses =
     options.trustedProxyAddresses ??
     (process.env.TRUSTED_PROXIES === undefined
@@ -34,6 +40,10 @@ export function startGameServer(
           logger.warn(JSON.stringify({ event: 'invalid_trusted_proxy', entry }))
         }))
 
+  const socketServerRef: {
+    current?: ReturnType<typeof createGameSocketServer>
+  } = {}
+  const leaveIntentCommands = new SlidingWindowRateLimiter(20, 10_000)
   const httpServer = createServer((request, response) => {
     let pathname = ''
     if (request.url) {
@@ -50,10 +60,57 @@ export function startGameServer(
       response.end(JSON.stringify({ status: 'ok' }))
       return
     }
+    if (request.method === 'POST' && pathname === '/leave-intent') {
+      if (!isOriginAllowed(request.headers.origin)) {
+        response.writeHead(403, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ status: 'forbidden' }))
+        return
+      }
+      void readRequestBody(request, 16 * 1_024).then(
+        (body) => {
+          const intent = parseLeaveIntentForm(body)
+          const activeSocketServer = socketServerRef.current
+          if (!intent || !activeSocketServer) {
+            response.writeHead(intent ? 503 : 400, {
+              'content-type': 'application/json',
+            })
+            response.end(
+              JSON.stringify({
+                status: intent ? 'server_unavailable' : 'invalid',
+              }),
+            )
+            return
+          }
+          if (!leaveIntentCommands.take(intent.token, Date.now())) {
+            response.writeHead(429, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ status: 'rate_limited' }))
+            return
+          }
+          response.writeHead(202, { 'content-type': 'application/json' })
+          response.end(JSON.stringify({ status: 'accepted' }))
+          void activeSocketServer
+            .receiveLeaveIntent(intent.token, intent.roomCodes, intent.socketId)
+            .catch((error: unknown) => {
+              logger.error(
+                JSON.stringify({
+                  event: 'leave_intent_failed',
+                  message:
+                    error instanceof Error ? error.message : 'Unknown error',
+                }),
+              )
+            })
+        },
+        () => {
+          response.writeHead(413, { 'content-type': 'application/json' })
+          response.end(JSON.stringify({ status: 'too_large' }))
+        },
+      )
+      return
+    }
     response.writeHead(404, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ status: 'not_found' }))
   })
-  const socketServer = createGameSocketServer(httpServer, {
+  const activeSocketServer = createGameSocketServer(httpServer, {
     allowedOrigins,
     allowPrivateNetworkOrigins,
     trustDigitalOceanProxy:
@@ -62,6 +119,7 @@ export function startGameServer(
     ...(trustedProxyAddresses !== undefined ? { trustedProxyAddresses } : {}),
     logger,
   })
+  socketServerRef.current = activeSocketServer
 
   httpServer.on('error', (error) => {
     logger.error(
@@ -103,7 +161,7 @@ export function startGameServer(
   let stopPromise: Promise<void> | undefined
   function stop() {
     stopPromise ??= (async () => {
-      await socketServer.shutdown()
+      await activeSocketServer.shutdown()
       if (httpServer.listening) {
         await new Promise<void>((resolveClose, reject) =>
           httpServer.close((error) => (error ? reject(error) : resolveClose())),
@@ -113,7 +171,33 @@ export function startGameServer(
     return stopPromise
   }
 
-  return { httpServer, ...socketServer, stop }
+  return { httpServer, ...activeSocketServer, stop }
+}
+
+function readRequestBody(
+  request: import('node:http').IncomingMessage,
+  maxBytes: number,
+) {
+  return new Promise<string>((resolveBody, rejectBody) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    let tooLarge = false
+    request.on('data', (chunk: Buffer) => {
+      if (tooLarge) return
+      size += chunk.length
+      if (size > maxBytes) {
+        tooLarge = true
+        chunks.length = 0
+        return
+      }
+      chunks.push(chunk)
+    })
+    request.on('end', () => {
+      if (tooLarge) rejectBody(new Error('Request body is too large.'))
+      else resolveBody(Buffer.concat(chunks).toString('utf8'))
+    })
+    request.on('error', rejectBody)
+  })
 }
 
 export function parseEnvPort(value: string | undefined) {

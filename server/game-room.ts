@@ -5,6 +5,7 @@ import {
   MAX_TARGET_COUNT,
   MAX_STARTING_PLAYERS,
   MIN_TARGET_COUNT,
+  type AdvanceTurnPayload,
   type CardKind,
   type ClaimCardPayload,
   type CommandFailure,
@@ -19,6 +20,7 @@ import {
   type RoomSnapshot,
   type ScoreboardEntry,
   type SubmitHintPayload,
+  type TurnActivitySnapshot,
 } from '../lib/game-protocol'
 import {
   applyTargets,
@@ -33,6 +35,7 @@ export const MAX_ROOM_MEMBERS = 32
 // Bound retained identities without ever evicting a room's removal restrictions.
 export const MAX_ROOM_IDENTITIES = 1_024
 const MAX_REMEMBERED_COMMANDS_PER_PLAYER = 100
+const KICKED_PLAYER_NAME = 'xxxx'
 
 type Member = {
   playerId: string
@@ -42,6 +45,9 @@ type Member = {
   participation: Participation
   joinedAt: number
   active: boolean
+  departedGame: boolean
+  kicked: boolean
+  lobbyNotice?: 'player_left'
   game: GameSeat | null
 }
 
@@ -64,6 +70,8 @@ type GameState = {
   turnIndex: number
   turnId: string
   turnCompleted: boolean
+  latestActivity:
+    (Omit<TurnActivitySnapshot, 'message'> & { playerId: string }) | null
 }
 
 export type GameRoomOptions = {
@@ -136,6 +144,7 @@ export class GameRoom {
     if (existing) {
       existing.name = name
       existing.active = true
+      if (existing.departedGame) existing.participation = 'spectator'
       if (
         !existing.game &&
         this.phase === 'hinting' &&
@@ -166,10 +175,11 @@ export class GameRoom {
     const member = this.findActiveMember(token)
     if (!member) return { status: 'success' }
 
+    const wasHost = member.role === 'host'
     member.active = false
-    if (member.role === 'host') {
+    if (wasHost) {
       member.role = 'player'
-      const successor = this.activeMembers()[0]
+      const successor = this.hostSuccessor()
       if (successor) successor.role = 'host'
     }
 
@@ -177,8 +187,13 @@ export class GameRoom {
       const index = this.members.indexOf(member)
       if (index >= 0) this.members.splice(index, 1)
     } else if (member.game) {
-      if (this.phase === 'hinting') this.removeGameSeat(member)
-      if (this.phase === 'guessing') member.game.turnState = 'done'
+      if (this.phase === 'hinting') {
+        this.removeGameSeat(member)
+        if (this.gamePlayers().length < MIN_STARTING_PLAYERS) {
+          this.resetRoundToLobby('player_left')
+        }
+      }
+      if (this.phase === 'guessing') this.departGuessingPlayer(member)
     }
 
     this.commandResults.delete(token)
@@ -240,10 +255,10 @@ export class GameRoom {
     }
 
     this.removedTokenFingerprints.add(fingerprintClientToken(target.token))
+    target.kicked = true
     this.commandResults.delete(target.token)
     if (this.phase === 'guessing') {
-      target.active = false
-      if (target.game) target.game.turnState = 'done'
+      this.departGuessingPlayer(target)
       this.touch(now)
       return { status: 'success', removedToken: target.token }
     }
@@ -254,11 +269,13 @@ export class GameRoom {
     return { status: 'success', removedToken: target.token }
   }
 
-  private resetRoundToLobby() {
+  private resetRoundToLobby(lobbyNotice?: Member['lobbyNotice']) {
     this.phase = 'lobby'
     this.game = null
     for (const member of this.members) {
       member.participation = 'player'
+      member.departedGame = false
+      member.lobbyNotice = member.active ? lobbyNotice : undefined
       member.game = null
     }
     this.commandResults.clear()
@@ -297,6 +314,7 @@ export class GameRoom {
     const seed = `${this.initialSeed}:${now}`
     players.forEach((member, position) => {
       member.participation = 'player'
+      member.lobbyNotice = undefined
       member.game = {
         position,
         score: 0,
@@ -316,6 +334,7 @@ export class GameRoom {
       turnIndex: 0,
       turnId: randomUUID(),
       turnCompleted: false,
+      latestActivity: null,
     }
     this.phase = 'hinting'
     this.commandResults.clear()
@@ -546,6 +565,13 @@ export class GameRoom {
       this.completeCurrentTurn()
     }
 
+    this.requireGame().latestActivity = {
+      type: card.kind,
+      playerId: member.playerId,
+      playerName: member.name,
+      word: card.word,
+    }
+
     this.touch(now)
     return this.remember(token, payload.commandId, {
       status: 'success',
@@ -577,13 +603,19 @@ export class GameRoom {
     // already a success, without extending room life.
     if (member.game.turnState === 'done') return { status: 'success' }
     member.game.turnState = 'done'
+    this.requireGame().latestActivity = {
+      type: 'pass',
+      playerId: member.playerId,
+      playerName: member.name,
+      word: null,
+    }
     this.touch(now)
     return { status: 'success' }
   }
 
   advanceTurn(
     token: string,
-    payload: GameCommandPayload,
+    payload: AdvanceTurnPayload,
     now = Date.now(),
   ): CommandResult {
     if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
@@ -600,13 +632,12 @@ export class GameRoom {
         message: 'The game is not in the guessing phase.',
       }
     }
-    if (!this.isCurrentTurnSettled()) {
+    if (payload.turnId !== this.requireGame().turnId) {
       return {
-        status: 'invalid',
-        message: 'Waiting for players to finish guessing.',
+        status: 'stale',
+        message: 'That guessing turn is no longer current.',
       }
     }
-
     const game = this.requireGame()
     if (game.turnIndex >= game.playerOrder.length - 1) {
       return {
@@ -614,9 +645,15 @@ export class GameRoom {
         message: 'Use View scoreboard after the final turn.',
       }
     }
-    game.turnIndex += 1
+    const currentClueGiver = this.currentClueGiver()
+    if (currentClueGiver.departedGame) {
+      game.playerOrder.splice(game.turnIndex, 1)
+    } else {
+      game.turnIndex += 1
+    }
     game.turnId = randomUUID()
     game.turnCompleted = false
+    game.latestActivity = null
     this.prepareCurrentTurn()
     this.commandResults.clear()
     this.touch(now)
@@ -625,7 +662,7 @@ export class GameRoom {
 
   showScoreboard(
     token: string,
-    payload: GameCommandPayload,
+    payload: AdvanceTurnPayload,
     now = Date.now(),
   ): CommandResult {
     if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
@@ -642,13 +679,12 @@ export class GameRoom {
         message: 'The scoreboard is available only after the final turn.',
       }
     }
-    if (this.hasActiveGuessers()) {
+    if (payload.turnId !== this.requireGame().turnId) {
       return {
-        status: 'invalid',
-        message: 'Waiting for players to finish guessing.',
+        status: 'stale',
+        message: 'That guessing turn is no longer current.',
       }
     }
-
     this.phase = 'finished'
     this.commandResults.clear()
     this.touch(now)
@@ -678,6 +714,7 @@ export class GameRoom {
 
     for (const member of this.members) {
       member.participation = 'player'
+      member.departedGame = false
       member.game = null
     }
     this.game = null
@@ -713,7 +750,12 @@ export class GameRoom {
     }
 
     if (this.phase === 'lobby') {
-      return { status: 'lobby', minimumPlayers: MIN_STARTING_PLAYERS, ...base }
+      return {
+        status: 'lobby',
+        minimumPlayers: MIN_STARTING_PLAYERS,
+        ...(member.lobbyNotice ? { lobbyNotice: member.lobbyNotice } : {}),
+        ...base,
+      }
     }
 
     if (this.phase === 'hinting') {
@@ -756,13 +798,19 @@ export class GameRoom {
         (entry): entry is ScoreboardEntry & { score: number } =>
           entry.participation === 'player' && entry.score !== null,
       )
-      const winningScore = Math.max(...playerScores.map(({ score }) => score))
+      const winningScore =
+        playerScores.length > 0
+          ? Math.max(...playerScores.map(({ score }) => score))
+          : null
       return {
         status: 'finished',
         gameId: this.requireGame().gameId,
         ...base,
         scoreboard,
-        winners: playerScores.filter(({ score }) => score === winningScore),
+        winners:
+          winningScore === null
+            ? []
+            : playerScores.filter(({ score }) => score === winningScore),
       }
     }
 
@@ -773,7 +821,9 @@ export class GameRoom {
     const turnSettled = this.isCurrentTurnSettled()
     const finalTurnReview = this.isFinalTurn() && turnSettled
     const revealAll =
-      turnSettled || member === clueGiver || member.game?.turnState === 'done'
+      turnSettled ||
+      (!member.departedGame &&
+        (member === clueGiver || member.game?.turnState === 'done'))
     const board = clueSeat.board.map((card) => {
       const selectedByYou = card.claimers.some(
         ({ playerId }) => playerId === member.playerId,
@@ -789,6 +839,7 @@ export class GameRoom {
       const canGuess =
         this.phase === 'guessing' &&
         Boolean(member.game) &&
+        !member.departedGame &&
         member !== clueGiver &&
         member.game?.turnState === 'guessing'
       return {
@@ -799,8 +850,12 @@ export class GameRoom {
           card.kind === 'assassin' && !revealAll
             ? card.claimers
                 .filter(({ playerId }) => playerId === member.playerId)
-                .map(({ name }) => name)
-            : card.claimers.map(({ name }) => name),
+                .map(({ playerId, name }) =>
+                  this.publicPlayerName(playerId, name),
+                )
+            : card.claimers.map(({ playerId, name }) =>
+                this.publicPlayerName(playerId, name),
+              ),
         selectedByYou,
         disabled:
           !canGuess ||
@@ -818,7 +873,7 @@ export class GameRoom {
       turnNumber: this.requireGame().turnIndex + 1,
       totalTurns: this.requireGame().playerOrder.length,
       clueGiverId: clueGiver.playerId,
-      clueGiverName: clueGiver.name,
+      clueGiverName: this.publicPlayerName(clueGiver.playerId, clueGiver.name),
       hint: clueSeat.hint,
       hintNumber: clueSeat.targetCount,
       boardCompleted: this.requireGame().turnCompleted || finalTurnReview,
@@ -826,7 +881,7 @@ export class GameRoom {
       board,
       turnPlayers: this.gamePlayers().map((player) => ({
         playerId: player.playerId,
-        name: player.name,
+        name: this.publicPlayerName(player.playerId, player.name),
         state:
           player === clueGiver
             ? 'clue-giver'
@@ -834,19 +889,21 @@ export class GameRoom {
               ? 'done'
               : 'guessing',
       })),
+      latestActivity: this.turnActivitySnapshot(),
+      unfinishedPickerCount: this.activeGuesserCount(),
       scoreboard: this.scoreboard(),
       canGuess:
         Boolean(member.game) &&
+        !member.departedGame &&
         member !== clueGiver &&
         member.game?.turnState === 'guessing',
       canMarkDone:
         Boolean(member.game) &&
+        !member.departedGame &&
         member !== clueGiver &&
         member.game?.turnState === 'guessing',
-      canAdvanceTurn:
-        member.role === 'host' && !this.isFinalTurn() && turnSettled,
-      canViewScoreboard:
-        member.role === 'host' && this.isFinalTurn() && turnSettled,
+      canAdvanceTurn: member.role === 'host' && !this.isFinalTurn(),
+      canViewScoreboard: member.role === 'host' && this.isFinalTurn(),
     }
   }
 
@@ -868,6 +925,9 @@ export class GameRoom {
       participation: 'player',
       joinedAt,
       active: true,
+      departedGame: false,
+      kicked: false,
+      lobbyNotice: undefined,
       game: null,
     }
   }
@@ -878,6 +938,7 @@ export class GameRoom {
     const boardIndex = game.nextBoardIndex
     game.nextBoardIndex += 1
     member.participation = 'player'
+    member.departedGame = false
     member.game = {
       position,
       score: 0,
@@ -938,13 +999,19 @@ export class GameRoom {
   }
 
   private scoreboard(): ScoreboardEntry[] {
-    const players: ScoreboardEntry[] = this.gamePlayers().map((member) => ({
-      ...this.identity(member),
-      position: member.game?.position ?? null,
-      score: member.game?.score ?? null,
-    }))
+    const players: ScoreboardEntry[] = this.gamePlayers()
+      .filter(({ kicked }) => !kicked)
+      .map((member) => ({
+        ...this.identity(member),
+        participation: 'player',
+        position: member.game?.position ?? null,
+        score: member.game?.score ?? null,
+      }))
     const spectators: ScoreboardEntry[] = this.activeMembers()
-      .filter(({ participation }) => participation === 'spectator')
+      .filter(
+        ({ participation, game }) =>
+          participation === 'spectator' && game === null,
+      )
       .map((member) => ({
         ...this.identity(member),
         position: null,
@@ -968,7 +1035,9 @@ export class GameRoom {
     for (const player of this.gamePlayers()) {
       if (!player.game) continue
       player.game.turnState =
-        player === clueGiver || !player.active ? 'done' : 'guessing'
+        player === clueGiver || !player.active || player.departedGame
+          ? 'done'
+          : 'guessing'
     }
   }
 
@@ -981,6 +1050,7 @@ export class GameRoom {
     return this.gamePlayers().some(
       (player) =>
         player.active &&
+        !player.departedGame &&
         player !== clueGiver &&
         player.game?.turnState === 'guessing',
     )
@@ -988,6 +1058,48 @@ export class GameRoom {
 
   private isCurrentTurnSettled() {
     return !this.hasActiveGuessers()
+  }
+
+  private activeGuesserCount() {
+    const clueGiver = this.currentClueGiver()
+    return this.gamePlayers().filter(
+      (player) =>
+        player.active &&
+        !player.departedGame &&
+        player !== clueGiver &&
+        player.game?.turnState === 'guessing',
+    ).length
+  }
+
+  private turnActivitySnapshot(): TurnActivitySnapshot | null {
+    const activity = this.requireGame().latestActivity
+    if (!activity) return null
+
+    const { playerId, ...publicActivity } = activity
+    const playerName = this.publicPlayerName(playerId, activity.playerName)
+
+    const next = this.isCurrentTurnSettled()
+      ? 'The host can move on.'
+      : 'Waiting for the other players to finish guessing.'
+    const quotedWord = activity.word ? ` “${activity.word}”` : ''
+    const message =
+      activity.type === 'target'
+        ? this.requireGame().turnCompleted
+          ? `${playerName} found target${quotedWord}. The board is complete. ${next}`
+          : `${playerName} found target${quotedWord} and may keep guessing.`
+        : activity.type === 'civilian'
+          ? `${playerName} found civilian${quotedWord} and is done guessing. ${next}`
+          : activity.type === 'assassin'
+            ? `${playerName} found assassin${quotedWord}. The board is complete. ${next}`
+            : `${playerName} passed and is done guessing. ${next}`
+
+    return { ...publicActivity, playerName, message }
+  }
+
+  private publicPlayerName(playerId: string, fallback: string) {
+    return this.members.find((member) => member.playerId === playerId)?.kicked
+      ? KICKED_PLAYER_NAME
+      : fallback
   }
 
   private allTargetsClaimed() {
@@ -1009,6 +1121,27 @@ export class GameRoom {
   private isFinalTurn() {
     const game = this.requireGame()
     return game.turnIndex === game.playerOrder.length - 1
+  }
+
+  private hostSuccessor() {
+    const active = this.activeMembers()
+    return (
+      active.find(({ participation }) => participation === 'player') ??
+      active[0]
+    )
+  }
+
+  private departGuessingPlayer(member: Member) {
+    member.active = false
+    member.departedGame = true
+    member.participation = 'spectator'
+    if (member.game) member.game.turnState = 'done'
+
+    const game = this.requireGame()
+    const playerIndex = game.playerOrder.indexOf(member.playerId)
+    if (playerIndex > game.turnIndex) {
+      game.playerOrder.splice(playerIndex, 1)
+    }
   }
 
   private isCurrentGame(gameId: string) {

@@ -3,7 +3,9 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
+import { LeaveRoomControl } from '@/components/leave-room-control'
 import { Button } from '@/components/ui/button'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { Input } from '@/components/ui/input'
 import {
   CARD_SCORE,
@@ -62,6 +64,11 @@ export function HintPhaseScreen({
   const [isStarting, setIsStarting] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
+  const [removalTarget, setRemovalTarget] = useState<{
+    playerId: string
+    name: string
+    resetsRound: boolean
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
@@ -117,16 +124,18 @@ export function HintPhaseScreen({
 
   const removePlayer = async (playerId: string, name: string) => {
     const resetsRound = view.hintStatuses.length <= 2
-    const confirmed = window.confirm(
-      resetsRound
-        ? `Remove ${name}? This will leave fewer than two players, end the current round, and return everyone else to the lobby. All current boards, hints, readiness, scores, and turns will be discarded. ${name} will not be able to rejoin this room.`
-        : `Remove ${name}? Their board, submitted hint, readiness, and remaining turn will be removed from this game. They will not be able to rejoin this room.`,
-    )
-    if (!confirmed) return
+    setError(null)
+    setRemovalTarget({ playerId, name, resetsRound })
+  }
+
+  const confirmRemoval = async () => {
+    if (!removalTarget) return
+    const { playerId, resetsRound } = removalTarget
     setBusyPlayer(playerId)
     setError(null)
     const result = await onRemovePlayer(playerId, resetsRound)
     if (result.status !== 'success') setError(result.message)
+    else setRemovalTarget(null)
     setBusyPlayer(null)
   }
 
@@ -379,6 +388,7 @@ export function HintPhaseScreen({
           {isHost ? (
             <div className="host-control">
               <p className="host-control-label">Host control</p>
+              <OperationalHostNotice view={view} />
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                 Review clues as they arrive, reject any that need revision, or
                 start guessing once everyone is ready.
@@ -397,23 +407,51 @@ export function HintPhaseScreen({
               start guessing when everyone is ready.
             </p>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-3 w-full"
-            disabled={isLeaving}
-            onClick={() => void leave()}
-          >
-            {isLeaving ? 'Leaving…' : 'Leave room'}
-          </Button>
-          {leaveError ? (
-            <p className="form-message" role="alert">
-              {leaveError}
-            </p>
-          ) : null}
+          <LeaveRoomControl
+            busy={isLeaving}
+            confirmationRequired={!isHost || view.members.length > 1}
+            error={leaveError}
+            gameInProgress
+            isHost={isHost}
+            onConfirm={() => void leave()}
+          />
         </aside>
       </div>
+      {view.hintRejected ? <HintRejectionNotice /> : null}
+      <ConfirmationDialog
+        open={removalTarget !== null}
+        title={
+          removalTarget ? `Remove ${removalTarget.name} from this game?` : ''
+        }
+        description={
+          removalTarget?.resetsRound
+            ? `This will leave fewer than two players, end the current round, and return everyone else to the lobby. All current boards, hints, readiness, scores, and turns will be discarded. ${removalTarget.name} will not be able to rejoin this room.`
+            : `${removalTarget?.name ?? 'This player'}'s board, submitted hint, readiness, and remaining turn will be removed from this game. They will not be able to rejoin this room.`
+        }
+        cancelLabel="Cancel"
+        confirmLabel="Remove"
+        busy={busyPlayer !== null}
+        error={removalTarget ? error : null}
+        onCancel={() => setRemovalTarget(null)}
+        onConfirm={() => void confirmRemoval()}
+      />
     </GamePageShell>
+  )
+}
+
+function HintRejectionNotice() {
+  const [open, setOpen] = useState(true)
+
+  return (
+    <ConfirmationDialog
+      open={open}
+      eyebrow="Hint update"
+      title="Your hint was rejected"
+      description="The host rejected your hint! You've been given a new board. If you're not sure why your hint was rejected, ask the host!"
+      confirmLabel="Got it"
+      onConfirm={() => setOpen(false)}
+      onCancel={() => setOpen(false)}
+    />
   )
 }
 
@@ -422,6 +460,7 @@ export function GuessingScreen({
   onClaimCard,
   onFinishGuessing,
   onRemovePlayer,
+  onLeave,
   onAdvanceTurn,
   onShowScoreboard,
 }: {
@@ -432,14 +471,24 @@ export function GuessingScreen({
   ) => Promise<CommandResult<{ kind: CardKind }>>
   onFinishGuessing: () => Promise<CommandResult>
   onRemovePlayer: (playerId: string) => Promise<CommandResult>
+  onLeave?: () => Promise<CommandResult>
   onAdvanceTurn: () => Promise<CommandResult>
   onShowScoreboard?: () => Promise<CommandResult>
 }) {
   const [busyCard, setBusyCard] = useState<string | null>(null)
   const [isFinishing, setIsFinishing] = useState(false)
   const [isAdvancing, setIsAdvancing] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
+  const [leaveError, setLeaveError] = useState<string | null>(null)
   const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
+  const [removalTarget, setRemovalTarget] = useState<{
+    playerId: string
+    name: string
+  } | null>(null)
+  const [confirmAdvance, setConfirmAdvance] = useState(false)
+  const [advanceError, setAdvanceError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [removalError, setRemovalError] = useState<string | null>(null)
   const isClueGiver = view.player.playerId === view.clueGiverId
   const fullyRevealed = view.board.every(
     ({ revealedKind }) => revealedKind !== null,
@@ -453,6 +502,7 @@ export function GuessingScreen({
   const canHostAct = view.isFinalTurn
     ? view.canViewScoreboard
     : view.canAdvanceTurn
+  const unfinishedPickerCount = view.unfinishedPickerCount ?? 0
 
   const claim = async (cardId: string) => {
     setBusyCard(cardId)
@@ -477,26 +527,52 @@ export function GuessingScreen({
     setIsFinishing(false)
   }
 
-  const advance = async () => {
+  const performAdvance = async () => {
     setFeedback(null)
+    setAdvanceError(null)
     setIsAdvancing(true)
     const result = await (view.isFinalTurn && onShowScoreboard
       ? onShowScoreboard()
       : onAdvanceTurn())
-    if (result.status !== 'success') setFeedback(result.message)
+    if (result.status !== 'success') {
+      if (confirmAdvance) setAdvanceError(result.message)
+      else setFeedback(result.message)
+    } else setConfirmAdvance(false)
     setIsAdvancing(false)
   }
 
+  const advance = () => {
+    if (unfinishedPickerCount > 0) {
+      setAdvanceError(null)
+      setConfirmAdvance(true)
+      return
+    }
+    void performAdvance()
+  }
+
   const removePlayer = async (playerId: string, name: string) => {
-    const confirmed = window.confirm(
-      `Remove ${name}? They will no longer be able to guess or rejoin this room. Their board, clue, turn, and score history will remain in the game.`,
-    )
-    if (!confirmed) return
+    setRemovalError(null)
+    setRemovalTarget({ playerId, name })
+  }
+
+  const confirmRemoval = async () => {
+    if (!removalTarget) return
+    const { playerId } = removalTarget
     setBusyPlayer(playerId)
-    setFeedback(null)
+    setRemovalError(null)
     const result = await onRemovePlayer(playerId)
-    if (result.status !== 'success') setFeedback(result.message)
+    if (result.status !== 'success') setRemovalError(result.message)
+    else setRemovalTarget(null)
     setBusyPlayer(null)
+  }
+
+  const leave = async () => {
+    if (!onLeave) return
+    setLeaveError(null)
+    setIsLeaving(true)
+    const result = await onLeave()
+    if (result.status !== 'success') setLeaveError(result.message)
+    setIsLeaving(false)
   }
 
   return (
@@ -653,20 +729,21 @@ export function GuessingScreen({
           {view.player.role === 'host' ? (
             <div className="host-control">
               <p className="host-control-label">Host control</p>
+              <OperationalHostNotice view={view} />
               <p
                 id="host-advance-status"
                 role="status"
                 className="mt-1 text-sm text-[var(--muted-foreground)]"
               >
-                {canHostAct
-                  ? view.isFinalTurn
+                {unfinishedPickerCount > 0
+                  ? `${unfinishedPickerCount} ${unfinishedPickerCount === 1 ? 'player is' : 'players are'} still guessing. You can move on with confirmation.`
+                  : view.isFinalTurn
                     ? 'Everyone has finished guessing. Show the final scoreboard when the room is ready.'
-                    : 'Everyone has finished guessing. Advance when the room is ready.'
-                  : 'Waiting for players to finish guessing.'}
+                    : 'Everyone has finished guessing. Advance when the room is ready.'}
               </p>
               <Button
                 className="mt-4 w-full"
-                onClick={() => void advance()}
+                onClick={advance}
                 disabled={isAdvancing || !canHostAct}
                 aria-describedby="host-advance-status"
               >
@@ -678,9 +755,69 @@ export function GuessingScreen({
               </Button>
             </div>
           ) : null}
+          {onLeave ? (
+            <LeaveRoomControl
+              busy={isLeaving}
+              confirmationRequired={
+                view.player.role !== 'host' || view.members.length > 1
+              }
+              error={leaveError}
+              gameInProgress
+              isHost={view.player.role === 'host'}
+              onConfirm={() => void leave()}
+            />
+          ) : null}
         </aside>
       </div>
+      <ConfirmationDialog
+        open={confirmAdvance}
+        title="Move on from this board?"
+        description={`${unfinishedPickerCount} ${unfinishedPickerCount === 1 ? 'player is' : 'players are'} still guessing. Are you sure you want to move on?`}
+        cancelLabel="Cancel"
+        confirmLabel="Move on"
+        busy={isAdvancing}
+        error={confirmAdvance ? advanceError : null}
+        onCancel={() => {
+          setAdvanceError(null)
+          setConfirmAdvance(false)
+        }}
+        onConfirm={() => void performAdvance()}
+      />
+      <ConfirmationDialog
+        open={removalTarget !== null}
+        title={
+          removalTarget ? `Remove ${removalTarget.name} from this game?` : ''
+        }
+        description={`${removalTarget?.name ?? 'This player'} will no longer be able to guess or rejoin this room. Their score and name will be removed from the game. Points already earned by other players and completed game history will remain. If their clue-giver turn has not happened yet, their submitted hint and board will be skipped.`}
+        cancelLabel="Cancel"
+        confirmLabel="Remove"
+        busy={busyPlayer !== null}
+        error={removalTarget ? removalError : null}
+        onCancel={() => setRemovalTarget(null)}
+        onConfirm={() => void confirmRemoval()}
+      />
     </GamePageShell>
+  )
+}
+
+function OperationalHostNotice({
+  view,
+}: {
+  view: HintingView | GuessingView | FinishedView
+}) {
+  if (
+    view.player.role !== 'host' ||
+    view.player.participation !== 'spectator'
+  ) {
+    return null
+  }
+
+  return (
+    <p className="operational-host-notice">
+      You inherited operational host duties because no starting player remains
+      available. You can move the game between phases, but spectator privacy and
+      player-only actions remain unchanged.
+    </p>
   )
 }
 
@@ -740,6 +877,7 @@ export function FinishedScreen({
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
   const ranks = getDenseRanks(players.map(({ score }) => score))
   const winnerNames = view.winners.map(({ name }) => name).join(' & ')
+  const hasWinner = view.winners.length > 0
   const isHost = view.player.role === 'host'
 
   const returnToLobby = async () => {
@@ -755,44 +893,64 @@ export function FinishedScreen({
     <GamePageShell
       roomCode={view.roomCode}
       eyebrow="Game complete"
-      title={`${winnerNames} ${view.winners.length === 1 ? 'wins' : 'win'}`}
-      subtitle="Every player gave one hint. Final scores are locked."
+      title={
+        hasWinner
+          ? `${winnerNames} ${view.winners.length === 1 ? 'wins' : 'win'}`
+          : 'No winner'
+      }
+      subtitle={
+        hasWinner
+          ? 'Every player gave one hint. Final scores are locked.'
+          : 'No players remain in the final standings.'
+      }
     >
       <div className="mx-auto max-w-2xl">
         <section className="game-panel">
           <h2 className="sidebar-title">Final standings</h2>
-          <ol className="mt-4 grid gap-2">
-            {players.map((player, index) => {
-              const place = ranks[index]
-              const medal = ['🥇', '🥈', '🥉'][place - 1]
-              const placeName = ['First', 'Second', 'Third'][place - 1]
-              const placeLabel = medal ? `${placeName} place` : `Place ${place}`
-              return (
-                <li
-                  className={cn('score-row', place === 1 && 'score-row-winner')}
-                  key={player.playerId}
-                >
-                  <div className="min-w-0">
-                    <span className="block truncate font-semibold">
-                      {player.name}
-                    </span>
-                    <span className="score-placement text-xs text-[var(--muted-foreground)]">
-                      {medal ? (
-                        <>
-                          <span aria-hidden="true">{medal}</span> {placeLabel}
-                        </>
-                      ) : (
-                        placeLabel
-                      )}
-                    </span>
-                  </div>
-                  <span className="score-value">{player.score}</span>
-                </li>
-              )
-            })}
-          </ol>
+          {players.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--muted-foreground)]">
+              No players remain in the final standings.
+            </p>
+          ) : (
+            <ol className="mt-4 grid gap-2">
+              {players.map((player, index) => {
+                const place = ranks[index]
+                const medal = ['🥇', '🥈', '🥉'][place - 1]
+                const placeName = ['First', 'Second', 'Third'][place - 1]
+                const placeLabel = medal
+                  ? `${placeName} place`
+                  : `Place ${place}`
+                return (
+                  <li
+                    className={cn(
+                      'score-row',
+                      place === 1 && 'score-row-winner',
+                    )}
+                    key={player.playerId}
+                  >
+                    <div className="min-w-0">
+                      <span className="block truncate font-semibold">
+                        {player.name}
+                      </span>
+                      <span className="score-placement text-xs text-[var(--muted-foreground)]">
+                        {medal ? (
+                          <>
+                            <span aria-hidden="true">{medal}</span> {placeLabel}
+                          </>
+                        ) : (
+                          placeLabel
+                        )}
+                      </span>
+                    </div>
+                    <span className="score-value">{player.score}</span>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
           {isHost ? (
             <>
+              <OperationalHostNotice view={view} />
               <p className="form-message" role={error ? 'alert' : 'status'}>
                 {error ??
                   'Return everyone to the lobby before starting another game.'}

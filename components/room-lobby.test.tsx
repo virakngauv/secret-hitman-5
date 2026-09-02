@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -143,12 +143,51 @@ describe('RoomLobby invite prompt', () => {
     mocks.routerPush.mockReset()
   })
 
+  it('lets a host leave immediately when they are alone in the room', async () => {
+    const user = userEvent.setup()
+    mocks.view = lobbyView()
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Leave room' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(mocks.leaveRoom).toHaveBeenCalledWith('bcdf2')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/home')
+  })
+
+  it('shows a failed immediate leave without opening a confirmation dialog', async () => {
+    const user = userEvent.setup()
+    mocks.leaveRoom.mockResolvedValue({
+      status: 'server_unavailable',
+      message: 'Could not leave this room.',
+    })
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Leave room' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not leave this room.',
+    )
+    expect(mocks.routerPush).not.toHaveBeenCalled()
+  })
+
   it('lets an active hinting participant leave the round and returns home', async () => {
     const user = userEvent.setup()
     mocks.view = hintingView()
     render(<RoomLobby roomCode="bcdf2" />)
 
     await user.click(screen.getByRole('button', { name: 'Leave room' }))
+
+    expect(mocks.leaveRoom).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Leave as host?',
+    })
+    expect(dialog).toHaveTextContent(
+      /another room member will become host.*current participation will end.*completed scores and game history will remain/i,
+    )
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    await user.click(within(dialog).getByRole('button', { name: 'Leave room' }))
 
     expect(mocks.leaveRoom).toHaveBeenCalledWith('bcdf2')
     expect(mocks.routerPush).toHaveBeenCalledWith('/home')
@@ -164,11 +203,47 @@ describe('RoomLobby invite prompt', () => {
     render(<RoomLobby roomCode="bcdf2" />)
 
     await user.click(screen.getByRole('button', { name: 'Leave room' }))
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Leave as host?',
+    })
+    await user.click(within(dialog).getByRole('button', { name: 'Leave room' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
       'Could not leave this room.',
     )
     expect(mocks.routerPush).not.toHaveBeenCalled()
+  })
+
+  it('keeps a participant in the room when they cancel leaving', async () => {
+    const user = userEvent.setup()
+    mocks.view = hintingView()
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Leave room' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(
+      screen.queryByRole('alertdialog', { name: 'Leave as host?' }),
+    ).not.toBeInTheDocument()
+    expect(mocks.leaveRoom).not.toHaveBeenCalled()
+    expect(mocks.routerPush).not.toHaveBeenCalled()
+  })
+
+  it('explains the non-host consequences without describing host transfer', async () => {
+    const user = userEvent.setup()
+    const view = hintingView()
+    mocks.view = { ...view, player: view.members[1] }
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Leave room' }))
+
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Leave this room?',
+    })
+    expect(dialog).toHaveTextContent(
+      /leave the current game.*completed scores and game history will remain/i,
+    )
+    expect(dialog).not.toHaveTextContent(/become host/i)
   })
 
   it('sends the displayed turn identity with claims and passes after a snapshot change', async () => {
@@ -264,6 +339,10 @@ describe('RoomLobby invite prompt', () => {
       'Too many commands.',
     )
     await user.click(screen.getByRole('button', { name: 'Remove Grace' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'Grace will leave the lobby and will not be able to rejoin this room.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(mocks.removePlayer).toHaveBeenCalledWith('bcdf2', 'guest')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
@@ -376,6 +455,64 @@ describe('RoomLobby invite prompt', () => {
 
     expect(
       screen.getByRole('heading', { name: 'You were removed' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('link', { name: 'Back to home' }).parentElement,
+    ).toHaveClass('mx-auto', 'max-w-xs')
+  })
+
+  it('explains an early round ending before revealing the returned lobby', async () => {
+    const user = userEvent.setup()
+    mocks.view = { ...lobbyView(), lobbyNotice: 'player_left' }
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'The round ended early',
+    })
+    expect(dialog).toHaveTextContent(
+      /another player left.*fewer than two players.*round was ended.*returned to the lobby/i,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Return to lobby' }),
+    ).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Assemble the room.' }),
+    ).toBeVisible()
+  })
+
+  it('shows the explanation again after a later round ends early', async () => {
+    const user = userEvent.setup()
+    mocks.view = { ...lobbyView(), lobbyNotice: 'player_left' }
+    const rendered = render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+    mocks.view = lobbyView()
+    rendered.rerender(<RoomLobby roomCode="bcdf2" />)
+    mocks.view = { ...lobbyView(), lobbyNotice: 'player_left' }
+    rendered.rerender(<RoomLobby roomCode="bcdf2" />)
+
+    expect(
+      await screen.findByRole('alertdialog', {
+        name: 'The round ended early',
+      }),
+    ).toBeVisible()
+  })
+
+  it('infers an early round ending when the live lobby snapshot omits its notice', () => {
+    mocks.view = hintingView()
+    const rendered = render(<RoomLobby roomCode="bcdf2" />)
+
+    mocks.view = lobbyView()
+    rendered.rerender(<RoomLobby roomCode="bcdf2" />)
+
+    expect(
+      screen.getByRole('alertdialog', { name: 'The round ended early' }),
     ).toBeVisible()
   })
 })
