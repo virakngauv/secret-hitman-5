@@ -107,10 +107,26 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           key={snapshot.board?.[0]?.id ?? 'spectator'}
           view={snapshot}
           onSubmitHint={(hint, targetCardIds) =>
-            game.submitHint({ roomCode, hint, targetCardIds })
+            game.submitHint({
+              roomCode,
+              gameId: snapshot.gameId,
+              hint,
+              targetCardIds,
+            })
           }
-          onUnlockHint={() => game.unlockHint(roomCode)}
-          onRejectHint={(playerId) => game.rejectHint({ roomCode, playerId })}
+          onUnlockHint={() =>
+            game.unlockHint({ roomCode, gameId: snapshot.gameId })
+          }
+          onStartGuessing={() =>
+            game.startGuessing({ roomCode, gameId: snapshot.gameId })
+          }
+          onRejectHint={(playerId) =>
+            game.rejectHint({
+              roomCode,
+              gameId: snapshot.gameId,
+              playerId,
+            })
+          }
           onRemovePlayer={(playerId, allowRoundReset) =>
             game.removePlayer(roomCode, playerId, allowRoundReset)
           }
@@ -119,7 +135,6 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             if (result.status === 'success') router.push('/home')
             return result
           }}
-          onStartGuessing={() => game.startGuessing(roomCode)}
         />,
       )
     case 'guessing':
@@ -130,20 +145,37 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onClaimCard={(cardId, turnId) =>
             game.claimCard({
               roomCode,
+              gameId: snapshot.gameId,
               turnId,
               cardId,
               commandId: crypto.randomUUID?.() ?? generateClientToken(),
             })
           }
           onFinishGuessing={() =>
-            game.finishGuessing({ roomCode, turnId: snapshot.turnId })
+            game.finishGuessing({
+              roomCode,
+              gameId: snapshot.gameId,
+              turnId: snapshot.turnId,
+            })
+          }
+          onAdvanceTurn={() =>
+            game.advanceTurn({ roomCode, gameId: snapshot.gameId })
+          }
+          onShowScoreboard={() =>
+            game.showScoreboard({ roomCode, gameId: snapshot.gameId })
           }
           onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
-          onAdvanceTurn={() => game.advanceTurn(roomCode)}
         />,
       )
     case 'finished':
-      return retainScreen(<FinishedScreen view={snapshot} />)
+      return retainScreen(
+        <FinishedScreen
+          view={snapshot}
+          onReturnToLobby={() =>
+            game.returnToLobby({ roomCode, gameId: snapshot.gameId })
+          }
+        />,
+      )
     default:
       return assertNever(snapshot)
   }

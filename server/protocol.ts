@@ -19,8 +19,10 @@ import {
   parseCreateRoom,
   parseClaimCard,
   parseFinishGuessing,
+  parseGameCommand,
   parseHandshakeAuth,
   parseJoinRoom,
+  parseRejectHint,
   parseRemovePlayer,
   parseRoomCommand,
   parseSessionResume,
@@ -266,9 +268,9 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:unlock-hint', acknowledge, () => {
-        const parsed = parseRoomCommand(payload)
+        const parsed = parseGameCommand(payload)
         if (!parsed) return acknowledge(invalid())
-        const result = gameServer.unlockHint(socket.data.token, parsed.roomCode)
+        const result = gameServer.unlockHint(socket.data.token, parsed)
         acknowledge(result)
         if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })
@@ -278,7 +280,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:reject-hint', acknowledge, () => {
-        const parsed = parseRemovePlayer(payload)
+        const parsed = parseRejectHint(payload)
         if (!parsed) return acknowledge(invalid())
         const result = gameServer.rejectHint(socket.data.token, parsed)
         acknowledge(result)
@@ -290,12 +292,9 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:start-guessing', acknowledge, () => {
-        const parsed = parseRoomCommand(payload)
+        const parsed = parseGameCommand(payload)
         if (!parsed) return acknowledge(invalid())
-        const result = gameServer.startGuessing(
-          socket.data.token,
-          parsed.roomCode,
-        )
+        const result = gameServer.startGuessing(socket.data.token, parsed)
         acknowledge(result)
         if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })
@@ -329,12 +328,33 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:advance-turn', acknowledge, () => {
-        const parsed = parseRoomCommand(payload)
+        const parsed = parseGameCommand(payload)
         if (!parsed) return acknowledge(invalid())
-        const result = gameServer.advanceTurn(
-          socket.data.token,
-          parsed.roomCode,
-        )
+        const result = gameServer.advanceTurn(socket.data.token, parsed)
+        acknowledge(result)
+        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
+      })
+    })
+
+    socket.on('game:show-scoreboard', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('game:show-scoreboard', acknowledge, () => {
+        const parsed = parseGameCommand(payload)
+        if (!parsed) return acknowledge(invalid())
+        const result = gameServer.showScoreboard(socket.data.token, parsed)
+        acknowledge(result)
+        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
+      })
+    })
+
+    socket.on('game:return-to-lobby', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('game:return-to-lobby', acknowledge, () => {
+        const parsed = parseGameCommand(payload)
+        if (!parsed) return acknowledge(invalid())
+        const result = gameServer.returnToLobby(socket.data.token, parsed)
         acknowledge(result)
         if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })

@@ -8,9 +8,12 @@ import {
   parseHandshakeAuth,
   parseHint,
   parsePlayerName,
+  parseRejectHint,
   parseRemovePlayer,
   parseSubmitHint,
 } from './validation'
+
+const gameId = '10000000-0000-4000-8000-000000000001'
 
 describe('turn-bound commands', () => {
   const turnId = 'abcdef01-2345-4abc-8def-0123456789ab'
@@ -20,8 +23,9 @@ describe('turn-bound commands', () => {
     'normalizes rooms and accepts only a UUID turn identity: %s',
     (parse) => {
       const extra = parse === parseClaimCard ? claim : {}
-      expect(parse({ roomCode: ' BCDF2 ', turnId, ...extra })).toEqual({
+      expect(parse({ roomCode: ' BCDF2 ', gameId, turnId, ...extra })).toEqual({
         roomCode: 'bcdf2',
+        gameId,
         turnId,
         ...extra,
       })
@@ -39,19 +43,23 @@ describe('turn-bound commands', () => {
         'a'.repeat(1_000),
       ]) {
         expect(
-          parse({ roomCode: 'bcdf2', turnId: invalidId, ...extra }),
+          parse({ roomCode: 'bcdf2', gameId, turnId: invalidId, ...extra }),
         ).toBeNull()
       }
       expect(
         parse({
           roomCode: 'bcdf2',
+          gameId,
           turnId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
           ...extra,
         }),
       ).toBeNull()
       expect(parse(null)).toBeNull()
-      expect(parse({ roomCode: 'bad', turnId, ...extra })).toBeNull()
-      expect(parse({ roomCode: 'bcdf2', revision: 5, ...extra })).toBeNull()
+      expect(parse({ roomCode: 'bad', gameId, turnId, ...extra })).toBeNull()
+      expect(
+        parse({ roomCode: 'bcdf2', gameId, revision: 5, ...extra }),
+      ).toBeNull()
+      expect(parse({ roomCode: 'bcdf2', turnId, ...extra })).toBeNull()
     },
   )
 
@@ -91,11 +99,13 @@ describe('parseHint', () => {
     expect(
       parseSubmitHint({
         roomCode: 'bcdf2',
+        gameId,
         hint: '\u202eBlue sky',
         targetCardIds: ['p1-card-1'],
       }),
     ).toEqual({
       roomCode: 'bcdf2',
+      gameId,
       hint: 'Blue sky',
       targetCardIds: ['p1-card-1'],
     })
@@ -106,23 +116,27 @@ describe('parseHint', () => {
     expect(
       parseSubmitHint({
         roomCode: 'bcdf2',
+        gameId,
         hint: 'Orbit',
         targetCardIds: ['p100-card-11'],
       }),
     ).toEqual({
       roomCode: 'bcdf2',
+      gameId,
       hint: 'Orbit',
       targetCardIds: ['p100-card-11'],
     })
     expect(
       parseClaimCard({
         roomCode: 'bcdf2',
+        gameId,
         commandId: 'claim-100',
         turnId,
         cardId: 'p100-card-11',
       }),
     ).toEqual({
       roomCode: 'bcdf2',
+      gameId,
       commandId: 'claim-100',
       turnId,
       cardId: 'p100-card-11',
@@ -131,7 +145,12 @@ describe('parseHint', () => {
 
   it('accepts one through five targets and rejects empty or larger selections', () => {
     expect(
-      parseSubmitHint({ roomCode: 'bcdf2', hint: 'Orbit', targetCardIds: [] }),
+      parseSubmitHint({
+        roomCode: 'bcdf2',
+        gameId,
+        hint: 'Orbit',
+        targetCardIds: [],
+      }),
     ).toBeNull()
     for (let count = 1; count <= 5; count += 1) {
       const targetCardIds = Array.from(
@@ -139,12 +158,18 @@ describe('parseHint', () => {
         (_, index) => `p1-card-${index}`,
       )
       expect(
-        parseSubmitHint({ roomCode: 'bcdf2', hint: 'Orbit', targetCardIds }),
-      ).toEqual({ roomCode: 'bcdf2', hint: 'Orbit', targetCardIds })
+        parseSubmitHint({
+          roomCode: 'bcdf2',
+          gameId,
+          hint: 'Orbit',
+          targetCardIds,
+        }),
+      ).toEqual({ roomCode: 'bcdf2', gameId, hint: 'Orbit', targetCardIds })
     }
     expect(
       parseSubmitHint({
         roomCode: 'bcdf2',
+        gameId,
         hint: 'Orbit',
         targetCardIds: Array.from(
           { length: 6 },
@@ -199,6 +224,24 @@ describe('parseRemovePlayer', () => {
         playerId: 'player-2',
         allowRoundReset: 'yes',
       }),
+    ).toBeNull()
+  })
+})
+
+describe('parseRejectHint', () => {
+  it('requires the current game identity with a bounded player id', () => {
+    expect(
+      parseRejectHint({
+        roomCode: ' BCDF2 ',
+        gameId,
+        playerId: 'player-2',
+      }),
+    ).toEqual({ roomCode: 'bcdf2', gameId, playerId: 'player-2' })
+    expect(
+      parseRejectHint({ roomCode: 'bcdf2', playerId: 'player-2' }),
+    ).toBeNull()
+    expect(
+      parseRejectHint({ roomCode: 'bcdf2', gameId, playerId: 'player 2' }),
     ).toBeNull()
   })
 })

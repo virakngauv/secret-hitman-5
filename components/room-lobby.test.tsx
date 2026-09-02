@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   startGame: vi.fn(),
   claimCard: vi.fn(),
   finishGuessing: vi.fn(),
+  advanceTurn: vi.fn(),
+  showScoreboard: vi.fn(),
+  returnToLobby: vi.fn(),
   removePlayer: vi.fn(),
   leaveRoom: vi.fn(),
   routerPush: vi.fn(),
@@ -24,6 +27,9 @@ vi.mock('@/components/game-socket-provider', () => ({
     startGame: mocks.startGame,
     claimCard: mocks.claimCard,
     finishGuessing: mocks.finishGuessing,
+    advanceTurn: mocks.advanceTurn,
+    showScoreboard: mocks.showScoreboard,
+    returnToLobby: mocks.returnToLobby,
     removePlayer: mocks.removePlayer,
     leaveRoom: mocks.leaveRoom,
   }),
@@ -73,6 +79,7 @@ function guessingView(): Extract<RoomSnapshot, { status: 'guessing' }> {
   return {
     ...readyLobby(),
     status: 'guessing',
+    gameId: '10000000-0000-4000-8000-000000000001',
     turnId: '00000000-0000-4000-8000-000000000001',
     turnNumber: 1,
     totalTurns: 2,
@@ -104,6 +111,7 @@ function hintingView(): Extract<RoomSnapshot, { status: 'hinting' }> {
   return {
     ...lobby,
     status: 'hinting',
+    gameId: '10000000-0000-4000-8000-000000000001',
     hintStatuses: lobby.members.map(({ playerId, name }) => ({
       playerId,
       name,
@@ -176,6 +184,7 @@ describe('RoomLobby invite prompt', () => {
       await user.click(screen.getByRole('button', { name: /moon/i }))
       expect(mocks.claimCard).toHaveBeenLastCalledWith({
         roomCode: 'bcdf2',
+        gameId: view.gameId,
         turnId,
         cardId: 'p1-card-0',
         commandId: expect.any(String),
@@ -185,6 +194,7 @@ describe('RoomLobby invite prompt', () => {
       )
       expect(mocks.finishGuessing).toHaveBeenLastCalledWith({
         roomCode: 'bcdf2',
+        gameId: view.gameId,
         turnId,
       })
     }

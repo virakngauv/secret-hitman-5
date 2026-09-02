@@ -5,7 +5,9 @@ import { GameRoom, MAX_ROOM_IDENTITIES, MAX_ROOM_MEMBERS } from './game-room'
 const hostToken = 'a'.repeat(32)
 const guestToken = 'b'.repeat(32)
 const thirdToken = 'c'.repeat(32)
+const lastGameIds = new WeakMap<GameRoom, string>()
 const fourthToken = 'd'.repeat(32)
+const returningToken = 'e'.repeat(32)
 
 function createRoom() {
   let id = 0
@@ -34,6 +36,23 @@ function guessing(room: GameRoom, token = hostToken) {
   return snapshot
 }
 
+function gameCommand(room: GameRoom) {
+  for (const token of [hostToken, guestToken, thirdToken]) {
+    const snapshot = room.snapshotFor(token)
+    if (
+      snapshot.status === 'hinting' ||
+      snapshot.status === 'guessing' ||
+      snapshot.status === 'finished'
+    ) {
+      lastGameIds.set(room, snapshot.gameId)
+      return { roomCode: room.code, gameId: snapshot.gameId }
+    }
+  }
+  const gameId = lastGameIds.get(room)
+  if (!gameId) throw new Error('Expected an active or recently finished game.')
+  return { roomCode: room.code, gameId }
+}
+
 function submitFirstHint(room: GameRoom, token: string, hint: string) {
   const view = hinting(room, token)
   const targetCardIds =
@@ -41,7 +60,7 @@ function submitFirstHint(room: GameRoom, token: string, hint: string) {
       ?.filter(({ kind }) => kind === 'neutral')
       .slice(0, 2)
       .map(({ id }) => id) ?? []
-  return room.submitHint(token, { roomCode: room.code, hint, targetCardIds })
+  return room.submitHint(token, { ...gameCommand(room), hint, targetCardIds })
 }
 
 function startTwoPlayerGame(withThirdPlayer = false) {
@@ -56,20 +75,45 @@ function startTwoPlayerGame(withThirdPlayer = false) {
     status: 'success',
   })
   if (withThirdPlayer) submitFirstHint(room, thirdToken, 'Metal')
-  expect(room.startGuessing(hostToken, 1_003)).toEqual({ status: 'success' })
+  expect(room.startGuessing(hostToken, gameCommand(room), 1_003)).toEqual({
+    status: 'success',
+  })
   return room
 }
 
 function finishActiveGuessers(room: GameRoom) {
-  for (const token of [hostToken, guestToken, thirdToken]) {
+  for (const token of [
+    hostToken,
+    guestToken,
+    thirdToken,
+    fourthToken,
+    returningToken,
+  ]) {
     const view = room.snapshotFor(token)
     if (view.status === 'guessing' && view.canMarkDone) {
       expect(
         room.finishGuessing(token, {
-          roomCode: room.code,
+          ...gameCommand(room),
           turnId: view.turnId,
         }),
       ).toEqual({ status: 'success' })
+    }
+  }
+}
+
+function finishGameAndShowScoreboard(room: GameRoom) {
+  while (room.snapshotFor(hostToken).status === 'guessing') {
+    finishActiveGuessers(room)
+    const view = guessing(room)
+    const command = { ...gameCommand(room), gameId: view.gameId }
+    if (view.isFinalTurn) {
+      expect(room.showScoreboard(hostToken, command)).toEqual({
+        status: 'success',
+      })
+    } else {
+      expect(room.advanceTurn(hostToken, command)).toEqual({
+        status: 'success',
+      })
     }
   }
 }
@@ -91,7 +135,7 @@ describe('GameRoom single-round flow', () => {
     expect(submitFirstHint(room, guestToken, 'Garden')).toEqual({
       status: 'success',
     })
-    expect(room.startGuessing(guestToken)).toMatchObject({
+    expect(room.startGuessing(guestToken, gameCommand(room))).toMatchObject({
       status: 'invalid',
       message: 'At least 2 players are required to start guessing.',
     })
@@ -116,7 +160,7 @@ describe('GameRoom single-round flow', () => {
     expect(submitFirstHint(room, hostToken, 'Orbit')).toEqual({
       status: 'success',
     })
-    expect(room.startGuessing(guestToken, 1_005)).toEqual({
+    expect(room.startGuessing(guestToken, gameCommand(room), 1_005)).toEqual({
       status: 'success',
     })
     expect(guessing(room).totalTurns).toBe(2)
@@ -144,7 +188,7 @@ describe('GameRoom single-round flow', () => {
       const activity = room.lastMeaningfulActivityAt
       expect(
         room.submitHint(hostToken, {
-          roomCode: room.code,
+          ...gameCommand(room),
           hint: 'Orbit',
           targetCardIds,
         }),
@@ -154,7 +198,7 @@ describe('GameRoom single-round flow', () => {
     }
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Orbit',
         targetCardIds: [neutral.id],
       }),
@@ -169,7 +213,7 @@ describe('GameRoom single-round flow', () => {
     )
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Changed',
         targetCardIds: [],
       }),
@@ -181,7 +225,7 @@ describe('GameRoom single-round flow', () => {
     expect(replacement.hintSubmitted).toBe(false)
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Orbit',
         targetCardIds: [
           replacement.board!.find(({ kind }) => kind === 'neutral')!.id,
@@ -192,7 +236,7 @@ describe('GameRoom single-round flow', () => {
     expect(hinting(room, thirdToken).board).toHaveLength(12)
     submitFirstHint(room, guestToken, 'Garden')
     submitFirstHint(room, thirdToken, 'Metal')
-    room.startGuessing(guestToken)
+    room.startGuessing(guestToken, gameCommand(room))
     expect(guessing(room)).toMatchObject({
       clueGiverName: 'Grace',
       hintNumber: 2,
@@ -203,7 +247,9 @@ describe('GameRoom single-round flow', () => {
       ),
     ).toBe(true)
     finishActiveGuessers(room)
-    expect(room.advanceTurn(guestToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(guestToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
     expect(guessing(room)).toMatchObject({
       clueGiverName: 'Ada',
       hintNumber: 1,
@@ -230,7 +276,7 @@ describe('GameRoom single-round flow', () => {
 
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Orbit',
         targetCardIds: targetIds,
       }),
@@ -256,7 +302,9 @@ describe('GameRoom single-round flow', () => {
     expect(submitFirstHint(room, guestToken, 'Garden')).toEqual({
       status: 'success',
     })
-    expect(room.unlockHint(hostToken, 1_003)).toEqual({ status: 'success' })
+    expect(room.unlockHint(hostToken, gameCommand(room), 1_003)).toEqual({
+      status: 'success',
+    })
     const unlocked = hinting(room)
     expect(unlocked).toMatchObject({
       hint: 'Orbit',
@@ -280,15 +328,19 @@ describe('GameRoom single-round flow', () => {
           locked,
         })),
     ).toEqual(fixedRoles)
-    expect(room.startGuessing(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.startGuessing(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
 
     const activity = room.lastMeaningfulActivityAt
-    expect(room.unlockHint(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.unlockHint(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
     expect(room.lastMeaningfulActivityAt).toBe(activity)
     const revisedTargets = [targetIds[1]!]
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Galaxy',
         targetCardIds: revisedTargets,
       }),
@@ -298,7 +350,9 @@ describe('GameRoom single-round flow', () => {
       hintSubmitted: true,
       allHintsSubmitted: true,
     })
-    expect(room.unlockHint(hostToken, 1_004)).toEqual({ status: 'success' })
+    expect(room.unlockHint(hostToken, gameCommand(room), 1_004)).toEqual({
+      status: 'success',
+    })
     expect(hinting(room)).toMatchObject({
       hint: 'Galaxy',
       hintSubmitted: false,
@@ -306,13 +360,17 @@ describe('GameRoom single-round flow', () => {
     })
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Nebula',
         targetCardIds: targetIds,
       }),
     ).toEqual({ status: 'success' })
-    expect(room.startGuessing(hostToken)).toEqual({ status: 'success' })
-    expect(room.unlockHint(hostToken)).toMatchObject({ status: 'forbidden' })
+    expect(room.startGuessing(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
+    expect(room.unlockHint(hostToken, gameCommand(room))).toMatchObject({
+      status: 'forbidden',
+    })
     expect(guessing(room).hint).toBe('Nebula')
     expect(guessing(room).hintNumber).toBe(2)
   })
@@ -326,11 +384,11 @@ describe('GameRoom single-round flow', () => {
       .slice(0, 2)
       .map(({ id }) => id)
     room.submitHint(hostToken, {
-      roomCode: room.code,
+      ...gameCommand(room),
       hint: 'Orbit',
       targetCardIds: targetIds,
     })
-    room.unlockHint(hostToken)
+    room.unlockHint(hostToken, gameCommand(room))
 
     expect(room.leave(hostToken)).toEqual({ status: 'success' })
     expect(hinting(room, guestToken).hintStatuses).toEqual([
@@ -347,7 +405,9 @@ describe('GameRoom single-round flow', () => {
     ).toBe(true)
     submitFirstHint(room, hostToken, 'Galaxy')
     submitFirstHint(room, guestToken, 'Garden')
-    expect(room.startGuessing(guestToken)).toEqual({ status: 'success' })
+    expect(room.startGuessing(guestToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
     expect(guessing(room).hint).toBe('Garden')
   })
 
@@ -363,7 +423,7 @@ describe('GameRoom single-round flow', () => {
     const before = hinting(room)
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Too many',
         targetCardIds: editableIds.slice(0, 6),
       }),
@@ -371,13 +431,13 @@ describe('GameRoom single-round flow', () => {
     expect(hinting(room)).toEqual(before)
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Five',
         targetCardIds: editableIds.slice(0, 5),
       }),
     ).toEqual({ status: 'success' })
     submitFirstHint(room, guestToken, 'Garden')
-    room.startGuessing(hostToken)
+    room.startGuessing(hostToken, gameCommand(room))
     expect(guessing(room).hintNumber).toBe(5)
     expect(
       guessing(room).board.filter(
@@ -398,7 +458,7 @@ describe('GameRoom single-round flow', () => {
         .map(({ id }) => id)
       expect(
         room.submitHint(hostToken, {
-          roomCode: room.code,
+          ...gameCommand(room),
           hint: 'Orbit',
           targetCardIds: editableIds,
         }),
@@ -406,7 +466,9 @@ describe('GameRoom single-round flow', () => {
       expect(submitFirstHint(room, guestToken, 'Garden')).toEqual({
         status: 'success',
       })
-      expect(room.startGuessing(hostToken)).toEqual({ status: 'success' })
+      expect(room.startGuessing(hostToken, gameCommand(room))).toEqual({
+        status: 'success',
+      })
       expect(guessing(room).hintNumber).toBe(count)
     },
   )
@@ -421,7 +483,7 @@ describe('GameRoom single-round flow', () => {
     room.leave(spectator)
     for (const [index, token] of [guestToken, thirdToken].entries()) {
       const payload = {
-        roomCode: room.code,
+        ...gameCommand(room),
         turnId: before.turnId,
         cardId: targets[index].id,
         commandId: `older-snapshot-${index}`,
@@ -451,12 +513,14 @@ describe('GameRoom single-round flow', () => {
     const room = startTwoPlayerGame()
     const current = guessing(room)
     expect(current.board).toEqual(oldView.board)
+    expect(current.gameId).not.toBe(oldView.gameId)
     expect(current.turnId).not.toBe(oldView.turnId)
     const target = current.board.find(
       ({ revealedKind }) => revealedKind === 'target',
     )!
     const payload = {
-      roomCode: room.code,
+      ...gameCommand(room),
+      gameId: oldView.gameId,
       turnId: oldView.turnId,
       cardId: target.id,
       commandId: 'prior-game-command',
@@ -471,7 +535,11 @@ describe('GameRoom single-round flow', () => {
     expect(guessing(room)).toEqual(current)
     expect(room.lastMeaningfulActivityAt).toBe(activity)
     expect(
-      room.claimCard(guestToken, { ...payload, turnId: current.turnId }),
+      room.claimCard(guestToken, {
+        ...payload,
+        gameId: current.gameId,
+        turnId: current.turnId,
+      }),
     ).toEqual({ status: 'success', kind: 'target' })
   })
 
@@ -479,14 +547,14 @@ describe('GameRoom single-round flow', () => {
     const room = startTwoPlayerGame(true)
     const oldTurnId = guessing(room).turnId
     finishActiveGuessers(room)
-    room.advanceTurn(hostToken)
+    room.advanceTurn(hostToken, gameCommand(room))
     const view = guessing(room, guestToken)
     expect(view.turnId).not.toBe(oldTurnId)
     const target = view.board.find(
       ({ revealedKind }) => revealedKind === 'target',
     )!
     const payload = {
-      roomCode: room.code,
+      ...gameCommand(room),
       turnId: view.turnId,
       cardId: target.id,
       commandId: 'reused-command-id',
@@ -507,10 +575,18 @@ describe('GameRoom single-round flow', () => {
       }),
     ).toMatchObject({ status: 'invalid' })
     expect(guessing(room)).toEqual(after)
-    for (let remainingTurn = 0; remainingTurn < 2; remainingTurn++) {
-      finishActiveGuessers(room)
-      expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
-    }
+    finishActiveGuessers(room)
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
+    finishActiveGuessers(room)
+    const finalTurn = guessing(room)
+    expect(
+      room.showScoreboard(hostToken, {
+        ...gameCommand(room),
+        gameId: finalTurn.gameId,
+      }),
+    ).toEqual({ status: 'success' })
     const finished = room.snapshotFor(thirdToken)
     expect(finished.status).toBe('finished')
     const activity = room.lastMeaningfulActivityAt
@@ -528,7 +604,7 @@ describe('GameRoom single-round flow', () => {
     const room = startTwoPlayerGame(true)
     const spectator = 'd'.repeat(32)
     room.join(spectator, 'Spectator')
-    const payload = { roomCode: room.code, turnId: guessing(room).turnId }
+    const payload = { ...gameCommand(room), turnId: guessing(room).turnId }
     expect(room.finishGuessing(guestToken, payload)).toEqual({
       status: 'success',
     })
@@ -537,7 +613,7 @@ describe('GameRoom single-round flow', () => {
     const activity = room.lastMeaningfulActivityAt
     expect(guessing(room).canAdvanceTurn).toBe(false)
     for (let attempt = 0; attempt < 2; attempt++) {
-      expect(room.advanceTurn(hostToken)).toEqual({
+      expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
         status: 'invalid',
         message: 'Waiting for players to finish guessing.',
       })
@@ -552,30 +628,38 @@ describe('GameRoom single-round flow', () => {
     expect(guessing(room).turnNumber).toBe(1)
     expect(guessing(room, guestToken).canAdvanceTurn).toBe(false)
     expect(guessing(room, spectator).canAdvanceTurn).toBe(false)
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
     // A delayed retry from the now-completed turn cannot skip new pickers.
     const next = guessing(room)
-    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
     expect(guessing(room)).toEqual(next)
   })
 
   it('keeps a finished host waiting for other pickers', () => {
     const room = startTwoPlayerGame(true)
     finishActiveGuessers(room)
-    room.advanceTurn(hostToken)
+    room.advanceTurn(hostToken, gameCommand(room))
     room.finishGuessing(hostToken, {
-      roomCode: room.code,
+      ...gameCommand(room),
       turnId: guessing(room).turnId,
     })
     expect(guessing(room).canGuess).toBe(false)
     expect(guessing(room).canAdvanceTurn).toBe(false)
-    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
     room.finishGuessing(thirdToken, {
-      roomCode: room.code,
+      ...gameCommand(room),
       turnId: guessing(room).turnId,
     })
     expect(guessing(room).canAdvanceTurn).toBe(true)
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
   })
 
   it.each(['civilian', 'assassin'] as const)(
@@ -588,7 +672,7 @@ describe('GameRoom single-round flow', () => {
       )!
       expect(
         room.claimCard(guestToken, {
-          roomCode: room.code,
+          ...gameCommand(room),
           turnId: before.turnId,
           cardId: card.id,
           commandId: 'last-picker',
@@ -596,7 +680,9 @@ describe('GameRoom single-round flow', () => {
       ).toEqual({ status: 'success', kind })
       expect(guessing(room).canAdvanceTurn).toBe(true)
       expect(guessing(room).turnNumber).toBe(1)
-      expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+      expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+        status: 'success',
+      })
     },
   )
 
@@ -610,7 +696,7 @@ describe('GameRoom single-round flow', () => {
     )
     for (const [index, card] of targets.entries()) {
       const payload = {
-        roomCode: room.code,
+        ...gameCommand(room),
         turnId: before.turnId,
         cardId: card.id,
         commandId: `target-${index}`,
@@ -652,7 +738,7 @@ describe('GameRoom single-round flow', () => {
     )!
     expect(
       room.claimCard(thirdToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         turnId: completed.turnId,
         cardId: unselected.id,
         commandId: 'after-target-completion',
@@ -661,7 +747,9 @@ describe('GameRoom single-round flow', () => {
       status: 'forbidden',
       message: 'This board is already complete.',
     })
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
   })
 
   it('does not wait on explicitly departed pickers or reopen their turn on rejoin', () => {
@@ -671,12 +759,14 @@ describe('GameRoom single-round flow', () => {
     room.join(guestToken, 'Grace')
     expect(guessing(room, guestToken).canGuess).toBe(false)
     expect(guessing(room).canAdvanceTurn).toBe(true)
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
   })
 
   it('acknowledges repeated passes without effects and rejects passes from another turn', () => {
     const room = startTwoPlayerGame(true)
-    const payload = { roomCode: room.code, turnId: guessing(room).turnId }
+    const payload = { ...gameCommand(room), turnId: guessing(room).turnId }
     expect(room.finishGuessing(hostToken, payload)).toMatchObject({
       status: 'forbidden',
     })
@@ -696,9 +786,13 @@ describe('GameRoom single-round flow', () => {
     expect(guessing(room, guestToken)).toEqual(after)
     expect(room.lastMeaningfulActivityAt).toBe(2_000)
     finishActiveGuessers(room)
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
     finishActiveGuessers(room)
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
     const next = guessing(room, guestToken)
     expect(next.canGuess).toBe(true)
     expect(room.finishGuessing(guestToken, payload)).toMatchObject({
@@ -722,7 +816,7 @@ describe('GameRoom single-round flow', () => {
     ).toBe(true)
     expect(
       room.claimCard(guestToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         cardId: returned.board[0].id,
         turnId: returned.turnId,
         commandId: 'after-leave-rejoin',
@@ -747,7 +841,7 @@ describe('GameRoom single-round flow', () => {
       if (ending === 'pass') {
         expect(
           room.finishGuessing(guestToken, {
-            roomCode: room.code,
+            ...gameCommand(room),
             turnId: before.turnId,
           }),
         ).toEqual({ status: 'success' })
@@ -757,7 +851,7 @@ describe('GameRoom single-round flow', () => {
         )!
         expect(
           room.claimCard(guestToken, {
-            roomCode: room.code,
+            ...gameCommand(room),
             cardId: card.id,
             turnId: before.turnId,
             commandId: `finish-${ending}`,
@@ -777,7 +871,7 @@ describe('GameRoom single-round flow', () => {
       )!
       expect(
         room.claimCard(guestToken, {
-          roomCode: room.code,
+          ...gameCommand(room),
           cardId: target.id,
           turnId: finished.turnId,
           commandId: 'after-finishing',
@@ -804,7 +898,7 @@ describe('GameRoom single-round flow', () => {
       }
       expect(
         room.claimCard(thirdToken, {
-          roomCode: room.code,
+          ...gameCommand(room),
           cardId: target.id,
           turnId: before.turnId,
           commandId: 'active-picker-target',
@@ -814,9 +908,13 @@ describe('GameRoom single-round flow', () => {
       })
 
       finishActiveGuessers(room)
-      expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+      expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+        status: 'success',
+      })
       finishActiveGuessers(room)
-      expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+      expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+        status: 'success',
+      })
       const next = guessing(room, guestToken)
       expect(next.clueGiverName).toBe('Linus')
       expect(next.canGuess).toBe(true)
@@ -825,7 +923,7 @@ describe('GameRoom single-round flow', () => {
       ).toBe(true)
       expect(
         room.claimCard(guestToken, {
-          roomCode: room.code,
+          ...gameCommand(room),
           cardId: next.board[0].id,
           turnId: finished.turnId,
           commandId: 'previous-turn',
@@ -844,7 +942,7 @@ describe('GameRoom single-round flow', () => {
         ({ revealedKind }) => revealedKind === kind,
       )!
       const payload = {
-        roomCode: room.code,
+        ...gameCommand(room),
         cardId: card.id,
         turnId: before.turnId,
         commandId: 'same-command-id-per-player',
@@ -1020,24 +1118,28 @@ describe('GameRoom single-round flow', () => {
 
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Trap',
         targetCardIds: [assassin?.id ?? 'missing'],
       }),
     ).toMatchObject({ status: 'invalid' })
     expect(
       room.submitHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Orbit',
         targetCardIds: targets.map(({ id }) => id),
       }),
     ).toEqual({ status: 'success' })
     expect(hinting(room).allHintsSubmitted).toBe(false)
-    expect(room.startGuessing(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.startGuessing(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
 
     submitFirstHint(room, guestToken, 'Garden')
     expect(hinting(room).allHintsSubmitted).toBe(true)
-    expect(room.startGuessing(hostToken)).toEqual({ status: 'success' })
+    expect(room.startGuessing(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
     expect(guessing(room).hintNumber).toBe(3)
   })
 
@@ -1059,7 +1161,7 @@ describe('GameRoom single-round flow', () => {
     const guestId = hinting(room, guestToken).player.playerId
     expect(
       room.rejectHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         playerId: guestId,
       }),
     ).toMatchObject({ status: 'stale' })
@@ -1085,20 +1187,20 @@ describe('GameRoom single-round flow', () => {
     ])
     expect(
       room.rejectHint(guestToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         playerId: hinting(room).player.playerId,
       }),
     ).toMatchObject({ status: 'forbidden' })
     expect(
       room.rejectHint(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         playerId: hinting(room).player.playerId,
       }),
     ).toMatchObject({ status: 'forbidden' })
 
     const submittedGuestBoard = hinting(room, guestToken).board!
     expect(
-      room.rejectHint(hostToken, { roomCode: room.code, playerId: guestId }),
+      room.rejectHint(hostToken, { ...gameCommand(room), playerId: guestId }),
     ).toEqual({ status: 'success' })
     expect(hinting(room).hintStatuses).toEqual([
       expect.objectContaining({
@@ -1133,7 +1235,9 @@ describe('GameRoom single-round flow', () => {
       replacementGuestBoard.filter(({ kind }) => kind === 'neutral'),
     ).toHaveLength(8)
     expect(replacementGuestBoard.filter(({ locked }) => locked)).toHaveLength(4)
-    expect(room.startGuessing(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.startGuessing(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
     expect(submitFirstHint(room, guestToken, 'City')).toEqual({
       status: 'success',
     })
@@ -1163,7 +1267,7 @@ describe('GameRoom single-round flow', () => {
 
     const guestId = hinting(room, guestToken).player.playerId
     expect(
-      room.rejectHint(hostToken, { roomCode: room.code, playerId: guestId }),
+      room.rejectHint(hostToken, { ...gameCommand(room), playerId: guestId }),
     ).toEqual({ status: 'success' })
     expect(hinting(room).hintStatuses).toEqual([
       expect.objectContaining({ name: 'Ada', hint: 'Orbit', hintNumber: 2 }),
@@ -1193,9 +1297,11 @@ describe('GameRoom single-round flow', () => {
       allHintsSubmitted: true,
     })
     expect(
-      room.rejectHint(guestToken, { roomCode: room.code, playerId: hostId }),
+      room.rejectHint(guestToken, { ...gameCommand(room), playerId: hostId }),
     ).toMatchObject({ status: 'stale' })
-    expect(room.startGuessing(guestToken)).toEqual({ status: 'success' })
+    expect(room.startGuessing(guestToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
   })
 
   it('removes a rejected hinting seat and creates a clean seat on rejoin', () => {
@@ -1207,7 +1313,7 @@ describe('GameRoom single-round flow', () => {
     const guestId = hinting(room, guestToken).player.playerId
 
     expect(
-      room.rejectHint(hostToken, { roomCode: room.code, playerId: guestId }),
+      room.rejectHint(hostToken, { ...gameCommand(room), playerId: guestId }),
     ).toEqual({ status: 'success' })
     expect(room.leave(guestToken, 1_003)).toEqual({ status: 'success' })
     expect(hinting(room).hintStatuses).toEqual([
@@ -1217,7 +1323,9 @@ describe('GameRoom single-round flow', () => {
         needsRevision: false,
       }),
     ])
-    expect(room.startGuessing(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.startGuessing(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
     expect(room.join(guestToken, 'Grace', 1_004)).toEqual({ status: 'success' })
     expect(hinting(room, guestToken)).toMatchObject({
       hint: null,
@@ -1225,7 +1333,9 @@ describe('GameRoom single-round flow', () => {
       hintRejected: false,
     })
     submitFirstHint(room, guestToken, 'Metal')
-    expect(room.startGuessing(hostToken)).toEqual({ status: 'success' })
+    expect(room.startGuessing(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
   })
 
   it('orders late hinting joins atomically before the guessing cutoff', () => {
@@ -1249,12 +1359,16 @@ describe('GameRoom single-round flow', () => {
       'Grace',
       'Linus',
     ])
-    expect(joinedFirst.startGuessing(hostToken)).toMatchObject({
+    expect(
+      joinedFirst.startGuessing(hostToken, gameCommand(joinedFirst)),
+    ).toMatchObject({
       status: 'invalid',
     })
     submitFirstHint(joinedFirst, guestToken, 'Garden')
     submitFirstHint(joinedFirst, thirdToken, 'Metal')
-    expect(joinedFirst.startGuessing(hostToken)).toEqual({ status: 'success' })
+    expect(
+      joinedFirst.startGuessing(hostToken, gameCommand(joinedFirst)),
+    ).toEqual({ status: 'success' })
     expect(guessing(joinedFirst)).toMatchObject({ totalTurns: 3 })
 
     const cutoffFirst = createRoom()
@@ -1262,7 +1376,7 @@ describe('GameRoom single-round flow', () => {
     cutoffFirst.start(hostToken, 1_002)
     submitFirstHint(cutoffFirst, hostToken, 'Orbit')
     submitFirstHint(cutoffFirst, guestToken, 'Garden')
-    cutoffFirst.startGuessing(hostToken, 1_003)
+    cutoffFirst.startGuessing(hostToken, gameCommand(cutoffFirst), 1_003)
     expect(cutoffFirst.snapshotFor(thirdToken)).toEqual({
       status: 'joinable',
       roomCode: cutoffFirst.code,
@@ -1285,7 +1399,9 @@ describe('GameRoom single-round flow', () => {
     expect(room.leave(thirdToken, 1_004)).toEqual({ status: 'success' })
     submitFirstHint(room, hostToken, 'Orbit')
     submitFirstHint(room, guestToken, 'Garden')
-    expect(room.startGuessing(hostToken, 1_005)).toEqual({ status: 'success' })
+    expect(room.startGuessing(hostToken, gameCommand(room), 1_005)).toEqual({
+      status: 'success',
+    })
     expect(guessing(room).totalTurns).toBe(2)
 
     expect(room.join(thirdToken, 'Linus', 1_006)).toEqual({ status: 'success' })
@@ -1381,7 +1497,7 @@ describe('GameRoom single-round flow', () => {
     submitFirstHint(room, hostToken, 'Orbit')
     submitFirstHint(room, guestToken, 'Garden')
     submitFirstHint(room, thirdToken, 'Metal')
-    room.startGuessing(hostToken, 1_004)
+    room.startGuessing(hostToken, gameCommand(room), 1_004)
 
     const before = guessing(room)
     const guestId = guessing(room, guestToken).player.playerId
@@ -1413,12 +1529,14 @@ describe('GameRoom single-round flow', () => {
 
     expect(
       room.finishGuessing(thirdToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         turnId: after.turnId,
       }),
     ).toEqual({ status: 'success' })
     expect(guessing(room).canAdvanceTurn).toBe(true)
-    expect(room.advanceTurn(hostToken, 1_006)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room), 1_006)).toEqual({
+      status: 'success',
+    })
 
     const removedPlayersBoard = guessing(room)
     expect(removedPlayersBoard).toMatchObject({
@@ -1430,7 +1548,7 @@ describe('GameRoom single-round flow', () => {
     })
     expect(
       room.claimCard(hostToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         turnId: removedPlayersBoard.turnId,
         commandId: 'removed-clue-giver-score',
         cardId: guestTargetId,
@@ -1521,7 +1639,7 @@ describe('GameRoom single-round flow', () => {
     expect(latePlayer.board).toHaveLength(12)
     expect(
       room.submitHint(thirdToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         hint: 'Metal',
         targetCardIds: [
           latePlayer.board!.find(({ kind }) => kind === 'neutral')!.id,
@@ -1547,7 +1665,7 @@ describe('GameRoom single-round flow', () => {
     )!
     expect(
       room.claimCard(guestToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         commandId: 'target-command-1',
         turnId: guestView.turnId,
         cardId: target.id,
@@ -1565,7 +1683,7 @@ describe('GameRoom single-round flow', () => {
     )!
     expect(
       room.claimCard(guestToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         commandId: 'civilian-command-1',
         turnId: afterTarget.turnId,
         cardId: civilian.id,
@@ -1587,7 +1705,7 @@ describe('GameRoom single-round flow', () => {
     submitFirstHint(room, hostToken, 'Orbit')
     submitFirstHint(room, guestToken, 'Garden')
     submitFirstHint(room, thirdToken, 'Metal')
-    room.startGuessing(hostToken, 1_004)
+    room.startGuessing(hostToken, gameCommand(room), 1_004)
 
     const hostView = guessing(room, hostToken)
     const assassin = hostView.board.find(
@@ -1596,7 +1714,7 @@ describe('GameRoom single-round flow', () => {
     const guestView = guessing(room, guestToken)
     expect(
       room.claimCard(guestToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         commandId: 'assassin-command-1',
         turnId: guestView.turnId,
         cardId: assassin.id,
@@ -1613,7 +1731,7 @@ describe('GameRoom single-round flow', () => {
     expect(scores.map(({ score }) => score)).toEqual([-5, -5, 0])
     expect(
       room.claimCard(thirdToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         commandId: 'assassin-command-2',
         turnId: thirdView.turnId,
         cardId: assassin.id,
@@ -1621,29 +1739,194 @@ describe('GameRoom single-round flow', () => {
     ).toMatchObject({ status: 'forbidden' })
   })
 
-  it('lets only the host advance each clue and finishes after every starting player has one turn', () => {
+  it('keeps the final board until the host explicitly shows the scoreboard', () => {
     const room = startTwoPlayerGame()
-    expect(room.advanceTurn(guestToken)).toMatchObject({ status: 'forbidden' })
-    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    const spectatorToken = 'd'.repeat(32)
+    expect(room.join(spectatorToken, 'Spectator')).toEqual({
+      status: 'success',
+    })
+    expect(room.advanceTurn(guestToken, gameCommand(room))).toMatchObject({
+      status: 'forbidden',
+    })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
     finishActiveGuessers(room)
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
     expect(guessing(room).turnNumber).toBe(2)
     expect(guessing(room).clueGiverName).toBe('Grace')
     const finalTurn = guessing(room)
-    expect(room.advanceTurn(hostToken)).toMatchObject({ status: 'invalid' })
+    expect(room.advanceTurn(hostToken, gameCommand(room))).toMatchObject({
+      status: 'invalid',
+    })
+    expect(
+      room.showScoreboard(guestToken, {
+        ...gameCommand(room),
+        gameId: finalTurn.gameId,
+      }),
+    ).toMatchObject({ status: 'forbidden' })
+    expect(
+      room.showScoreboard(hostToken, {
+        ...gameCommand(room),
+        gameId: finalTurn.gameId,
+      }),
+    ).toMatchObject({ status: 'invalid' })
     expect(guessing(room)).toEqual(finalTurn)
     finishActiveGuessers(room)
-    expect(guessing(room).canAdvanceTurn).toBe(true)
-    expect(room.advanceTurn(hostToken)).toEqual({ status: 'success' })
+    const reviewedBoard = guessing(room)
+    expect(reviewedBoard.boardCompleted).toBe(true)
+    expect(reviewedBoard.canAdvanceTurn).toBe(false)
+    expect(reviewedBoard.canViewScoreboard).toBe(true)
+    expect(
+      reviewedBoard.board.every(({ revealedKind }) => revealedKind !== null),
+    ).toBe(true)
+    const spectatorReview = guessing(room, spectatorToken)
+    expect(spectatorReview.boardCompleted).toBe(true)
+    expect(spectatorReview.canViewScoreboard).toBe(false)
+    expect(
+      spectatorReview.board.every(({ revealedKind }) => revealedKind !== null),
+    ).toBe(true)
+    expect(
+      room.showScoreboard(hostToken, {
+        ...gameCommand(room),
+        gameId: reviewedBoard.gameId,
+      }),
+    ).toEqual({ status: 'success' })
 
     const finished = room.snapshotFor(hostToken)
     expect(finished.status).toBe('finished')
     if (finished.status === 'finished') {
       expect(finished.winners.length).toBeGreaterThan(0)
-      expect(
-        finished.board.every(({ revealedKind }) => revealedKind !== null),
-      ).toBe(true)
+      expect(finished).not.toHaveProperty('board')
     }
+  })
+
+  it('reopens the same lobby, resets game state, admits a late visitor, and rejects prior-game commands', () => {
+    const room = startTwoPlayerGame()
+    const lateToken = thirdToken
+    const departedToken = returningToken
+    const removedToken = 'd'.repeat(32)
+    room.join(lateToken, 'Linus', 1_004)
+    expect(guessing(room, lateToken).player.participation).toBe('spectator')
+    room.join(departedToken, 'Margaret', 1_004)
+    expect(guessing(room, departedToken).player.participation).toBe('spectator')
+    expect(room.leave(departedToken, 1_004)).toEqual({ status: 'success' })
+
+    finishGameAndShowScoreboard(room)
+    const results = room.snapshotFor(hostToken)
+    if (results.status !== 'finished') throw new Error('Expected results.')
+    const firstGameId = results.gameId
+    const firstScores = results.scoreboard.map(({ score }) => score)
+
+    expect(
+      room.returnToLobby(guestToken, {
+        ...gameCommand(room),
+        gameId: firstGameId,
+      }),
+    ).toMatchObject({ status: 'forbidden' })
+    expect(
+      room.returnToLobby(hostToken, {
+        ...gameCommand(room),
+        gameId: firstGameId,
+      }),
+    ).toEqual({ status: 'success' })
+    const reopened = room.snapshotFor(lateToken)
+    expect(reopened).toMatchObject({
+      status: 'lobby',
+      roomCode: room.code,
+      player: { participation: 'player' },
+    })
+    if (reopened.status !== 'lobby') throw new Error('Expected lobby.')
+    expect(reopened.members).toHaveLength(3)
+    expect(
+      reopened.members.every(({ participation }) => participation === 'player'),
+    ).toBe(true)
+    const activity = room.lastMeaningfulActivityAt
+    expect(
+      room.returnToLobby(hostToken, {
+        ...gameCommand(room),
+        gameId: firstGameId,
+      }),
+    ).toEqual({ status: 'success' })
+    expect(room.lastMeaningfulActivityAt).toBe(activity)
+
+    expect(room.join(removedToken, 'Removed', 1_005)).toEqual({
+      status: 'success',
+    })
+    const removedId = room.snapshotFor(hostToken)
+    if (removedId.status !== 'lobby') throw new Error('Expected lobby.')
+    const target = removedId.members.find(({ name }) => name === 'Removed')!
+    expect(
+      room.removePlayer(hostToken, target.playerId, false, 1_006),
+    ).toMatchObject({ status: 'success' })
+
+    expect(room.start(hostToken, 1_007)).toEqual({ status: 'success' })
+    const secondHinting = hinting(room)
+    expect(secondHinting.gameId).not.toBe(firstGameId)
+    expect(room.join(departedToken, 'Margaret', 1_008)).toEqual({
+      status: 'success',
+    })
+    expect(hinting(room, departedToken)).toMatchObject({
+      player: { participation: 'player' },
+      board: expect.any(Array),
+    })
+    const secondHintingAfterRejoin = hinting(room)
+    expect(
+      room.submitHint(hostToken, {
+        roomCode: room.code,
+        hint: 'Missing game identity',
+        targetCardIds: [secondHinting.board![0].id],
+      } as never),
+    ).toMatchObject({ status: 'stale' })
+    expect(
+      room.submitHint(hostToken, {
+        ...gameCommand(room),
+        gameId: firstGameId,
+        hint: 'Stale',
+        targetCardIds: [secondHinting.board![0].id],
+      }),
+    ).toMatchObject({ status: 'stale' })
+    expect(hinting(room)).toEqual(secondHintingAfterRejoin)
+    expect(room.join(removedToken, 'Removed again', 1_009)).toMatchObject({
+      status: 'removed_from_room',
+    })
+
+    for (const [token, hint] of [
+      [hostToken, 'Orbit'],
+      [guestToken, 'Garden'],
+      [lateToken, 'Metal'],
+      [departedToken, 'City'],
+    ] as const) {
+      expect(submitFirstHint(room, token, hint)).toEqual({ status: 'success' })
+    }
+    expect(room.startGuessing(hostToken, gameCommand(room))).toEqual({
+      status: 'success',
+    })
+    expect(guessing(room, departedToken).scoreboard).toContainEqual(
+      expect.objectContaining({
+        name: 'Margaret',
+        participation: 'player',
+        score: 0,
+      }),
+    )
+    const secondScores = guessing(room)
+      .scoreboard.filter(({ participation }) => participation === 'player')
+      .map(({ score }) => score)
+    expect(secondScores).toEqual([0, 0, 0, 0])
+    expect(secondScores).not.toEqual(firstScores)
+    finishGameAndShowScoreboard(room)
+    const secondResults = room.snapshotFor(hostToken)
+    if (secondResults.status !== 'finished')
+      throw new Error('Expected results.')
+    expect(
+      room.returnToLobby(hostToken, {
+        ...gameCommand(room),
+        gameId: secondResults.gameId,
+      }),
+    ).toEqual({ status: 'success' })
+    expect(room.snapshotFor(hostToken).status).toBe('lobby')
   })
 
   it('rejects stale guesses without changing the score', () => {
@@ -1654,7 +1937,7 @@ describe('GameRoom single-round flow', () => {
     )!
     expect(
       room.claimCard(guestToken, {
-        roomCode: room.code,
+        ...gameCommand(room),
         commandId: 'stale-command-1',
         turnId: '00000000-0000-4000-8000-000000000000',
         cardId: target.id,

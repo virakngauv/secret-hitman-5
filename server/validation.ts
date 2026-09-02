@@ -5,7 +5,9 @@ import {
   type ClaimCardPayload,
   type CreateRoomPayload,
   type FinishGuessingPayload,
+  type GameCommandPayload,
   type JoinRoomPayload,
+  type RejectHintPayload,
   type RemovePlayerPayload,
   type RoomCommandPayload,
   type SessionResumePayload,
@@ -20,6 +22,7 @@ export const COMMAND_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 export const PLAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 export const TURN_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+export const GAME_ID_PATTERN = TURN_ID_PATTERN
 export const CARD_ID_PATTERN = /^p\d+-card-\d{1,2}$/
 export const MAX_PLAYER_NAME_LENGTH = 50
 export const MAX_HINT_LENGTH = 40
@@ -66,11 +69,21 @@ export function parseRoomCommand(value: unknown): RoomCommandPayload | null {
   return roomCode ? { roomCode } : null
 }
 
+export function parseGameCommand(value: unknown): GameCommandPayload | null {
+  const room = parseRoomCommand(value)
+  return room &&
+    isRecord(value) &&
+    typeof value.gameId === 'string' &&
+    GAME_ID_PATTERN.test(value.gameId)
+    ? { ...room, gameId: value.gameId }
+    : null
+}
+
 export function parseFinishGuessing(
   value: unknown,
 ): FinishGuessingPayload | null {
   if (!isRecord(value)) return null
-  const room = parseRoomCommand(value)
+  const room = parseGameCommand(value)
   return room &&
     typeof value.turnId === 'string' &&
     TURN_ID_PATTERN.test(value.turnId)
@@ -100,14 +113,29 @@ export function parseRemovePlayer(value: unknown): RemovePlayerPayload | null {
     : null
 }
 
+export function parseRejectHint(value: unknown): RejectHintPayload | null {
+  if (!isRecord(value)) return null
+  const game = parseGameCommand(value)
+  return game &&
+    typeof value.playerId === 'string' &&
+    PLAYER_ID_PATTERN.test(value.playerId)
+    ? { ...game, playerId: value.playerId }
+    : null
+}
+
 export function parseSubmitHint(value: unknown): SubmitHintPayload | null {
   if (!isRecord(value)) return null
   const roomCode = parseRoomCode(value.roomCode)
+  const gameId =
+    typeof value.gameId === 'string' && GAME_ID_PATTERN.test(value.gameId)
+      ? value.gameId
+      : null
   const hint = parseHint(value.hint)
   const targetCardIds = value.targetCardIds
 
   if (
     !roomCode ||
+    !gameId ||
     !hint ||
     !Array.isArray(targetCardIds) ||
     targetCardIds.length < MIN_TARGET_COUNT ||
@@ -119,15 +147,20 @@ export function parseSubmitHint(value: unknown): SubmitHintPayload | null {
     return null
   }
 
-  return { roomCode, hint, targetCardIds: targetCardIds as string[] }
+  return { roomCode, gameId, hint, targetCardIds: targetCardIds as string[] }
 }
 
 export function parseClaimCard(value: unknown): ClaimCardPayload | null {
   if (!isRecord(value)) return null
   const roomCode = parseRoomCode(value.roomCode)
+  const gameId =
+    typeof value.gameId === 'string' && GAME_ID_PATTERN.test(value.gameId)
+      ? value.gameId
+      : null
 
   if (
     !roomCode ||
+    !gameId ||
     typeof value.commandId !== 'string' ||
     !COMMAND_ID_PATTERN.test(value.commandId) ||
     typeof value.turnId !== 'string' ||
@@ -140,6 +173,7 @@ export function parseClaimCard(value: unknown): ClaimCardPayload | null {
 
   return {
     roomCode,
+    gameId,
     commandId: value.commandId,
     turnId: value.turnId,
     cardId: value.cardId,
