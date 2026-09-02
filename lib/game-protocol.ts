@@ -199,6 +199,10 @@ export type ClientToServerEvents = {
     payload: RoomCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
+  'room:leave-intent': (
+    payload: RoomCommandPayload,
+    acknowledge: (result: CommandResult) => void,
+  ) => void
   'room:remove-player': (
     payload: RemovePlayerPayload,
     acknowledge: (result: CommandResult) => void,

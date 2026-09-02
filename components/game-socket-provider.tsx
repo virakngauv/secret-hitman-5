@@ -284,7 +284,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
 
           const activeSocket = socketRef.current
           if (activeSocket?.connected && synchronizedRef.current) {
-            activeSocket.emit('room:leave', { roomCode }, () => {})
+            activeSocket.emit('room:leave-intent', { roomCode }, () => {})
           } else sendLeaveIntentRef.current([roomCode])
         }, 0)
         pendingUnwatchTimersRef.current.set(roomCode, timer)

@@ -345,7 +345,7 @@ describe('GameSocketProvider', () => {
 
     await waitFor(() =>
       expect(mocks.socket.emit).toHaveBeenCalledWith(
-        'room:leave',
+        'room:leave-intent',
         { roomCode: 'bcdf2' },
         expect.any(Function),
       ),
@@ -370,7 +370,7 @@ describe('GameSocketProvider', () => {
     )
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mocks.socket.emit).not.toHaveBeenCalledWith(
-      'room:leave',
+      'room:leave-intent',
       expect.anything(),
       expect.anything(),
     )
@@ -382,7 +382,7 @@ describe('GameSocketProvider', () => {
     )
     await waitFor(() =>
       expect(mocks.socket.emit).toHaveBeenCalledWith(
-        'room:leave',
+        'room:leave-intent',
         { roomCode: 'bcdf2' },
         expect.any(Function),
       ),
@@ -411,7 +411,7 @@ describe('GameSocketProvider', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(mocks.socket.emit).not.toHaveBeenCalledWith(
-      'room:leave',
+      'room:leave-intent',
       expect.anything(),
       expect.anything(),
     )

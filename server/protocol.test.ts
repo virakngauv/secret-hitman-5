@@ -276,6 +276,55 @@ describe('Socket.IO Secret Hitman protocol', () => {
     )
   })
 
+  it('protects a same-room tab from an automatic route-exit intent', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+    const otherTab = await connect(guestToken)
+    await otherTab.emitWithAck('session:resume', { roomCode })
+
+    expect(await guest.emitWithAck('room:leave-intent', { roomCode })).toEqual({
+      status: 'success',
+    })
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
+      {
+        members: [{ name: 'Ada' }, { name: 'Grace' }],
+      },
+    )
+    expect(
+      (await socketServer.io.in(roomCode).fetchSockets()).map(
+        (socket) => socket.id,
+      ),
+    ).not.toContain(guest.id)
+  })
+
+  it('cancels a route-exit intent when the same socket resumes during setup', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+    const fetchedSockets = await socketServer.io.fetchSockets()
+    let resolveFetch!: (sockets: typeof fetchedSockets) => void
+    const delayedFetch = new Promise<typeof fetchedSockets>((resolve) => {
+      resolveFetch = resolve
+    })
+    const fetchSockets = vi
+      .spyOn(socketServer.io, 'fetchSockets')
+      .mockImplementationOnce(() => delayedFetch)
+
+    const intent = guest.emitWithAck('room:leave-intent', { roomCode })
+    await vi.waitFor(() => expect(fetchSockets).toHaveBeenCalledOnce())
+    expect(
+      await guest.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({ status: 'success', snapshot: { status: 'lobby' } })
+    resolveFetch(fetchedSockets)
+    expect(await intent).toEqual({ status: 'success' })
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
+      {
+        members: [{ name: 'Ada' }, { name: 'Grace' }],
+      },
+    )
+  })
+
   it('does not preserve a room for a same-identity socket outside that room', async () => {
     const { guest, roomCode } = await createTwoPlayerLobby()
     const otherPage = await connect(guestToken)
@@ -400,6 +449,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         'room:create',
         'room:join',
         'room:leave',
+        'room:leave-intent',
         'room:remove-player',
         'game:start',
         'game:submit-hint',

@@ -109,7 +109,7 @@ export function createGameSocketServer(
   const pendingLeaveIntents = new Map<
     string,
     {
-      timer: ReturnType<typeof setTimeout>
+      timer: ReturnType<typeof setTimeout> | null
       generation: symbol
       initiatingSocketId: string
     }
@@ -227,6 +227,22 @@ export function createGameSocketServer(
         await socket.leave(parsed.roomCode)
         acknowledge(result)
         broadcastSnapshots(parsed.roomCode)
+      })
+    })
+
+    socket.on('room:leave-intent', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('room:leave-intent', acknowledge, async () => {
+        const parsed = parseRoomCommand(payload)
+        if (!parsed) return acknowledge(invalid())
+
+        await receiveLeaveIntent(
+          socket.data.token,
+          [parsed.roomCode],
+          socket.id,
+        )
+        acknowledge({ status: 'success' })
       })
     })
 
@@ -433,7 +449,7 @@ export function createGameSocketServer(
   function cancelLeaveIntent(token: string, roomCode: string) {
     const key = leaveIntentKey(token, roomCode)
     const intent = pendingLeaveIntents.get(key)
-    if (intent) clearTimeout(intent.timer)
+    if (intent?.timer) clearTimeout(intent.timer)
     pendingLeaveIntents.delete(key)
   }
 
@@ -446,7 +462,26 @@ export function createGameSocketServer(
       const snapshot = gameServer.snapshot(token, roomCode)
       if (!isMemberSnapshot(snapshot)) continue
 
-      const sockets = await io.fetchSockets()
+      cancelLeaveIntent(token, roomCode)
+      const key = leaveIntentKey(token, roomCode)
+      const generation = Symbol(key)
+      pendingLeaveIntents.set(key, {
+        timer: null,
+        generation,
+        initiatingSocketId,
+      })
+
+      let sockets: Awaited<ReturnType<typeof io.fetchSockets>>
+      try {
+        sockets = await io.fetchSockets()
+      } catch (error) {
+        if (pendingLeaveIntents.get(key)?.generation === generation) {
+          pendingLeaveIntents.delete(key)
+        }
+        throw error
+      }
+      if (pendingLeaveIntents.get(key)?.generation !== generation) continue
+
       const hasAnotherSocket = sockets.some(
         (candidate) =>
           candidate.id !== initiatingSocketId &&
@@ -461,9 +496,6 @@ export function createGameSocketServer(
         continue
       }
 
-      cancelLeaveIntent(token, roomCode)
-      const key = leaveIntentKey(token, roomCode)
-      const generation = Symbol(key)
       const timer = setTimeout(() => {
         void finalizeLeaveIntent(token, roomCode, generation).catch(
           (error: unknown) => {
@@ -472,6 +504,10 @@ export function createGameSocketServer(
         )
       }, options.leaveIntentGraceMs ?? LEAVE_INTENT_GRACE_MS)
       timer.unref()
+      if (pendingLeaveIntents.get(key)?.generation !== generation) {
+        clearTimeout(timer)
+        continue
+      }
       pendingLeaveIntents.set(key, {
         timer,
         generation,
@@ -611,8 +647,9 @@ export function createGameSocketServer(
     async shutdown() {
       acceptingCommands = false
       clearInterval(sweepTimer)
-      for (const intent of pendingLeaveIntents.values())
-        clearTimeout(intent.timer)
+      for (const intent of pendingLeaveIntents.values()) {
+        if (intent.timer) clearTimeout(intent.timer)
+      }
       pendingLeaveIntents.clear()
       io.emit('server:shutdown')
       await new Promise<void>((resolve) => io.close(() => resolve()))
