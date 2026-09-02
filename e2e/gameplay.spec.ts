@@ -540,7 +540,7 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(host)
       await expect(host).toHaveURL(/\/home$/)
-      await leaveRoom(guest)
+      await leaveRoom(guest, false)
       await expect(guest).toHaveURL(/\/home$/)
       await removed.goto('/home')
     } finally {
@@ -636,7 +636,7 @@ test.describe('Secret Hitman single round', () => {
       await spectator.getByRole('button', { name: 'View scoreboard' }).click()
       await expect(spectator.getByText('Final standings')).toBeVisible()
       await spectator.getByRole('button', { name: 'Return to lobby' }).click()
-      await leaveRoom(spectator)
+      await leaveRoom(spectator, false)
       await expect(spectator).toHaveURL(/\/home$/)
     } finally {
       for (const context of contexts) await context.close()
@@ -664,8 +664,12 @@ async function makeHint(page: Page, hint: string, count: number) {
   await expect(page.getByText('Hint locked in')).toBeVisible()
 }
 
-async function leaveRoom(page: Page) {
+async function leaveRoom(page: Page, confirmationExpected = true) {
   await page.getByRole('button', { name: 'Leave room' }).click()
+  if (!confirmationExpected) {
+    await expect(page.getByRole('alertdialog')).toHaveCount(0)
+    return
+  }
   const dialog = page.getByRole('alertdialog', {
     name: /Leave (?:as host|this room)\?/,
   })
