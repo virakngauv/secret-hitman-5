@@ -322,6 +322,44 @@ describe('Socket.IO Secret Hitman protocol', () => {
     expect(activeSocketIds).not.toContain(otherTab.id)
   })
 
+  it('does not let an older leave handler cancel a newer generation', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+    const otherTab = await connect(guestToken)
+    await otherTab.emitWithAck('session:resume', { roomCode })
+    const fetchedSockets = await socketServer.io.fetchSockets()
+    const guestSocket = fetchedSockets.find(
+      (candidate) => candidate.id === guest.id,
+    )!
+    let resolveLeave!: () => void
+    const delayedLeave = new Promise<void>((resolve) => {
+      resolveLeave = resolve
+    })
+    const leave = vi
+      .spyOn(guestSocket, 'leave')
+      .mockImplementationOnce(() => delayedLeave)
+    vi.spyOn(socketServer.io, 'fetchSockets').mockResolvedValueOnce(
+      fetchedSockets,
+    )
+
+    const firstIntent = socketServer.receiveLeaveIntent(
+      guestToken,
+      [roomCode],
+      guest.id!,
+    )
+    await vi.waitFor(() => expect(leave).toHaveBeenCalledOnce())
+    await socketServer.receiveLeaveIntent(guestToken, [roomCode], otherTab.id!)
+    resolveLeave()
+    await firstIntent
+
+    await vi.waitFor(() =>
+      expect(
+        socketServer.gameServer.snapshot(hostToken, roomCode),
+      ).toMatchObject({
+        members: [{ name: 'Ada' }],
+      }),
+    )
+  })
+
   it('cancels a route-exit intent when the same socket resumes during setup', async () => {
     const { guest, roomCode } = await createTwoPlayerLobby()
     const fetchedSockets = await socketServer.io.fetchSockets()

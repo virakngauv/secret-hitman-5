@@ -499,7 +499,9 @@ export function createGameSocketServer(
             .filter((candidate) => initiatingSocketIds.has(candidate.id))
             .map((candidate) => candidate.leave(roomCode)),
         )
-        cancelLeaveIntent(token, roomCode)
+        if (pendingLeaveIntents.get(key)?.generation === generation) {
+          cancelLeaveIntent(token, roomCode)
+        }
         continue
       }
 
