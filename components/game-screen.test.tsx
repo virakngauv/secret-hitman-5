@@ -712,6 +712,7 @@ describe('GuessingScreen messages', () => {
       hint: 'Orbit',
       hintNumber: 2,
       boardCompleted: false,
+      turnSettled: false,
       board: [],
       turnPlayers: [
         { playerId: 'player-1', name: 'Ada', state: 'clue-giver' },
@@ -776,6 +777,7 @@ describe('GuessingScreen messages', () => {
       hint: 'Orbit',
       hintNumber: 2,
       boardCompleted: false,
+      turnSettled: false,
       board: [
         {
           id: 'target',
@@ -891,7 +893,8 @@ describe('GuessingScreen messages', () => {
       clueGiverName: 'Grace',
       hint: 'Orbit',
       hintNumber: 1,
-      boardCompleted: true,
+      boardCompleted: false,
+      turnSettled: true,
       board: [
         {
           id: 'claimed-target',
@@ -937,6 +940,63 @@ describe('GuessingScreen messages', () => {
     ).not.toHaveTextContent(/\S/)
   })
 
+  it('does not describe the clue-giver private board as completed while the turn is active', () => {
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      gameId: hintingView.gameId,
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: hintingView.members[1],
+      members: hintingView.members,
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-2',
+      clueGiverName: 'Grace',
+      hint: 'Orbit',
+      hintNumber: 1,
+      boardCompleted: false,
+      turnSettled: false,
+      board: [
+        {
+          id: 'target',
+          word: 'MOON',
+          revealedKind: 'target',
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: true,
+        },
+        {
+          id: 'assassin',
+          word: 'POISON',
+          revealedKind: 'assassin',
+          claimedBy: [],
+          selectedByYou: false,
+          disabled: true,
+        },
+      ],
+      turnPlayers: [],
+      scoreboard: [],
+      canGuess: false,
+      canMarkDone: false,
+      canAdvanceTurn: false,
+    }
+
+    render(
+      <GuessingScreen
+        view={view}
+        onClaimCard={vi.fn()}
+        onFinishGuessing={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onAdvanceTurn={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Fully revealed board')).toBeVisible()
+    expect(
+      screen.queryByLabelText('Completed and fully revealed board'),
+    ).not.toBeInTheDocument()
+  })
+
   it.each([1, 2])(
     'keeps the host action disabled until the server permits advancement on turn %s',
     async (turnNumber) => {
@@ -958,6 +1018,7 @@ describe('GuessingScreen messages', () => {
         hint: 'Garden',
         hintNumber: 2,
         boardCompleted: false,
+        turnSettled: false,
         board: [],
         turnPlayers: [],
         scoreboard: [],
@@ -1041,6 +1102,7 @@ describe('GuessingScreen messages', () => {
         hint: 'Orbit',
         hintNumber: 2,
         boardCompleted: false,
+        turnSettled: false,
         board: [],
         turnPlayers: [],
         scoreboard: [],

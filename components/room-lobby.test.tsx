@@ -88,6 +88,7 @@ function guessingView(): Extract<RoomSnapshot, { status: 'guessing' }> {
     hint: 'Orbit',
     hintNumber: 2,
     boardCompleted: false,
+    turnSettled: false,
     board: [
       {
         id: 'p1-card-0',

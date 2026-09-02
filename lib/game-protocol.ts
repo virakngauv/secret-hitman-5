@@ -95,6 +95,7 @@ export type RoomSnapshot =
       hint: string
       hintNumber: number
       boardCompleted: boolean
+      turnSettled: boolean
       board: GuessCardSnapshot[]
       turnPlayers: TurnPlayerSnapshot[]
       scoreboard: ScoreboardEntry[]

@@ -600,7 +600,7 @@ export class GameRoom {
         message: 'The game is not in the guessing phase.',
       }
     }
-    if (this.hasActiveGuessers()) {
+    if (!this.isCurrentTurnSettled()) {
       return {
         status: 'invalid',
         message: 'Waiting for players to finish guessing.',
@@ -770,12 +770,10 @@ export class GameRoom {
     const clueSeat = clueGiver.game
     if (!clueSeat?.hint)
       throw new Error('Current clue giver is missing a hint.')
-    const finalTurnReview = this.isFinalTurn() && !this.hasActiveGuessers()
+    const turnSettled = this.isCurrentTurnSettled()
+    const finalTurnReview = this.isFinalTurn() && turnSettled
     const revealAll =
-      this.requireGame().turnCompleted ||
-      finalTurnReview ||
-      member === clueGiver ||
-      member.game?.turnState === 'done'
+      turnSettled || member === clueGiver || member.game?.turnState === 'done'
     const board = clueSeat.board.map((card) => {
       const selectedByYou = card.claimers.some(
         ({ playerId }) => playerId === member.playerId,
@@ -824,6 +822,7 @@ export class GameRoom {
       hint: clueSeat.hint,
       hintNumber: clueSeat.targetCount,
       boardCompleted: this.requireGame().turnCompleted || finalTurnReview,
+      turnSettled,
       board,
       turnPlayers: this.gamePlayers().map((player) => ({
         playerId: player.playerId,
@@ -845,13 +844,9 @@ export class GameRoom {
         member !== clueGiver &&
         member.game?.turnState === 'guessing',
       canAdvanceTurn:
-        member.role === 'host' &&
-        !this.isFinalTurn() &&
-        !this.hasActiveGuessers(),
+        member.role === 'host' && !this.isFinalTurn() && turnSettled,
       canViewScoreboard:
-        member.role === 'host' &&
-        this.isFinalTurn() &&
-        !this.hasActiveGuessers(),
+        member.role === 'host' && this.isFinalTurn() && turnSettled,
     }
   }
 
@@ -989,6 +984,10 @@ export class GameRoom {
         player !== clueGiver &&
         player.game?.turnState === 'guessing',
     )
+  }
+
+  private isCurrentTurnSettled() {
+    return !this.hasActiveGuessers()
   }
 
   private allTargetsClaimed() {

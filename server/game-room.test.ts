@@ -625,9 +625,17 @@ describe('GameRoom single-round flow', () => {
       status: 'success',
     })
     expect(guessing(room).canAdvanceTurn).toBe(true)
+    expect(guessing(room).turnSettled).toBe(true)
     expect(guessing(room).turnNumber).toBe(1)
     expect(guessing(room, guestToken).canAdvanceTurn).toBe(false)
-    expect(guessing(room, spectator).canAdvanceTurn).toBe(false)
+    const settledSpectator = guessing(room, spectator)
+    expect(settledSpectator.canAdvanceTurn).toBe(false)
+    expect(settledSpectator.turnSettled).toBe(true)
+    expect(
+      settledSpectator.board.every(
+        ({ revealedKind, disabled }) => revealedKind !== null && disabled,
+      ),
+    ).toBe(true)
     expect(room.advanceTurn(hostToken, gameCommand(room))).toEqual({
       status: 'success',
     })
@@ -1944,5 +1952,122 @@ describe('GameRoom single-round flow', () => {
       }),
     ).toMatchObject({ status: 'stale' })
     expect(guessing(room).scoreboard.map(({ score }) => score)).toEqual([0, 0])
+  })
+
+  describe('spectator host succession', () => {
+    const spectatorToken = 'd'.repeat(32)
+
+    it('requires every earlier active member to leave before a spectator inherits host authority', () => {
+      const room = startTwoPlayerGame()
+      room.join(spectatorToken, 'Spectator', 1_004)
+
+      expect(guessing(room, spectatorToken)).toMatchObject({
+        player: { role: 'player', participation: 'spectator' },
+      })
+      expect(
+        room.startGuessing(spectatorToken, gameCommand(room)),
+      ).toMatchObject({
+        status: 'forbidden',
+      })
+
+      room.leave(hostToken, 1_005)
+      expect(guessing(room, guestToken).player.role).toBe('host')
+      expect(guessing(room, spectatorToken).player.role).toBe('player')
+      expect(
+        room.startGuessing(spectatorToken, gameCommand(room)),
+      ).toMatchObject({
+        status: 'forbidden',
+      })
+
+      room.leave(guestToken, 1_006)
+      expect(guessing(room, spectatorToken).player).toMatchObject({
+        role: 'host',
+        participation: 'spectator',
+      })
+    })
+
+    it('lets a legitimate spectator successor operate host transitions without gaining player-only actions', () => {
+      const room = startTwoPlayerGame()
+      room.join(spectatorToken, 'Spectator', 1_004)
+      room.leave(hostToken, 1_005)
+      room.leave(guestToken, 1_006)
+
+      const inherited = guessing(room, spectatorToken)
+      expect(inherited).toMatchObject({
+        player: { role: 'host', participation: 'spectator' },
+        canGuess: false,
+        canMarkDone: false,
+        canAdvanceTurn: true,
+      })
+      expect(JSON.stringify(inherited)).not.toContain(hostToken)
+      expect(JSON.stringify(inherited)).not.toContain(guestToken)
+      expect(
+        room.submitHint(spectatorToken, {
+          ...gameCommand(room),
+          roomCode: room.code,
+          hint: 'No private seat',
+          targetCardIds: ['not-a-card'],
+        }),
+      ).toMatchObject({ status: 'forbidden' })
+
+      const firstTurn = guessing(room, spectatorToken)
+      expect(firstTurn).toMatchObject({
+        player: { role: 'host', participation: 'spectator' },
+        canGuess: false,
+        canMarkDone: false,
+        canAdvanceTurn: true,
+      })
+      expect(
+        firstTurn.board.every(
+          ({ revealedKind, claimedBy, disabled }) =>
+            revealedKind !== null && claimedBy.length === 0 && disabled,
+        ),
+      ).toBe(true)
+      expect(
+        room.finishGuessing(spectatorToken, {
+          ...gameCommand(room),
+          roomCode: room.code,
+          turnId: firstTurn.turnId,
+        }),
+      ).toMatchObject({ status: 'forbidden' })
+      expect(
+        room.claimCard(spectatorToken, {
+          ...gameCommand(room),
+          roomCode: room.code,
+          turnId: firstTurn.turnId,
+          commandId: 'spectator-host-claim',
+          cardId: firstTurn.board[0]!.id,
+        }),
+      ).toMatchObject({ status: 'forbidden' })
+
+      expect(
+        room.advanceTurn(spectatorToken, gameCommand(room), 1_007),
+      ).toEqual({
+        status: 'success',
+      })
+      expect(guessing(room, spectatorToken)).toMatchObject({
+        canAdvanceTurn: false,
+        canViewScoreboard: true,
+        turnSettled: true,
+      })
+      expect(
+        room.showScoreboard(spectatorToken, gameCommand(room), 1_008),
+      ).toEqual({
+        status: 'success',
+      })
+      expect(room.snapshotFor(spectatorToken)).toMatchObject({
+        status: 'finished',
+        player: { role: 'host', participation: 'spectator' },
+      })
+
+      room.join(hostToken, 'Ada', 1_009)
+      room.join(guestToken, 'Grace', 1_010)
+      expect(room.snapshotFor(hostToken)).toMatchObject({
+        player: { role: 'player', participation: 'player' },
+      })
+      expect(room.snapshotFor(guestToken)).toMatchObject({
+        player: { role: 'player', participation: 'player' },
+      })
+    })
   })
 })

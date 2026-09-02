@@ -1121,6 +1121,88 @@ describe('Socket.IO Secret Hitman protocol', () => {
     })
   })
 
+  it('keeps host authority through transport disconnects and multiple sockets sharing one identity', async () => {
+    const firstHostSocket = await connect(hostToken)
+    const secondHostSocket = await connect(hostToken)
+    const guest = await connect(guestToken)
+    const spectator = await connect(spectatorToken)
+    const created = await firstHostSocket.emitWithAck('room:create', {
+      name: 'Ada',
+    })
+    if (created.status !== 'success') throw new Error('Unable to create room.')
+    const { roomCode } = created
+
+    await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
+    await firstHostSocket.emitWithAck('game:start', { roomCode })
+    for (const [token, hint] of [
+      [hostToken, 'Orbit'],
+      [guestToken, 'Garden'],
+    ] as const) {
+      const view = socketServer.gameServer.snapshot(token, roomCode)
+      if (view.status !== 'hinting' || !view.board)
+        throw new Error('Expected hinting board.')
+      const target = view.board.find(({ kind }) => kind === 'neutral')!
+      expect(
+        socketServer.gameServer.submitHint(token, {
+          gameId: view.gameId,
+          roomCode,
+          hint,
+          targetCardIds: [target.id],
+        }),
+      ).toEqual({ status: 'success' })
+    }
+    const ready = socketServer.gameServer.snapshot(hostToken, roomCode)
+    if (ready.status !== 'hinting') throw new Error('Expected hinting phase.')
+    expect(
+      socketServer.gameServer.startGuessing(hostToken, {
+        gameId: ready.gameId,
+        roomCode,
+      }),
+    ).toEqual({ status: 'success' })
+    await spectator.emitWithAck('room:join', { roomCode, name: 'Spectator' })
+    const before = socketServer.gameServer.snapshot(hostToken, roomCode)
+    if (before.status !== 'guessing')
+      throw new Error('Expected guessing phase.')
+
+    expect(
+      await secondHostSocket.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({
+      status: 'success',
+      snapshot: {
+        player: { playerId: before.player.playerId, role: 'host' },
+      },
+    })
+    const serverHostSocket = socketServer.io.sockets.sockets.get(
+      firstHostSocket.id!,
+    )
+    if (!serverHostSocket) throw new Error('Expected the first host socket.')
+    const disconnected = new Promise<void>((resolve) =>
+      serverHostSocket.once('disconnect', () => resolve()),
+    )
+    firstHostSocket.disconnect()
+    await disconnected
+
+    expect(
+      await secondHostSocket.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({
+      status: 'success',
+      snapshot: {
+        player: { playerId: before.player.playerId, role: 'host' },
+      },
+    })
+    expect(
+      socketServer.gameServer.snapshot(spectatorToken, roomCode),
+    ).toMatchObject({
+      player: { role: 'player', participation: 'spectator' },
+    })
+    expect(
+      await spectator.emitWithAck('game:start-guessing', {
+        gameId: before.gameId,
+        roomCode,
+      }),
+    ).toMatchObject({ status: 'forbidden' })
+  })
+
   it('returns a resume snapshot only through the acknowledgement', async () => {
     const client = await connect(hostToken)
     const roomSnapshots = vi.fn<(snapshot: RoomSnapshot) => void>()
