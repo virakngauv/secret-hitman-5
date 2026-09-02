@@ -823,7 +823,7 @@ export class GameRoom {
       clueGiverName: clueGiver.name,
       hint: clueSeat.hint,
       hintNumber: clueSeat.targetCount,
-      boardCompleted: this.requireGame().turnCompleted,
+      boardCompleted: this.requireGame().turnCompleted || finalTurnReview,
       board,
       turnPlayers: this.gamePlayers().map((player) => ({
         playerId: player.playerId,

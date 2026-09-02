@@ -1776,12 +1776,14 @@ describe('GameRoom single-round flow', () => {
     expect(guessing(room)).toEqual(finalTurn)
     finishActiveGuessers(room)
     const reviewedBoard = guessing(room)
+    expect(reviewedBoard.boardCompleted).toBe(true)
     expect(reviewedBoard.canAdvanceTurn).toBe(false)
     expect(reviewedBoard.canViewScoreboard).toBe(true)
     expect(
       reviewedBoard.board.every(({ revealedKind }) => revealedKind !== null),
     ).toBe(true)
     const spectatorReview = guessing(room, spectatorToken)
+    expect(spectatorReview.boardCompleted).toBe(true)
     expect(spectatorReview.canViewScoreboard).toBe(false)
     expect(
       spectatorReview.board.every(({ revealedKind }) => revealedKind !== null),
