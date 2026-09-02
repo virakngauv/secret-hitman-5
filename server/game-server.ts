@@ -1,6 +1,7 @@
 import { randomBytes, randomInt } from 'node:crypto'
 
 import type {
+  AdvanceTurnPayload,
   ClaimCardPayload,
   CommandResult,
   FinishGuessingPayload,
@@ -149,13 +150,13 @@ export class GameServer {
     )
   }
 
-  advanceTurn(token: string, payload: GameCommandPayload, now = Date.now()) {
+  advanceTurn(token: string, payload: AdvanceTurnPayload, now = Date.now()) {
     return this.withRoom(payload.roomCode, (room) =>
       room.advanceTurn(token, payload, now),
     )
   }
 
-  showScoreboard(token: string, payload: GameCommandPayload, now = Date.now()) {
+  showScoreboard(token: string, payload: AdvanceTurnPayload, now = Date.now()) {
     return this.withRoom(payload.roomCode, (room) =>
       room.showScoreboard(token, payload, now),
     )

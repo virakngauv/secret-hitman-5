@@ -26,6 +26,8 @@ export const GAME_ID_PATTERN = TURN_ID_PATTERN
 export const CARD_ID_PATTERN = /^p\d+-card-\d{1,2}$/
 export const MAX_PLAYER_NAME_LENGTH = 50
 export const MAX_HINT_LENGTH = 40
+const SOCKET_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+const MAX_LEAVE_INTENT_ROOMS = 10
 const UNSAFE_TEXT_CHARACTERS =
   /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
 
@@ -210,6 +212,30 @@ export function parseHint(value: unknown) {
   return normalized.length > 0 && normalized.length <= MAX_HINT_LENGTH
     ? normalized
     : null
+}
+
+export function parseLeaveIntentForm(body: string) {
+  const form = new URLSearchParams(body)
+  const token = form.get('token')
+  const socketId = form.get('socketId')
+  const roomCodes = form
+    .getAll('roomCode')
+    .map(parseRoomCode)
+    .filter((roomCode): roomCode is string => roomCode !== null)
+
+  if (
+    !token ||
+    !CLIENT_TOKEN_PATTERN.test(token) ||
+    !socketId ||
+    !SOCKET_ID_PATTERN.test(socketId) ||
+    roomCodes.length === 0 ||
+    roomCodes.length > MAX_LEAVE_INTENT_ROOMS ||
+    roomCodes.length !== form.getAll('roomCode').length
+  ) {
+    return null
+  }
+
+  return { token, socketId, roomCodes: [...new Set(roomCodes)] }
 }
 
 function isRecord(value: unknown): value is UnknownRecord {

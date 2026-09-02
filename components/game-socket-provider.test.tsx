@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   emitWithAck: vi.fn(),
   io: vi.fn(),
   socket: {
+    id: 'socket-1',
     connected: true,
     on: vi.fn((event: string, handler: (...args: never[]) => void) => {
       mocks.handlers.set(event, handler)
@@ -167,6 +168,10 @@ describe('GameSocketProvider', () => {
       )
     mocks.socket.timeout.mockReset().mockReturnValue(mocks.socket)
     mocks.socket.disconnect.mockClear()
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      value: vi.fn().mockReturnValue(true),
+    })
   })
 
   afterEach(() => {
@@ -300,6 +305,42 @@ describe('GameSocketProvider', () => {
         expect.any(Object),
       ),
     )
+  })
+
+  it('sends an unload-compatible leave intent for the watched room', async () => {
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    await waitFor(() => expect(mocks.io).toHaveBeenCalled())
+
+    const event = new Event('pagehide')
+    Object.defineProperty(event, 'persisted', { value: false })
+    act(() => window.dispatchEvent(event))
+
+    expect(navigator.sendBeacon).toHaveBeenCalledOnce()
+    const [url, body] = vi.mocked(navigator.sendBeacon).mock.calls[0]
+    expect(url).toBe('http://localhost:3200/leave-intent')
+    expect(body).toBeInstanceOf(URLSearchParams)
+    expect((body as URLSearchParams).get('token')).toBe(mocks.clientToken)
+    expect((body as URLSearchParams).get('socketId')).toBe('socket-1')
+    expect((body as URLSearchParams).getAll('roomCode')).toEqual(['bcdf2'])
+  })
+
+  it('does not send a leave intent when the page enters the back-forward cache', async () => {
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    await waitFor(() => expect(mocks.io).toHaveBeenCalled())
+
+    const event = new Event('pagehide')
+    Object.defineProperty(event, 'persisted', { value: true })
+    act(() => window.dispatchEvent(event))
+
+    expect(navigator.sendBeacon).not.toHaveBeenCalled()
   })
 
   it.each(['watchRoom', 'connect resume'] as const)(

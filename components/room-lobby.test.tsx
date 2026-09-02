@@ -264,6 +264,10 @@ describe('RoomLobby invite prompt', () => {
       'Too many commands.',
     )
     await user.click(screen.getByRole('button', { name: 'Remove Grace' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'Grace will leave the lobby and will not be able to rejoin this room.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(mocks.removePlayer).toHaveBeenCalledWith('bcdf2', 'guest')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })

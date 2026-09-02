@@ -19,6 +19,7 @@ import {
   RoomInviteCard,
 } from '@/components/room-invite-card'
 import { Button } from '@/components/ui/button'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { MAX_STARTING_PLAYERS, type RoomSnapshot } from '@/lib/game-protocol'
 import { generateClientToken } from '@/lib/player-session'
 
@@ -159,12 +160,25 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             })
           }
           onAdvanceTurn={() =>
-            game.advanceTurn({ roomCode, gameId: snapshot.gameId })
+            game.advanceTurn({
+              roomCode,
+              gameId: snapshot.gameId,
+              turnId: snapshot.turnId,
+            })
           }
           onShowScoreboard={() =>
-            game.showScoreboard({ roomCode, gameId: snapshot.gameId })
+            game.showScoreboard({
+              roomCode,
+              gameId: snapshot.gameId,
+              turnId: snapshot.turnId,
+            })
           }
           onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
+          onLeave={async () => {
+            const result = await game.leaveRoom(roomCode)
+            if (result.status === 'success') router.push('/home')
+            return result
+          }}
         />,
       )
     case 'finished':
@@ -199,6 +213,19 @@ function LobbyScreen({
   const isHost = view.player.role === 'host'
   const canStart = view.members.length >= view.minimumPlayers
   const missingPlayers = view.minimumPlayers - view.members.length
+  const [removalTarget, setRemovalTarget] = useState<{
+    playerId: string
+    name: string
+  } | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
+
+  const confirmRemoval = async () => {
+    if (!removalTarget) return
+    setIsRemoving(true)
+    await onRemove(removalTarget.playerId)
+    setIsRemoving(false)
+    setRemovalTarget(null)
+  }
 
   return (
     <main className="min-h-screen px-4 py-7 sm:px-7 lg:px-10">
@@ -251,7 +278,12 @@ function LobbyScreen({
                     <button
                       type="button"
                       className="remove-player"
-                      onClick={() => void onRemove(member.playerId)}
+                      onClick={() =>
+                        setRemovalTarget({
+                          playerId: member.playerId,
+                          name: member.name,
+                        })
+                      }
                       aria-label={`Remove ${member.name}`}
                     >
                       ×
@@ -289,6 +321,16 @@ function LobbyScreen({
             </Button>
           </section>
         </div>
+        <ConfirmationDialog
+          open={removalTarget !== null}
+          title={removalTarget ? `Remove ${removalTarget.name}?` : ''}
+          description={`${removalTarget?.name ?? 'This player'} will leave the lobby and will not be able to rejoin this room.`}
+          cancelLabel="Cancel"
+          confirmLabel="Remove"
+          busy={isRemoving}
+          onCancel={() => setRemovalTarget(null)}
+          onConfirm={() => void confirmRemoval()}
+        />
       </div>
     </main>
   )

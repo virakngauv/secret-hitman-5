@@ -35,6 +35,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     httpServer = createServer()
     socketServer = createGameSocketServer(httpServer, {
       allowedOrigins: [allowedOrigin],
+      leaveIntentGraceMs: 20,
       entryCommandLimits: {
         perPlayerPerMinute: 30,
         perAddressPerMinute: 2,
@@ -78,6 +79,67 @@ describe('Socket.IO Secret Hitman protocol', () => {
     })
     return client
   }
+
+  async function createTwoPlayerLobby() {
+    const host = await connect(hostToken)
+    const guest = await connect(guestToken)
+    const created = await host.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    await guest.emitWithAck('room:join', {
+      roomCode: created.roomCode,
+      name: 'Grace',
+    })
+    return { host, guest, roomCode: created.roomCode }
+  }
+
+  it('finalizes a leave intent after the reconnect grace period', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+
+    await socketServer.receiveLeaveIntent(guestToken, [roomCode], guest.id!)
+    guest.disconnect()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
+      {
+        status: 'lobby',
+        members: [{ name: 'Ada' }],
+      },
+    )
+  })
+
+  it('cancels a pending leave intent when the same identity reconnects', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+
+    await socketServer.receiveLeaveIntent(guestToken, [roomCode], guest.id!)
+    guest.disconnect()
+    const reconnected = await connect(guestToken)
+    expect(
+      await reconnected.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({ status: 'success', snapshot: { status: 'lobby' } })
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
+      {
+        members: [{ name: 'Ada' }, { name: 'Grace' }],
+      },
+    )
+  })
+
+  it('keeps a player when another active tab shares the same identity', async () => {
+    const { guest, roomCode } = await createTwoPlayerLobby()
+    const otherTab = await connect(guestToken)
+    await otherTab.emitWithAck('session:resume', { roomCode })
+
+    await socketServer.receiveLeaveIntent(guestToken, [roomCode], guest.id!)
+    guest.disconnect()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(socketServer.gameServer.snapshot(hostToken, roomCode)).toMatchObject(
+      {
+        members: [{ name: 'Ada' }, { name: 'Grace' }],
+      },
+    )
+  })
 
   it.each([true, false])(
     'trusts the provider header only when explicitly enabled: %s',
@@ -644,7 +706,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       }
       const completed = server.snapshot(guestToken, roomCode)
       expect(server.snapshot(hostToken, roomCode)).toMatchObject({
-        canAdvanceTurn: ending !== 'active',
+        canAdvanceTurn: true,
       })
       const serverGuest = [...socketServer.io.sockets.sockets.values()].find(
         (socket) => socket.data.token === guestToken,
@@ -655,14 +717,9 @@ describe('Socket.IO Secret Hitman protocol', () => {
       guest.disconnect()
       await disconnected
       if (ending === 'active') {
-        expect(
-          await host.emitWithAck('game:advance-turn', {
-            roomCode,
-            gameId: before.gameId,
-          }),
-        ).toEqual({
-          status: 'invalid',
-          message: 'Waiting for players to finish guessing.',
+        expect(server.snapshot(hostToken, roomCode)).toMatchObject({
+          canAdvanceTurn: true,
+          unfinishedPickerCount: 1,
         })
         expect(server.snapshot(guestToken, roomCode)).toEqual(completed)
       }
@@ -686,7 +743,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         throw new Error('Expected resumed guessing snapshot.')
       expect(resumed.snapshot).toEqual(completed)
       expect(server.snapshot(hostToken, roomCode)).toMatchObject({
-        canAdvanceTurn: ending !== 'active',
+        canAdvanceTurn: true,
       })
       if (ending === 'pass') {
         expect(
@@ -800,6 +857,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     await host.emitWithAck('game:advance-turn', {
       roomCode,
       gameId: before.gameId,
+      turnId: before.turnId,
     })
     const next = socketServer.gameServer.snapshot(thirdToken, roomCode)
     if (next.status !== 'guessing') throw new Error('Expected next turn.')
@@ -1011,6 +1069,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         server.advanceTurn(hostToken, {
           roomCode,
           gameId: complete.gameId,
+          turnId: complete.turnId,
         }),
       ).toEqual({ status: 'success' })
     }
@@ -1023,6 +1082,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       await guest.emitWithAck('game:show-scoreboard', {
         roomCode,
         gameId: finalBoard.gameId,
+        turnId: finalBoard.turnId,
       }),
     ).toMatchObject({ status: 'forbidden' })
 
@@ -1036,6 +1096,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       await host.emitWithAck('game:show-scoreboard', {
         roomCode,
         gameId: finalBoard.gameId,
+        turnId: finalBoard.turnId,
       }),
     ).toEqual({ status: 'success' })
     for (const snapshot of await Promise.all(resultSnapshots)) {

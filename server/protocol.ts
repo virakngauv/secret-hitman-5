@@ -59,6 +59,7 @@ export type GameSocketServerOptions = {
   trustDigitalOceanProxy?: boolean
   gameServer?: GameServer
   expirationSweepMs?: number
+  leaveIntentGraceMs?: number
   entryCommandLimits?: EntryCommandLimits
   logger?: Pick<Console, 'info' | 'warn' | 'error'>
 }
@@ -69,6 +70,7 @@ const invalid = (): CommandFailure => ({
 })
 
 const GLOBAL_ENTRY_KEY = 'global'
+export const LEAVE_INTENT_GRACE_MS = 3_000
 
 export function createGameSocketServer(
   httpServer: HttpServer,
@@ -104,6 +106,7 @@ export function createGameSocketServer(
     60_000,
   )
   let acceptingCommands = true
+  const pendingLeaveIntents = new Map<string, ReturnType<typeof setTimeout>>()
 
   const io = new Server<
     ClientToServerEvents,
@@ -154,6 +157,8 @@ export function createGameSocketServer(
         if (!parsed) return acknowledge(invalid())
         if (!parsed.roomCode) return acknowledge({ status: 'success' })
 
+        cancelLeaveIntent(socket.data.token, parsed.roomCode)
+
         const snapshot = gameServer.snapshot(socket.data.token, parsed.roomCode)
         if (isMemberSnapshot(snapshot)) {
           await socket.join(parsed.roomCode)
@@ -189,6 +194,8 @@ export function createGameSocketServer(
         const parsed = parseJoinRoom(payload)
         if (!parsed) return acknowledge(invalid())
 
+        cancelLeaveIntent(socket.data.token, parsed.roomCode)
+
         const result = gameServer.joinRoom(
           socket.data.token,
           parsed.roomCode,
@@ -208,6 +215,7 @@ export function createGameSocketServer(
         const parsed = parseRoomCommand(payload)
         if (!parsed) return acknowledge(invalid())
 
+        cancelLeaveIntent(socket.data.token, parsed.roomCode)
         const result = gameServer.leaveRoom(socket.data.token, parsed.roomCode)
         await socket.leave(parsed.roomCode)
         acknowledge(result)
@@ -328,7 +336,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:advance-turn', acknowledge, () => {
-        const parsed = parseGameCommand(payload)
+        const parsed = parseFinishGuessing(payload)
         if (!parsed) return acknowledge(invalid())
         const result = gameServer.advanceTurn(socket.data.token, parsed)
         acknowledge(result)
@@ -340,7 +348,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:show-scoreboard', acknowledge, () => {
-        const parsed = parseGameCommand(payload)
+        const parsed = parseFinishGuessing(payload)
         if (!parsed) return acknowledge(invalid())
         const result = gameServer.showScoreboard(socket.data.token, parsed)
         acknowledge(result)
@@ -409,6 +417,67 @@ export function createGameSocketServer(
     void emitSnapshots(roomCode).catch((error: unknown) => {
       logFailure('snapshot_broadcast_failed', error)
     })
+  }
+
+  function leaveIntentKey(token: string, roomCode: string) {
+    return `${token}:${roomCode}`
+  }
+
+  function cancelLeaveIntent(token: string, roomCode: string) {
+    const key = leaveIntentKey(token, roomCode)
+    const timer = pendingLeaveIntents.get(key)
+    if (timer) clearTimeout(timer)
+    pendingLeaveIntents.delete(key)
+  }
+
+  async function receiveLeaveIntent(
+    token: string,
+    roomCodes: string[],
+    initiatingSocketId: string,
+  ) {
+    for (const roomCode of roomCodes) {
+      const snapshot = gameServer.snapshot(token, roomCode)
+      if (!isMemberSnapshot(snapshot)) continue
+
+      const sockets = await io.fetchSockets()
+      const hasAnotherSocket = sockets.some(
+        (candidate) =>
+          candidate.id !== initiatingSocketId && candidate.data.token === token,
+      )
+      if (hasAnotherSocket) {
+        cancelLeaveIntent(token, roomCode)
+        continue
+      }
+
+      cancelLeaveIntent(token, roomCode)
+      const key = leaveIntentKey(token, roomCode)
+      const timer = setTimeout(() => {
+        pendingLeaveIntents.delete(key)
+        void finalizeLeaveIntent(token, roomCode, initiatingSocketId).catch(
+          (error: unknown) => {
+            logFailure('leave_intent_failed', error)
+          },
+        )
+      }, options.leaveIntentGraceMs ?? LEAVE_INTENT_GRACE_MS)
+      timer.unref()
+      pendingLeaveIntents.set(key, timer)
+    }
+  }
+
+  async function finalizeLeaveIntent(
+    token: string,
+    roomCode: string,
+    initiatingSocketId: string,
+  ) {
+    const sockets = await io.fetchSockets()
+    const reconnected = sockets.some(
+      (candidate) =>
+        candidate.id !== initiatingSocketId && candidate.data.token === token,
+    )
+    if (reconnected) return
+
+    const result = gameServer.leaveRoom(token, roomCode)
+    if (result.status === 'success') broadcastSnapshots(roomCode)
   }
 
   async function notifyRemovedPlayer(roomCode: string, token: string) {
@@ -510,9 +579,12 @@ export function createGameSocketServer(
     async shutdown() {
       acceptingCommands = false
       clearInterval(sweepTimer)
+      for (const timer of pendingLeaveIntents.values()) clearTimeout(timer)
+      pendingLeaveIntents.clear()
       io.emit('server:shutdown')
       await new Promise<void>((resolve) => io.close(() => resolve()))
     },
+    receiveLeaveIntent,
   }
 }
 

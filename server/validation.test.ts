@@ -7,6 +7,7 @@ import {
   parseFinishGuessing,
   parseHandshakeAuth,
   parseHint,
+  parseLeaveIntentForm,
   parsePlayerName,
   parseRejectHint,
   parseRemovePlayer,
@@ -65,7 +66,7 @@ describe('turn-bound commands', () => {
 
   it('rejects older clients that cannot send the turn-bound payload', () => {
     const token = 'a'.repeat(32)
-    expect(GAME_PROTOCOL_VERSION).toBe(10)
+    expect(GAME_PROTOCOL_VERSION).toBe(11)
     expect(
       parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
     ).toBeNull()
@@ -242,6 +243,37 @@ describe('parseRejectHint', () => {
     ).toBeNull()
     expect(
       parseRejectHint({ roomCode: 'bcdf2', gameId, playerId: 'player 2' }),
+    ).toBeNull()
+  })
+})
+
+describe('parseLeaveIntentForm', () => {
+  it('accepts a bounded authenticated multi-room beacon body', () => {
+    const form = new URLSearchParams({
+      token: 'a'.repeat(32),
+      socketId: 'socket_123',
+    })
+    form.append('roomCode', ' BCDF2 ')
+    form.append('roomCode', 'cdfg3')
+
+    expect(parseLeaveIntentForm(form.toString())).toEqual({
+      token: 'a'.repeat(32),
+      socketId: 'socket_123',
+      roomCodes: ['bcdf2', 'cdfg3'],
+    })
+  })
+
+  it('rejects malformed credentials, socket ids, rooms, and empty room lists', () => {
+    expect(parseLeaveIntentForm('token=bad&socketId=socket_1')).toBeNull()
+    expect(
+      parseLeaveIntentForm(
+        `token=${'a'.repeat(32)}&socketId=bad%20socket&roomCode=bcdf2`,
+      ),
+    ).toBeNull()
+    expect(
+      parseLeaveIntentForm(
+        `token=${'a'.repeat(32)}&socketId=socket_1&roomCode=invalid`,
+      ),
     ).toBeNull()
   })
 })

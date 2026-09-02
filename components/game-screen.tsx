@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { Input } from '@/components/ui/input'
 import {
   CARD_SCORE,
@@ -62,6 +63,14 @@ export function HintPhaseScreen({
   const [isStarting, setIsStarting] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
+  const [removalTarget, setRemovalTarget] = useState<{
+    playerId: string
+    name: string
+    resetsRound: boolean
+  } | null>(null)
+  const [showRejectionNotice, setShowRejectionNotice] = useState(
+    view.hintRejected,
+  )
   const [error, setError] = useState<string | null>(null)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
@@ -117,16 +126,17 @@ export function HintPhaseScreen({
 
   const removePlayer = async (playerId: string, name: string) => {
     const resetsRound = view.hintStatuses.length <= 2
-    const confirmed = window.confirm(
-      resetsRound
-        ? `Remove ${name}? This will leave fewer than two players, end the current round, and return everyone else to the lobby. All current boards, hints, readiness, scores, and turns will be discarded. ${name} will not be able to rejoin this room.`
-        : `Remove ${name}? Their board, submitted hint, readiness, and remaining turn will be removed from this game. They will not be able to rejoin this room.`,
-    )
-    if (!confirmed) return
+    setRemovalTarget({ playerId, name, resetsRound })
+  }
+
+  const confirmRemoval = async () => {
+    if (!removalTarget) return
+    const { playerId, resetsRound } = removalTarget
     setBusyPlayer(playerId)
     setError(null)
     const result = await onRemovePlayer(playerId, resetsRound)
     if (result.status !== 'success') setError(result.message)
+    else setRemovalTarget(null)
     setBusyPlayer(null)
   }
 
@@ -379,6 +389,7 @@ export function HintPhaseScreen({
           {isHost ? (
             <div className="host-control">
               <p className="host-control-label">Host control</p>
+              <OperationalHostNotice view={view} />
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                 Review clues as they arrive, reject any that need revision, or
                 start guessing once everyone is ready.
@@ -413,6 +424,31 @@ export function HintPhaseScreen({
           ) : null}
         </aside>
       </div>
+      <ConfirmationDialog
+        open={showRejectionNotice}
+        eyebrow="Hint update"
+        title="Your hint was rejected"
+        description="The host rejected your hint! You've been given a new board. If you're not sure why your hint was rejected, ask the host!"
+        confirmLabel="Got it"
+        onConfirm={() => setShowRejectionNotice(false)}
+        onCancel={() => setShowRejectionNotice(false)}
+      />
+      <ConfirmationDialog
+        open={removalTarget !== null}
+        title={
+          removalTarget ? `Remove ${removalTarget.name} from this game?` : ''
+        }
+        description={
+          removalTarget?.resetsRound
+            ? `This will leave fewer than two players, end the current round, and return everyone else to the lobby. All current boards, hints, readiness, scores, and turns will be discarded. ${removalTarget.name} will not be able to rejoin this room.`
+            : `${removalTarget?.name ?? 'This player'}'s board, submitted hint, readiness, and remaining turn will be removed from this game. They will not be able to rejoin this room.`
+        }
+        cancelLabel="Cancel"
+        confirmLabel="Remove"
+        busy={busyPlayer !== null}
+        onCancel={() => setRemovalTarget(null)}
+        onConfirm={() => void confirmRemoval()}
+      />
     </GamePageShell>
   )
 }
@@ -422,6 +458,7 @@ export function GuessingScreen({
   onClaimCard,
   onFinishGuessing,
   onRemovePlayer,
+  onLeave,
   onAdvanceTurn,
   onShowScoreboard,
 }: {
@@ -432,13 +469,20 @@ export function GuessingScreen({
   ) => Promise<CommandResult<{ kind: CardKind }>>
   onFinishGuessing: () => Promise<CommandResult>
   onRemovePlayer: (playerId: string) => Promise<CommandResult>
+  onLeave?: () => Promise<CommandResult>
   onAdvanceTurn: () => Promise<CommandResult>
   onShowScoreboard?: () => Promise<CommandResult>
 }) {
   const [busyCard, setBusyCard] = useState<string | null>(null)
   const [isFinishing, setIsFinishing] = useState(false)
   const [isAdvancing, setIsAdvancing] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
   const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
+  const [removalTarget, setRemovalTarget] = useState<{
+    playerId: string
+    name: string
+  } | null>(null)
+  const [confirmAdvance, setConfirmAdvance] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const isClueGiver = view.player.playerId === view.clueGiverId
   const fullyRevealed = view.board.every(
@@ -453,6 +497,7 @@ export function GuessingScreen({
   const canHostAct = view.isFinalTurn
     ? view.canViewScoreboard
     : view.canAdvanceTurn
+  const unfinishedPickerCount = view.unfinishedPickerCount ?? 0
 
   const claim = async (cardId: string) => {
     setBusyCard(cardId)
@@ -477,26 +522,47 @@ export function GuessingScreen({
     setIsFinishing(false)
   }
 
-  const advance = async () => {
+  const performAdvance = async () => {
     setFeedback(null)
     setIsAdvancing(true)
     const result = await (view.isFinalTurn && onShowScoreboard
       ? onShowScoreboard()
       : onAdvanceTurn())
     if (result.status !== 'success') setFeedback(result.message)
+    else setConfirmAdvance(false)
     setIsAdvancing(false)
   }
 
+  const advance = () => {
+    if (unfinishedPickerCount > 0) {
+      setConfirmAdvance(true)
+      return
+    }
+    void performAdvance()
+  }
+
   const removePlayer = async (playerId: string, name: string) => {
-    const confirmed = window.confirm(
-      `Remove ${name}? They will no longer be able to guess or rejoin this room. Their board, clue, turn, and score history will remain in the game.`,
-    )
-    if (!confirmed) return
+    setRemovalTarget({ playerId, name })
+  }
+
+  const confirmRemoval = async () => {
+    if (!removalTarget) return
+    const { playerId } = removalTarget
     setBusyPlayer(playerId)
     setFeedback(null)
     const result = await onRemovePlayer(playerId)
     if (result.status !== 'success') setFeedback(result.message)
+    else setRemovalTarget(null)
     setBusyPlayer(null)
+  }
+
+  const leave = async () => {
+    if (!onLeave) return
+    setFeedback(null)
+    setIsLeaving(true)
+    const result = await onLeave()
+    if (result.status !== 'success') setFeedback(result.message)
+    setIsLeaving(false)
   }
 
   return (
@@ -592,6 +658,16 @@ export function GuessingScreen({
         </section>
 
         <aside className="game-panel game-sidebar">
+          {view.latestActivity ? (
+            <section
+              className="turn-activity"
+              aria-label="Latest turn activity"
+              aria-live="polite"
+            >
+              <p className="host-control-label">Latest activity</p>
+              <p>{view.latestActivity.message}</p>
+            </section>
+          ) : null}
           <h2 className="sidebar-title">Scorecard</h2>
           <ol className="mt-4 grid gap-2">
             {players.map((player) => {
@@ -653,20 +729,21 @@ export function GuessingScreen({
           {view.player.role === 'host' ? (
             <div className="host-control">
               <p className="host-control-label">Host control</p>
+              <OperationalHostNotice view={view} />
               <p
                 id="host-advance-status"
                 role="status"
                 className="mt-1 text-sm text-[var(--muted-foreground)]"
               >
-                {canHostAct
-                  ? view.isFinalTurn
+                {unfinishedPickerCount > 0
+                  ? `${unfinishedPickerCount} ${unfinishedPickerCount === 1 ? 'player is' : 'players are'} still guessing. You can move on with confirmation.`
+                  : view.isFinalTurn
                     ? 'Everyone has finished guessing. Show the final scoreboard when the room is ready.'
-                    : 'Everyone has finished guessing. Advance when the room is ready.'
-                  : 'Waiting for players to finish guessing.'}
+                    : 'Everyone has finished guessing. Advance when the room is ready.'}
               </p>
               <Button
                 className="mt-4 w-full"
-                onClick={() => void advance()}
+                onClick={advance}
                 disabled={isAdvancing || !canHostAct}
                 aria-describedby="host-advance-status"
               >
@@ -678,9 +755,63 @@ export function GuessingScreen({
               </Button>
             </div>
           ) : null}
+          {onLeave ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 w-full"
+              disabled={isLeaving}
+              onClick={() => void leave()}
+            >
+              {isLeaving ? 'Leaving…' : 'Leave room'}
+            </Button>
+          ) : null}
         </aside>
       </div>
+      <ConfirmationDialog
+        open={confirmAdvance}
+        title="Move on from this board?"
+        description={`${unfinishedPickerCount} ${unfinishedPickerCount === 1 ? 'player is' : 'players are'} still guessing. Are you sure you want to move on?`}
+        cancelLabel="Cancel"
+        confirmLabel="Move on"
+        busy={isAdvancing}
+        onCancel={() => setConfirmAdvance(false)}
+        onConfirm={() => void performAdvance()}
+      />
+      <ConfirmationDialog
+        open={removalTarget !== null}
+        title={
+          removalTarget ? `Remove ${removalTarget.name} from this game?` : ''
+        }
+        description={`${removalTarget?.name ?? 'This player'} will no longer be able to guess or rejoin this room. Accepted scores, claims, and completed game history will remain unchanged; any future authored turn will be skipped.`}
+        cancelLabel="Cancel"
+        confirmLabel="Remove"
+        busy={busyPlayer !== null}
+        onCancel={() => setRemovalTarget(null)}
+        onConfirm={() => void confirmRemoval()}
+      />
     </GamePageShell>
+  )
+}
+
+function OperationalHostNotice({
+  view,
+}: {
+  view: HintingView | GuessingView | FinishedView
+}) {
+  if (
+    view.player.role !== 'host' ||
+    view.player.participation !== 'spectator'
+  ) {
+    return null
+  }
+
+  return (
+    <p className="operational-host-notice">
+      You inherited operational host duties because no starting player remains
+      available. You can move the game between phases, but spectator privacy and
+      player-only actions remain unchanged.
+    </p>
   )
 }
 
@@ -793,6 +924,7 @@ export function FinishedScreen({
           </ol>
           {isHost ? (
             <>
+              <OperationalHostNotice view={view} />
               <p className="form-message" role={error ? 'alert' : 'status'}>
                 {error ??
                   'Return everyone to the lobby before starting another game.'}

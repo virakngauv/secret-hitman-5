@@ -40,6 +40,39 @@ describe('game server HTTP process', () => {
     await expect(response.json()).resolves.toEqual({ status: 'ok' })
   })
 
+  it('accepts valid leave-intent beacons only from allowed origins', async () => {
+    server = startGameServer({
+      port: 0,
+      host: '127.0.0.1',
+      allowedOrigins: ['http://localhost:3100'],
+    })
+    await new Promise<void>((resolve) =>
+      server?.httpServer.once('listening', resolve),
+    )
+    const address = server.httpServer.address() as AddressInfo
+    const endpoint = `http://127.0.0.1:${address.port}/leave-intent`
+    const body = new URLSearchParams({
+      token: 'a'.repeat(32),
+      socketId: 'socket-1',
+      roomCode: 'bcdf2',
+    })
+
+    const accepted = await fetch(endpoint, {
+      method: 'POST',
+      headers: { Origin: 'http://localhost:3100' },
+      body,
+    })
+    expect(accepted.status).toBe(202)
+    await expect(accepted.json()).resolves.toEqual({ status: 'accepted' })
+
+    const forbidden = await fetch(endpoint, {
+      method: 'POST',
+      headers: { Origin: 'https://untrusted.example' },
+      body,
+    })
+    expect(forbidden.status).toBe(403)
+  })
+
   it('does not trust an invalid Host header when parsing health probes', async () => {
     server = startGameServer({ port: 0, host: '127.0.0.1' })
     await new Promise<void>((resolve) =>

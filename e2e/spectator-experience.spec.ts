@@ -80,6 +80,9 @@ test.describe('spectator experience audit', () => {
         .getAttribute('data-card-id')
       if (!firstTargetId) throw new Error('Expected a target on Ada’s board.')
       await guest.locator(`button[data-card-id="${firstTargetId}"]`).click()
+      await expect(spectator.getByLabel('Latest turn activity')).toContainText(
+        /Grace found target/i,
+      )
       await expect(
         spectator.locator(`button[data-card-id="${firstTargetId}"]`),
       ).toHaveAttribute('data-card-kind', 'target')
@@ -88,6 +91,9 @@ test.describe('spectator experience audit', () => {
       ).toContainText('Grace')
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
       await third.getByRole('button', { name: 'I’m done guessing' }).click()
+      await expect(spectator.getByLabel('Latest turn activity')).toContainText(
+        /Linus passed and is done guessing/i,
+      )
       await expect(
         host.getByRole('button', { name: 'Next hint' }),
       ).toBeEnabled()
@@ -111,6 +117,9 @@ test.describe('spectator experience audit', () => {
         .getAttribute('data-card-id')
       if (!civilianId) throw new Error('Expected a civilian on Grace’s board.')
       await host.locator(`button[data-card-id="${civilianId}"]`).click()
+      await expect(spectator.getByLabel('Latest turn activity')).toContainText(
+        /Ada found civilian/i,
+      )
       await third.getByRole('button', { name: 'I’m done guessing' }).click()
       await expect(
         spectator.locator(`button[data-card-id="${civilianId}"]`),
@@ -127,6 +136,9 @@ test.describe('spectator experience audit', () => {
         .getAttribute('data-card-id')
       if (!assassinId) throw new Error('Expected an assassin on Linus’s board.')
       await host.locator(`button[data-card-id="${assassinId}"]`).click()
+      await expect(spectator.getByLabel('Latest turn activity')).toContainText(
+        /Ada found assassin.*board is complete/i,
+      )
       await expect(
         spectator.getByLabel('Completed and fully revealed board'),
       ).toBeVisible()
@@ -151,6 +163,9 @@ test.describe('spectator experience audit', () => {
       await expect(
         spectator.getByLabel('Completed and fully revealed board'),
       ).toBeVisible()
+      await expect(spectator.getByLabel('Latest turn activity')).toContainText(
+        /Ada found assassin.*board is complete/i,
+      )
       await expect(
         spectator.getByRole('button', { name: 'View scoreboard' }),
       ).toHaveCount(0)

@@ -15,6 +15,7 @@ import {
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
   GAME_PROTOCOL_VERSION,
+  type AdvanceTurnPayload,
   type CardKind,
   type ClaimCardPayload,
   type ClientToServerEvents,
@@ -55,8 +56,8 @@ type GameSocketContextValue = {
     payload: ClaimCardPayload,
   ) => Promise<CommandResult<{ kind: CardKind }>>
   finishGuessing: (payload: FinishGuessingPayload) => Promise<CommandResult>
-  advanceTurn: (payload: GameCommandPayload) => Promise<CommandResult>
-  showScoreboard: (payload: GameCommandPayload) => Promise<CommandResult>
+  advanceTurn: (payload: AdvanceTurnPayload) => Promise<CommandResult>
+  showScoreboard: (payload: AdvanceTurnPayload) => Promise<CommandResult>
   returnToLobby: (payload: GameCommandPayload) => Promise<CommandResult>
 }
 
@@ -122,6 +123,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       autoConnect: true,
       reconnection: true,
     })
+    const leaveIntentUrl = new URL('/leave-intent', gameServerUrl).toString()
     socketRef.current = socket
     let resumeRetryTimer: ReturnType<typeof setTimeout> | null = null
     let resumeRetryAttempts = 0
@@ -204,12 +206,32 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     const handleShutdown = () => {
       markDisconnected()
     }
+    const handlePageHide = (event: PageTransitionEvent) => {
+      if (event.persisted || !socket.id) return
+      const roomCodes = [...watchedRoomsRef.current.keys()]
+      if (roomCodes.length === 0) return
+
+      const body = new URLSearchParams({
+        token: clientToken,
+        socketId: socket.id,
+      })
+      for (const roomCode of roomCodes) body.append('roomCode', roomCode)
+      const sent = navigator.sendBeacon?.(leaveIntentUrl, body) ?? false
+      if (!sent) {
+        void fetch(leaveIntentUrl, {
+          method: 'POST',
+          body,
+          keepalive: true,
+        }).catch(() => {})
+      }
+    }
 
     socket.on('connect', resumeWatchedRooms)
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectError)
     socket.on('room:snapshot', receiveSnapshot)
     socket.on('server:shutdown', handleShutdown)
+    window.addEventListener('pagehide', handlePageHide)
 
     if (socket.connected) resumeWatchedRooms()
 
@@ -220,6 +242,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       receiveSnapshotRef.current = () => {}
       resumeWatchedRoomsRef.current = () => {}
       clearResumeRetry()
+      window.removeEventListener('pagehide', handlePageHide)
       setSnapshots({})
       socket.disconnect()
     }
@@ -350,14 +373,14 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     [],
   )
   const advanceTurn = useCallback(
-    async (payload: GameCommandPayload): Promise<CommandResult> =>
+    async (payload: AdvanceTurnPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:advance-turn', payload),
       ),
     [],
   )
   const showScoreboard = useCallback(
-    async (payload: GameCommandPayload): Promise<CommandResult> =>
+    async (payload: AdvanceTurnPayload): Promise<CommandResult> =>
       await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
         socket.emitWithAck('game:show-scoreboard', payload),
       ),

@@ -304,13 +304,23 @@ test.describe('Secret Hitman single round', () => {
       await expect(guest.locator('.score-value')).toHaveText(['3', '3'])
 
       const nextHint = host.getByRole('button', { name: 'Next hint' })
-      await expect(nextHint).toBeDisabled()
+      await expect(nextHint).toBeEnabled()
       await expect(
-        host.getByText('Waiting for players to finish guessing.'),
+        host.getByText(
+          '1 player is still guessing. You can move on with confirmation.',
+        ),
       ).toBeVisible()
       await host.reload()
       await guest.reload()
-      await expect(nextHint).toBeDisabled()
+      await expect(nextHint).toBeEnabled()
+      await nextHint.click()
+      await expect(
+        host.getByRole('alertdialog', { name: 'Move on from this board?' }),
+      ).toContainText(
+        '1 player is still guessing. Are you sure you want to move on?',
+      )
+      await host.getByRole('button', { name: 'Cancel' }).click()
+      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
       await expect(nextHint).toBeEnabled()
       await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
@@ -318,7 +328,7 @@ test.describe('Secret Hitman single round', () => {
       await expect(host.getByText('Garden', { exact: true })).toBeVisible()
       await expect(
         host.getByRole('button', { name: 'View scoreboard' }),
-      ).toBeDisabled()
+      ).toBeEnabled()
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await expect(
         host.getByRole('button', { name: 'View scoreboard' }),
@@ -410,6 +420,12 @@ test.describe('Secret Hitman single round', () => {
 
       await host.getByRole('button', { name: "Reject Linus's hint" }).click()
       await expect(
+        late.getByRole('alertdialog', { name: 'Your hint was rejected' }),
+      ).toContainText(
+        "The host rejected your hint! You've been given a new board.",
+      )
+      await late.getByRole('button', { name: 'Got it' }).click()
+      await expect(
         late.getByText(
           'The host rejected this hint. Your board was refreshed; create and lock in a new hint.',
         ),
@@ -424,9 +440,17 @@ test.describe('Secret Hitman single round', () => {
       await makeHint(guest, 'Garden', 2)
       await expect(late.getByLabel("Grace's hint: Garden, 2")).toBeVisible()
 
-      host.once('dialog', (dialog) => dialog.accept())
       await host
         .getByRole('button', { name: 'Remove Grace from this game' })
+        .click()
+      await expect(
+        host.getByRole('alertdialog', {
+          name: 'Remove Grace from this game?',
+        }),
+      ).toContainText(/board, submitted hint, readiness, and remaining turn/i)
+      await host
+        .getByRole('alertdialog', { name: 'Remove Grace from this game?' })
+        .getByRole('button', { name: 'Remove', exact: true })
         .click()
       await expect(host.getByText('2/2')).toBeVisible()
       await expect(guest.getByText(/host removed this browser/i)).toBeVisible()
@@ -439,6 +463,124 @@ test.describe('Secret Hitman single round', () => {
       await expect(late.getByText('Turn 1 of 2')).toBeVisible()
     } finally {
       await Promise.all(contexts.map((context) => context.close()))
+    }
+  })
+
+  test('removes a guessing participant, preserves history, and skips their future turn', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000)
+    const contexts: BrowserContext[] = []
+    try {
+      const host = await newPlayer(browser, contexts)
+      const guest = await newPlayer(browser, contexts)
+      const removed = await newPlayer(browser, contexts)
+
+      await host.goto('/home')
+      await host.getByRole('link', { name: 'Create a room' }).click()
+      await host.getByLabel('Name').fill('Ada')
+      await host.getByRole('button', { name: 'Create', exact: true }).click()
+      await expect(host).toHaveURL(/\/[a-z2-9]{5}$/)
+      const roomCode = new URL(host.url()).pathname.slice(1)
+      await joinRoom(guest, roomCode, 'Grace')
+      await joinRoom(removed, roomCode, 'Linus')
+      await host.getByRole('button', { name: 'Start game' }).click()
+      await makeHint(host, 'Orbit', 1)
+      await makeHint(guest, 'Garden', 1)
+      await makeHint(removed, 'Metal', 1)
+      await host.getByRole('button', { name: 'Start guessing' }).click()
+
+      await host
+        .getByRole('button', { name: 'Remove Linus from this game' })
+        .click()
+      await expect(
+        host.getByRole('alertdialog', {
+          name: 'Remove Linus from this game?',
+        }),
+      ).toContainText(/future authored turn will be skipped/i)
+      await host
+        .getByRole('alertdialog', { name: 'Remove Linus from this game?' })
+        .getByRole('button', { name: 'Remove', exact: true })
+        .click()
+      await expect(
+        removed.getByText(/host removed this browser/i),
+      ).toBeVisible()
+      await expect(host.getByText('Turn 1 of 2')).toBeVisible()
+
+      await host.getByRole('button', { name: 'Next hint' }).click()
+      await expect(
+        host.getByRole('alertdialog', { name: 'Move on from this board?' }),
+      ).toContainText('1 player is still guessing')
+      await host.getByRole('button', { name: 'Move on' }).click()
+      await expect(
+        host.getByRole('heading', { name: 'Grace is the clue-giver' }),
+      ).toBeVisible()
+      await expect(host.getByText('Turn 2 of 2')).toBeVisible()
+      await expect(host.getByText('Linus', { exact: true })).toBeVisible()
+      await expect(host.getByText('No longer active')).toBeVisible()
+
+      await host.getByRole('button', { name: 'I’m done guessing' }).click()
+      await host.getByRole('button', { name: 'View scoreboard' }).click()
+      await expect(host.getByText('Final standings')).toBeVisible()
+      await expect(host.getByText('Linus', { exact: true })).toBeVisible()
+      await host.getByRole('button', { name: 'Return to lobby' }).click()
+      await host.getByRole('button', { name: 'Leave room' }).click()
+      await expect(host).toHaveURL(/\/home$/)
+      await guest.getByRole('button', { name: 'Leave room' }).click()
+      await expect(guest).toHaveURL(/\/home$/)
+      await removed.goto('/home')
+    } finally {
+      for (const context of contexts) await context.close()
+    }
+  })
+
+  test('explains spectator host fallback after every starting player leaves', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000)
+    const contexts: BrowserContext[] = []
+    try {
+      const host = await newPlayer(browser, contexts)
+      const guest = await newPlayer(browser, contexts)
+      const spectator = await newPlayer(browser, contexts)
+
+      await host.goto('/home')
+      await host.getByRole('link', { name: 'Create a room' }).click()
+      await host.getByLabel('Name').fill('Ada')
+      await host.getByRole('button', { name: 'Create', exact: true }).click()
+      await expect(host).toHaveURL(/\/[a-z2-9]{5}$/)
+      const roomCode = new URL(host.url()).pathname.slice(1)
+      await joinRoom(guest, roomCode, 'Grace')
+      await host.getByRole('button', { name: 'Start game' }).click()
+      await makeHint(host, 'Orbit', 1)
+      await makeHint(guest, 'Garden', 1)
+      await host.getByRole('button', { name: 'Start guessing' }).click()
+      await joinRoom(spectator, roomCode, 'Sofia')
+
+      await host.getByRole('button', { name: 'Leave room' }).click()
+      await expect(host).toHaveURL(/\/home$/)
+      await expect(guest.getByText('Host control')).toBeVisible()
+      await guest.getByRole('button', { name: 'Leave room' }).click()
+      await expect(guest).toHaveURL(/\/home$/)
+
+      await expect(
+        spectator.getByText(/inherited operational host duties/i),
+      ).toContainText(
+        /spectator privacy and player-only actions remain unchanged/i,
+      )
+      await expect(
+        spectator.getByRole('button', { name: 'View scoreboard' }),
+      ).toBeEnabled()
+      await expect(
+        spectator.getByRole('button', { name: 'I’m done guessing' }),
+      ).toHaveCount(0)
+      await spectator.getByRole('button', { name: 'View scoreboard' }).click()
+      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await spectator.getByRole('button', { name: 'Return to lobby' }).click()
+      await spectator.getByRole('button', { name: 'Leave room' }).click()
+      await expect(spectator).toHaveURL(/\/home$/)
+    } finally {
+      for (const context of contexts) await context.close()
     }
   })
 })
