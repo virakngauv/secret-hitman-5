@@ -525,9 +525,11 @@ export function GuessingScreen({
           <div
             className="word-grid"
             aria-label={
-              fullyRevealed
+              view.turnSettled
                 ? 'Completed and fully revealed board'
-                : 'Current guessing board'
+                : fullyRevealed
+                  ? 'Fully revealed board'
+                  : 'Current guessing board'
             }
           >
             {view.board.map((card) => (

@@ -549,10 +549,12 @@ describe('GameRoom single-round flow', () => {
       status: 'success',
     })
     expect(guessing(room).canAdvanceTurn).toBe(true)
+    expect(guessing(room).turnSettled).toBe(true)
     expect(guessing(room).turnNumber).toBe(1)
     expect(guessing(room, guestToken).canAdvanceTurn).toBe(false)
     const settledSpectator = guessing(room, spectator)
     expect(settledSpectator.canAdvanceTurn).toBe(false)
+    expect(settledSpectator.turnSettled).toBe(true)
     expect(
       settledSpectator.board.every(
         ({ revealedKind, disabled }) => revealedKind !== null && disabled,

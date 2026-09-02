@@ -734,6 +734,7 @@ export class GameRoom {
       hint: clueSeat.hint,
       hintNumber: clueSeat.targetCount,
       boardCompleted: this.requireGame().turnCompleted,
+      turnSettled,
       board,
       turnPlayers: this.gamePlayers().map((player) => ({
         playerId: player.playerId,
