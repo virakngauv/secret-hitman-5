@@ -381,5 +381,31 @@ describe('RoomLobby invite prompt', () => {
     expect(
       screen.getByRole('heading', { name: 'You were removed' }),
     ).toBeVisible()
+    expect(
+      screen.getByRole('link', { name: 'Back to home' }).parentElement,
+    ).toHaveClass('mx-auto', 'max-w-xs')
+  })
+
+  it('explains an early round ending before revealing the returned lobby', async () => {
+    const user = userEvent.setup()
+    mocks.view = { ...lobbyView(), lobbyNotice: 'player_left' }
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'The round ended early',
+    })
+    expect(dialog).toHaveTextContent(
+      /another player left.*fewer than two players.*round was ended.*returned to the lobby/i,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Return to lobby' }),
+    ).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Assemble the room.' }),
+    ).toBeVisible()
   })
 })

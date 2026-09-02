@@ -150,6 +150,7 @@ describe('GameRoom single-round flow', () => {
     expect(room.snapshotFor(hostToken)).toMatchObject({
       status: 'lobby',
       minimumPlayers: 2,
+      lobbyNotice: 'player_left',
       members: [{ name: 'Ada', role: 'host' }],
     })
     expect(room.start(hostToken, 1_004)).toMatchObject({
@@ -167,6 +168,7 @@ describe('GameRoom single-round flow', () => {
     expect(room.snapshotFor(guestToken)).toMatchObject({
       status: 'lobby',
       minimumPlayers: 2,
+      lobbyNotice: 'player_left',
       members: [{ name: 'Grace', role: 'host' }],
     })
     expect(room.start(guestToken, 1_004)).toMatchObject({
@@ -1565,6 +1567,7 @@ describe('GameRoom single-round flow', () => {
         },
       ],
     })
+    expect(room.snapshotFor(hostToken)).not.toHaveProperty('lobbyNotice')
     expect(room.snapshotFor(thirdToken)).toEqual({
       status: 'removed_from_room',
       roomCode: room.code,

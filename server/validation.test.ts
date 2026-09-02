@@ -66,7 +66,7 @@ describe('turn-bound commands', () => {
 
   it('rejects older clients that cannot send the turn-bound payload', () => {
     const token = 'a'.repeat(32)
-    expect(GAME_PROTOCOL_VERSION).toBe(11)
+    expect(GAME_PROTOCOL_VERSION).toBe(12)
     expect(
       parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
     ).toBeNull()

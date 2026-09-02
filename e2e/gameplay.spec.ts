@@ -454,6 +454,20 @@ test.describe('Secret Hitman single round', () => {
         .click()
       await expect(host.getByText('2/2')).toBeVisible()
       await expect(guest.getByText(/host removed this browser/i)).toBeVisible()
+      const removedHomeLink = guest.getByRole('link', {
+        name: 'Back to home',
+      })
+      const removedHomeBox = await removedHomeLink.boundingBox()
+      const removedViewport = guest.viewportSize()
+      expect(removedHomeBox).not.toBeNull()
+      expect(removedViewport).not.toBeNull()
+      expect(
+        Math.abs(
+          removedHomeBox!.x +
+            removedHomeBox!.width / 2 -
+            removedViewport!.width / 2,
+        ),
+      ).toBeLessThan(2)
       await expect(
         host.getByRole('button', { name: 'Start guessing' }),
       ).toBeEnabled()
@@ -531,6 +545,51 @@ test.describe('Secret Hitman single round', () => {
       await removed.goto('/home')
     } finally {
       for (const context of contexts) await context.close()
+    }
+  })
+
+  test('explains why a two-player hinting round returns to the lobby', async ({
+    browser,
+  }) => {
+    test.setTimeout(60_000)
+    const contexts: BrowserContext[] = []
+    try {
+      const host = await newPlayer(browser, contexts)
+      const guest = await newPlayer(browser, contexts)
+
+      await host.goto('/home')
+      await host.getByRole('link', { name: 'Create a room' }).click()
+      await host.getByLabel('Name').fill('Ada')
+      await host.getByRole('button', { name: 'Create', exact: true }).click()
+      await expect(host).toHaveURL(/\/[a-z2-9]{5}$/)
+      const roomCode = new URL(host.url()).pathname.slice(1)
+      await joinRoom(guest, roomCode, 'Grace')
+      await host.getByRole('button', { name: 'Start game' }).click()
+
+      await guest.getByRole('button', { name: 'Leave room' }).click()
+      await expect(guest).toHaveURL(/\/home$/)
+
+      const dialog = host.getByRole('alertdialog', {
+        name: 'The round ended early',
+      })
+      await expect(dialog).toContainText(
+        /another player left.*fewer than two players.*returned to the lobby/i,
+      )
+      const returnToLobby = dialog.getByRole('button', {
+        name: 'Return to lobby',
+      })
+      await expect(returnToLobby).toBeFocused()
+      await returnToLobby.click()
+
+      await expect(dialog).toHaveCount(0)
+      await expect(
+        host.getByRole('heading', { name: 'Assemble the room.' }),
+      ).toBeVisible()
+      await expect(
+        host.getByRole('button', { name: 'Start game' }),
+      ).toBeDisabled()
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()))
     }
   })
 

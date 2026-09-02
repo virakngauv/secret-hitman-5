@@ -218,6 +218,8 @@ function LobbyScreen({
     name: string
   } | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
+  const [roundResetNoticeDismissed, setRoundResetNoticeDismissed] =
+    useState(false)
 
   const confirmRemoval = async () => {
     if (!removalTarget) return
@@ -321,6 +323,17 @@ function LobbyScreen({
             </Button>
           </section>
         </div>
+        <ConfirmationDialog
+          open={
+            view.lobbyNotice === 'player_left' && !roundResetNoticeDismissed
+          }
+          eyebrow="Round update"
+          title="The round ended early"
+          description="Another player left, leaving fewer than two players in the game. The current round was ended and everyone remaining was returned to the lobby. Invite another player to start a new game."
+          confirmLabel="Return to lobby"
+          onCancel={() => {}}
+          onConfirm={() => setRoundResetNoticeDismissed(true)}
+        />
         <ConfirmationDialog
           open={removalTarget !== null}
           title={removalTarget ? `Remove ${removalTarget.name}?` : ''}
@@ -426,7 +439,11 @@ function RoomMessage({
         </span>
         <h1 className="mt-5 text-4xl font-black tracking-tight">{title}</h1>
         <p className="mt-3 text-[var(--muted-foreground)]">{body}</p>
-        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+        <div
+          className={`mt-7 grid gap-3 ${
+            showRoomRecovery ? 'sm:grid-cols-2' : 'mx-auto max-w-xs'
+          }`}
+        >
           <Button asChild>
             <Link href="/home">Back to home</Link>
           </Button>

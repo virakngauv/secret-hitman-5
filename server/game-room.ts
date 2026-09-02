@@ -45,6 +45,7 @@ type Member = {
   joinedAt: number
   active: boolean
   departedGame: boolean
+  lobbyNotice?: 'player_left'
   game: GameSeat | null
 }
 
@@ -186,7 +187,7 @@ export class GameRoom {
       if (this.phase === 'hinting') {
         this.removeGameSeat(member)
         if (this.gamePlayers().length < MIN_STARTING_PLAYERS) {
-          this.resetRoundToLobby()
+          this.resetRoundToLobby('player_left')
         }
       }
       if (this.phase === 'guessing') this.departGuessingPlayer(member)
@@ -264,12 +265,13 @@ export class GameRoom {
     return { status: 'success', removedToken: target.token }
   }
 
-  private resetRoundToLobby() {
+  private resetRoundToLobby(lobbyNotice?: Member['lobbyNotice']) {
     this.phase = 'lobby'
     this.game = null
     for (const member of this.members) {
       member.participation = 'player'
       member.departedGame = false
+      member.lobbyNotice = member.active ? lobbyNotice : undefined
       member.game = null
     }
     this.commandResults.clear()
@@ -308,6 +310,7 @@ export class GameRoom {
     const seed = `${this.initialSeed}:${now}`
     players.forEach((member, position) => {
       member.participation = 'player'
+      member.lobbyNotice = undefined
       member.game = {
         position,
         score: 0,
@@ -741,7 +744,12 @@ export class GameRoom {
     }
 
     if (this.phase === 'lobby') {
-      return { status: 'lobby', minimumPlayers: MIN_STARTING_PLAYERS, ...base }
+      return {
+        status: 'lobby',
+        minimumPlayers: MIN_STARTING_PLAYERS,
+        ...(member.lobbyNotice ? { lobbyNotice: member.lobbyNotice } : {}),
+        ...base,
+      }
     }
 
     if (this.phase === 'hinting') {
@@ -902,6 +910,7 @@ export class GameRoom {
       joinedAt,
       active: true,
       departedGame: false,
+      lobbyNotice: undefined,
       game: null,
     }
   }

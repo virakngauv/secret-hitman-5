@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 11 as const
+export const GAME_PROTOCOL_VERSION = 12 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -81,7 +81,11 @@ export type RoomSnapshot =
   | { status: 'expired'; roomCode: string }
   | { status: 'joinable'; roomCode: string; joinsAsSpectator: boolean }
   | { status: 'removed_from_room'; roomCode: string }
-  | ({ status: 'lobby'; minimumPlayers: number } & MemberSnapshotBase)
+  | ({
+      status: 'lobby'
+      minimumPlayers: number
+      lobbyNotice?: 'player_left'
+    } & MemberSnapshotBase)
   | ({
       status: 'hinting'
       hintStatuses: HintStatus[]
