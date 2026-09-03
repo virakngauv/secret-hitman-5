@@ -41,7 +41,9 @@ This starts:
 
 Both servers fall back to `127.0.0.1` when no LAN address exists. Set `HOST`
 to override the address both bind to — `HOST=127.0.0.1 pnpm dev` keeps
-everything on loopback.
+everything on loopback. Because the servers bind to a specific address,
+`http://localhost:3000` and `http://127.0.0.1:3000` stop answering on the dev
+machine — open the printed URL instead.
 
 ## Verification
 

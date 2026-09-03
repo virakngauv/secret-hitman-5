@@ -33,7 +33,7 @@ describe('dev host resolution', () => {
     const result = devHost({ HOST: '0.0.0.0' })
     expect(result.status).toBe(0)
     expect(result.stdout.trim()).toMatch(
-      /^(0\.0\.0\.0|((10|172\.(1[6-9]|2\d|3[01])|192\.168)(\.\d{1,3}){2}))$/,
+      /^(0\.0\.0\.0|(10(\.\d{1,3}){3}|(172\.(1[6-9]|2\d|3[01])|192\.168)(\.\d{1,3}){2}))$/,
     )
   })
 })
