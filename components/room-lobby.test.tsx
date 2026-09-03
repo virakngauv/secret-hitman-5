@@ -314,14 +314,20 @@ describe('RoomLobby invite prompt', () => {
       /Everyone who is here when the host starts|Late arrivals can still watch as spectators/i,
     )
     const roster = screen.getByRole('list', { name: 'Players in this room' })
+    const roomCard = roster.closest('.game-panel') as HTMLElement
     const hostControls = screen.getByRole('region', { name: 'Host controls' })
     expect(within(roster).queryByRole('button')).not.toBeInTheDocument()
     expect(
       within(hostControls).getByRole('button', { name: 'Remove Grace' }),
     ).toBeVisible()
+    // Start game lives at the bottom of the room card, not the host card.
+    expect(roomCard).not.toBe(hostControls)
     expect(
-      within(hostControls).getByRole('button', { name: 'Start game' }),
+      within(roomCard).getByRole('button', { name: 'Start game' }),
     ).toBeEnabled()
+    expect(
+      within(hostControls).queryByRole('button', { name: 'Start game' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText('Ready when the host is.'),
     ).not.toBeInTheDocument()
@@ -335,6 +341,9 @@ describe('RoomLobby invite prompt', () => {
     const roster = screen.getByRole('list', { name: 'Players in this room' })
     expect(within(roster).getAllByRole('listitem')).toHaveLength(2)
     expect(within(roster).queryByRole('button')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Start game' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('region', { name: 'Host controls' }),
     ).not.toBeInTheDocument()
@@ -383,7 +392,7 @@ describe('RoomLobby invite prompt', () => {
     rendered.rerender(<RoomLobby roomCode="bcdf2" />)
 
     expect(screen.getByLabelText('Hint submission prompt')).toHaveTextContent(
-      'Submit your hint',
+      'Select 1-5 targets. Type your hint. Submit.',
     )
     expect(
       screen.queryByRole('heading', { name: 'Final standings' }),

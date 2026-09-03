@@ -1,6 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Ref,
+} from 'react'
 
 import { HostControlCard } from '@/components/host-control-card'
 import { LeaveRoomControl } from '@/components/leave-room-control'
@@ -174,64 +181,14 @@ export function HintPhaseScreen({
                   className="hint-display"
                   aria-label="Hint submission prompt"
                 >
-                  <p className="hint-display-text">Submit your hint</p>
+                  <p className="hint-display-text hint-display-prompt">
+                    <span className="hint-prompt-line">Select 1-5 targets.</span>{' '}
+                    <span className="hint-prompt-line">
+                      Type your hint. Submit.
+                    </span>
+                  </p>
                 </section>
               )}
-
-              <section aria-label="Hint controls">
-                <div className="hint-controls">
-                  <div>
-                    <label className="sr-only" htmlFor="hint">
-                      Your hint
-                    </label>
-                    <Input
-                      id="hint"
-                      value={hint}
-                      onChange={(event) => {
-                        setHint(event.target.value)
-                        setHintActionError(null)
-                      }}
-                      maxLength={40}
-                      placeholder="Type your hint"
-                      autoComplete="off"
-                      disabled={view.hintSubmitted}
-                      readOnly={isSubmitting || isUnlocking}
-                      className="h-13 rounded-2xl text-lg"
-                    />
-                  </div>
-                  {view.hintSubmitted ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-10 w-auto justify-self-end px-5"
-                      onClick={() => void unlock()}
-                      disabled={isUnlocking}
-                    >
-                      {isUnlocking ? 'Editing…' : 'Edit'}
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-10 w-auto justify-self-end px-5"
-                      onClick={() => void submit()}
-                      disabled={
-                        isSubmitting ||
-                        selected.size < MIN_TARGET_COUNT ||
-                        !hint.trim()
-                      }
-                    >
-                      {isSubmitting ? 'Submitting…' : 'Submit'}
-                    </Button>
-                  )}
-                </div>
-
-                {hintActionError ? (
-                  <p className="action-error hint-control-error" role="alert">
-                    {hintActionError}
-                  </p>
-                ) : null}
-              </section>
 
               <div className="word-grid" aria-label="Your twelve word board">
                 {view.board.map((card) => {
@@ -311,6 +268,78 @@ export function HintPhaseScreen({
                   )
                 })}
               </div>
+
+              <section aria-label="Hint controls">
+                <div className="hint-controls">
+                  <div>
+                    <label className="sr-only" htmlFor="hint">
+                      Your hint
+                    </label>
+                    <Input
+                      id="hint"
+                      value={hint}
+                      onChange={(event) => {
+                        setHint(event.target.value.toUpperCase())
+                        setHintActionError(null)
+                      }}
+                      maxLength={40}
+                      placeholder="Type your hint"
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      disabled={view.hintSubmitted}
+                      readOnly={isSubmitting || isUnlocking}
+                      className={cn(
+                        'h-13 rounded-2xl text-lg',
+                        view.hintSubmitted && 'uppercase',
+                      )}
+                    />
+                  </div>
+                  {view.hintSubmitted ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 w-auto justify-self-end px-5"
+                      onClick={() => void unlock()}
+                      disabled={isUnlocking}
+                    >
+                      {isUnlocking ? 'Editing…' : 'Edit'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 w-auto justify-self-end px-5"
+                      onClick={() => void submit()}
+                      disabled={
+                        isSubmitting ||
+                        selected.size < MIN_TARGET_COUNT ||
+                        !hint.trim()
+                      }
+                    >
+                      {isSubmitting ? 'Submitting…' : 'Submit'}
+                    </Button>
+                  )}
+                </div>
+
+                {hintActionError ? (
+                  <p className="action-error hint-control-error" role="alert">
+                    {hintActionError}
+                  </p>
+                ) : null}
+              </section>
+
+              {isHost ? (
+                <div className="board-actions">
+                  <div className="board-action-group">
+                    <Button
+                      onClick={() => void startGuessing()}
+                      disabled={!view.allHintsSubmitted || isStarting}
+                    >
+                      {isStarting ? 'Starting…' : 'Start guessing'}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </>
           )}
         </section>
@@ -351,6 +380,7 @@ export function HintPhaseScreen({
                     key={member.playerId}
                     name={member.name}
                     detail={hintDetail}
+                    detailClassName={hintDetail ? 'hint-detail' : undefined}
                     detailSuffix={
                       hintDetail && hintStatus
                         ? String(hintStatus.hintNumber)
@@ -396,7 +426,10 @@ export function HintPhaseScreen({
                     >
                       <PlayerSummary
                         name={player.name}
-                        detail={hintDetail}
+                        detail={hintDetail ?? 'No hint submitted'}
+                        detailClassName={
+                          hintDetail ? 'hint-detail' : 'host-no-hint-detail'
+                        }
                         detailSuffix={
                           hintDetail ? String(player.hintNumber) : undefined
                         }
@@ -442,13 +475,6 @@ export function HintPhaseScreen({
                   {hostActionError}
                 </p>
               ) : null}
-              <Button
-                className="mt-4 w-full"
-                disabled={!view.allHintsSubmitted || isStarting}
-                onClick={() => void startGuessing()}
-              >
-                {isStarting ? 'Starting…' : 'Start guessing'}
-              </Button>
             </HostControlCard>
           ) : null}
           <LeaveRoomControl
@@ -503,6 +529,116 @@ function HintRejectionNotice() {
   )
 }
 
+const ROSTER_REORDER_MS = 260
+const ROSTER_MOVE_TOLERANCE_PX = 0.5
+
+type RosterEntryPosition = { left: number; top: number }
+
+/* FLIP reorder: after React writes the new roster order, animate each
+   card from its previous slot so score changes glide into place. The
+   strip scrolls horizontally on desktop and vertically on mobile, so
+   both axes are measured and animated. */
+function useRosterReorder(orderKey: string) {
+  const rosterRef = useRef<HTMLUListElement | null>(null)
+  const scrollLeftRef = useRef(0)
+  const entryRefs = useRef(new Map<string, HTMLLIElement>())
+  const previousPositions = useRef(new Map<string, RosterEntryPosition>())
+  const animations = useRef(new Map<string, Animation>())
+  const refCache = useRef(
+    new Map<string, (element: HTMLLIElement | null) => void>(),
+  )
+
+  useEffect(() => {
+    const roster = rosterRef.current
+    if (!roster) return
+    const onScroll = () => {
+      scrollLeftRef.current = roster.scrollLeft
+    }
+    roster.addEventListener('scroll', onScroll, { passive: true })
+    return () => roster.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useLayoutEffect(() => {
+    const roster = rosterRef.current
+    if (!roster) return
+
+    // Reorders can still drag the strip's scroll position along (scroll
+    // anchoring, snap re-adjustment); pin it back to the last position
+    // the player scrolled to before measuring.
+    if (roster.scrollLeft !== scrollLeftRef.current) {
+      roster.scrollLeft = scrollLeftRef.current
+    }
+
+    const rosterBounds = roster.getBoundingClientRect()
+    const nextPositions = new Map<string, RosterEntryPosition>()
+    for (const [playerId, element] of entryRefs.current) {
+      const bounds = element.getBoundingClientRect()
+      nextPositions.set(playerId, {
+        left: bounds.left - rosterBounds.left + roster.scrollLeft,
+        top: bounds.top - rosterBounds.top + roster.scrollTop,
+      })
+    }
+
+    const reduceMotion =
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    for (const [playerId, element] of entryRefs.current) {
+      const previous = previousPositions.current.get(playerId)
+      const next = nextPositions.get(playerId)
+      if (previous === undefined || next === undefined) continue
+      const deltaX = previous.left - next.left
+      const deltaY = previous.top - next.top
+      if (
+        reduceMotion ||
+        typeof element.animate !== 'function' ||
+        (Math.abs(deltaX) <= ROSTER_MOVE_TOLERANCE_PX &&
+          Math.abs(deltaY) <= ROSTER_MOVE_TOLERANCE_PX)
+      ) {
+        continue
+      }
+      animations.current.get(playerId)?.cancel()
+      const animation = element.animate(
+        [{ translate: `${deltaX}px ${deltaY}px` }, { translate: '0 0' }],
+        {
+          duration: ROSTER_REORDER_MS,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          fill: 'both',
+        },
+      )
+      const clear = () => {
+        if (animations.current.get(playerId) === animation) {
+          animations.current.delete(playerId)
+        }
+      }
+      animation.onfinish = clear
+      animation.oncancel = clear
+      animations.current.set(playerId, animation)
+    }
+    previousPositions.current = nextPositions
+  }, [orderKey])
+
+  useEffect(
+    () => () => {
+      for (const animation of animations.current.values()) animation.cancel()
+      animations.current.clear()
+    },
+    [],
+  )
+
+  const cardRef = useCallback((playerId: string) => {
+    let callback = refCache.current.get(playerId)
+    if (!callback) {
+      callback = (element) => {
+        if (element) entryRefs.current.set(playerId, element)
+        else entryRefs.current.delete(playerId)
+      }
+      refCache.current.set(playerId, callback)
+    }
+    return callback
+  }, [])
+
+  return { rosterRef, cardRef }
+}
+
 export function GuessingScreen({
   view,
   onClaimCard,
@@ -540,8 +676,15 @@ export function GuessingScreen({
   const fullyRevealed = view.board.every(
     ({ revealedKind }) => revealedKind !== null,
   )
-  const players = view.scoreboard.filter(
-    ({ participation }) => participation === 'player',
+  const players = view.scoreboard
+    .filter(({ participation }) => participation === 'player')
+    .sort(
+      (left, right) =>
+        (right.score ?? 0) - (left.score ?? 0) ||
+        (left.position ?? Infinity) - (right.position ?? Infinity),
+    )
+  const { rosterRef, cardRef } = useRosterReorder(
+    players.map(({ playerId }) => playerId).join('|'),
   )
   const spectators = view.members.filter(
     ({ participation }) => participation === 'spectator',
@@ -668,22 +811,41 @@ export function GuessingScreen({
             ))}
           </div>
 
-          {feedback || view.canMarkDone ? (
+          {feedback || view.canMarkDone || view.player.role === 'host' ? (
             <div className="board-actions">
               {feedback ? (
                 <p className="form-message m-0" role="alert">
                   {feedback}
                 </p>
               ) : null}
-              {view.canMarkDone ? (
-                <Button
-                  variant="outline"
-                  onClick={() => void finish()}
-                  disabled={isFinishing}
-                >
-                  {isFinishing ? 'Saving…' : 'I’m done guessing'}
-                </Button>
-              ) : null}
+              <div className="board-action-group">
+                {view.canMarkDone ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => void finish()}
+                    disabled={isFinishing}
+                  >
+                    {isFinishing ? 'Saving…' : 'I’m done guessing'}
+                  </Button>
+                ) : null}
+                {view.player.role === 'host' ? (
+                  <Button
+                    onClick={advance}
+                    disabled={isAdvancing || !canHostAct}
+                    aria-describedby={
+                      unfinishedPickerCount > 0
+                        ? 'host-advance-warning'
+                        : undefined
+                    }
+                  >
+                    {isAdvancing
+                      ? 'Advancing…'
+                      : view.isFinalTurn
+                        ? 'View scoreboard'
+                        : 'Next hint'}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </section>
@@ -691,7 +853,7 @@ export function GuessingScreen({
         <aside className="game-sidebar game-sidebar-stack">
           <section className="game-panel">
             <h2 className="sidebar-title">Roster</h2>
-            <ul className="roster-scroll" aria-label="Roster">
+            <ul className="roster-scroll" ref={rosterRef} aria-label="Roster">
               {players.map((player) => {
                 const activeMember = view.members.find(
                   ({ playerId }) => playerId === player.playerId,
@@ -710,6 +872,7 @@ export function GuessingScreen({
                 return (
                   <RosterCard
                     className="score-row"
+                    ref={cardRef(player.playerId)}
                     key={player.playerId}
                     name={player.name}
                     detail={String(player.score)}
@@ -727,6 +890,7 @@ export function GuessingScreen({
               })}
               {spectators.map((spectator) => (
                 <RosterCard
+                  ref={cardRef(spectator.playerId)}
                   key={spectator.playerId}
                   name={spectator.name}
                   status="Spectating"
@@ -781,20 +945,6 @@ export function GuessingScreen({
                   )
                 })}
               </ul>
-              <Button
-                className="mt-4 w-full"
-                onClick={advance}
-                disabled={isAdvancing || !canHostAct}
-                aria-describedby={
-                  unfinishedPickerCount > 0 ? 'host-advance-warning' : undefined
-                }
-              >
-                {isAdvancing
-                  ? 'Advancing…'
-                  : view.isFinalTurn
-                    ? 'View scoreboard'
-                    : 'Next hint'}
-              </Button>
               {!confirmAdvance && advanceError ? (
                 <p className="action-error host-action-error" role="alert">
                   {advanceError}
@@ -879,6 +1029,7 @@ function RosterCard({
   status,
   tone,
   className,
+  ref,
 }: {
   name: string
   detail?: string | null
@@ -889,9 +1040,10 @@ function RosterCard({
   status: string
   tone: 'default' | 'ready' | 'spectating'
   className?: string
+  ref?: Ref<HTMLLIElement>
 }) {
   return (
-    <li className={cn('roster-card', className)}>
+    <li ref={ref} className={cn('roster-card', className)}>
       <PlayerSummary
         name={name}
         detail={detail}
@@ -963,27 +1115,26 @@ function PlayerSummary({
           </span>
         </>
       ) : (
-        <>
-          <span className="roster-card-copy">
-            <span className="roster-card-name">{name}</span>
-            {detail ? (
-              <>
-                <span className="roster-card-separator" aria-hidden="true">
-                  ·
-                </span>
-                <span
-                  className={cn('roster-card-detail', detailClassName)}
-                  aria-label={detailLabel}
-                >
-                  {detail}
-                </span>
-              </>
-            ) : null}
-          </span>
+        <span className="roster-card-copy">
+          <span className="roster-card-name">{name}</span>
+          {detail ? (
+            <>
+              <span className="roster-card-separator" aria-hidden="true">
+                ·
+              </span>
+              <span
+                className={cn('roster-card-detail', detailClassName)}
+                aria-label={detailLabel}
+              >
+                {detail}
+              </span>
+            </>
+          ) : null}
+          {/* Inline so the count trails the hint text when it wraps. */}
           {detailSuffix ? (
             <span className="roster-card-suffix">{detailSuffix}</span>
           ) : null}
-        </>
+        </span>
       )}
     </p>
   )

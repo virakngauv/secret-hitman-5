@@ -362,9 +362,32 @@ function LobbyScreen({
               </li>
             ))}
           </ul>
+
+          {isHost ? (
+            <>
+              {!canStart ? (
+                <p className="form-message" role="status">
+                  Invite at least {missingPlayers} more{' '}
+                  {missingPlayers === 1 ? 'player' : 'players'}.
+                </p>
+              ) : null}
+              {error?.action === 'start' ? (
+                <p className="action-error host-action-error" role="alert">
+                  {error.message}
+                </p>
+              ) : null}
+              <Button
+                className="mt-4 h-12 w-full"
+                disabled={!canStart || isActing}
+                onClick={() => void onStart()}
+              >
+                {isActing ? 'Starting…' : 'Start game'}
+              </Button>
+            </>
+          ) : null}
         </section>
 
-        {isHost ? (
+        {isHost && removableMembers.length > 0 ? (
           <HostControlCard>
             {removableMembers.length > 0 ? (
               <ul className="host-player-controls" aria-label="Player controls">
@@ -393,24 +416,6 @@ function LobbyScreen({
                 ))}
               </ul>
             ) : null}
-            {!canStart ? (
-              <p className="form-message" role="status">
-                Invite at least {missingPlayers} more{' '}
-                {missingPlayers === 1 ? 'player' : 'players'}.
-              </p>
-            ) : null}
-            {error?.action === 'start' ? (
-              <p className="action-error host-action-error" role="alert">
-                {error.message}
-              </p>
-            ) : null}
-            <Button
-              className="mt-4 h-12 w-full"
-              disabled={!canStart || isActing}
-              onClick={() => void onStart()}
-            >
-              {isActing ? 'Starting…' : 'Start game'}
-            </Button>
           </HostControlCard>
         ) : null}
         <LeaveRoomControl

@@ -303,7 +303,7 @@ input {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.5rem;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .word-grid {
@@ -589,12 +589,16 @@ button.word-card:focus-visible {
   gap: 0.5rem;
   margin-top: 1rem;
   overflow-x: auto;
+  /* Score reorders must not drag the strip's scroll position along, so
+     scroll anchoring and scroll snapping both stay off here: snapping
+     re-adjusts after the reorder layout change and pulls the scroll with
+     it (verified: one card-width of drift per reorder with snap on). */
+  overflow-anchor: none;
   overscroll-behavior-inline: contain;
   padding-bottom: 0.5rem;
   scrollbar-color: color-mix(in oklab, var(--foreground) 28%, transparent)
     transparent;
   scrollbar-width: thin;
-  scroll-snap-type: inline proximity;
 }
 
 .roster-scroll::-webkit-scrollbar {
@@ -617,7 +621,6 @@ button.word-card:focus-visible {
   border-radius: 0.9rem;
   background: var(--card);
   padding: 0.75rem 0.85rem;
-  scroll-snap-align: start;
   text-align: left;
 }
 
@@ -672,6 +675,10 @@ button.word-card:focus-visible {
   color: var(--muted-foreground);
 }
 
+.hint-detail {
+  text-transform: uppercase;
+}
+
 .roster-card-separator {
   margin-inline: 0.3rem;
   color: var(--muted-foreground);
@@ -679,6 +686,9 @@ button.word-card:focus-visible {
 
 .roster-card-suffix {
   flex-shrink: 0;
+  /* Sits inline after the hint text rather than in its own grid
+     track, so it stays left-aligned when the text wraps. */
+  margin-left: 0.3rem;
   color: var(--muted-foreground);
 }
 
@@ -738,6 +748,10 @@ button.word-card:focus-visible {
   gap: 0.5rem;
 }
 
+.host-no-hint-detail {
+  font-style: italic;
+}
+
 .action-error {
   color: var(--accent);
   font-size: 0.82rem;
@@ -779,8 +793,14 @@ button.word-card:focus-visible {
 }
 
 .hint-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Reserve room for the 2-line prompt so swapping in the hint
+     doesn't shift the page. Keep in sync with the
+     .hint-display-text.hint-display-prompt size and line-height. */
+  min-height: calc(clamp(1.5rem, 5vw, 2rem) * 1.2 * 2);
   margin-bottom: 0.75rem;
-  padding-top: 0.5rem;
   color: var(--foreground);
   text-align: center;
 }
@@ -800,13 +820,29 @@ button.word-card:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.hint-display-text.hint-display-prompt {
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.hint-prompt-line {
+  display: block;
+}
+
 .board-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.board-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .score-row {
@@ -1059,7 +1095,6 @@ button.word-card:focus-visible {
     overscroll-behavior-block: contain;
     padding-right: 0.35rem;
     padding-bottom: 0;
-    scroll-snap-type: block proximity;
   }
 
   .lobby-grid {
