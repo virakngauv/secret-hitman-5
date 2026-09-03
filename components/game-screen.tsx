@@ -182,7 +182,9 @@ export function HintPhaseScreen({
                   aria-label="Hint submission prompt"
                 >
                   <p className="hint-display-text hint-display-prompt">
-                    <span className="hint-prompt-line">Select 1-5 targets.</span>{' '}
+                    <span className="hint-prompt-line">
+                      Select 1-5 targets.
+                    </span>{' '}
                     <span className="hint-prompt-line">
                       Type your hint. Submit.
                     </span>
