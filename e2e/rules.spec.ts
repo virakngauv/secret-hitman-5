@@ -15,7 +15,7 @@ for (const viewport of [
     ).toBeVisible()
     await expect(page.getByRole('heading', { level: 2 })).toHaveText([
       '1. Gather your players',
-      '2. Build and lock in your clue',
+      '2. Build and submit your clue',
       '3. Pick targets or pass',
       '4. Count the points',
       '5. Finish the game',

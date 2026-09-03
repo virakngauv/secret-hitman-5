@@ -1031,7 +1031,7 @@ function CardWord({ word }: { word: string }) {
       className={cn(
         'word-card-word',
         isSingleWord && 'word-card-word-single',
-        isSingleWord && longestSegment >= 10 && 'word-card-word-compact',
+        isSingleWord && longestSegment >= 9 && 'word-card-word-compact',
         isSingleWord && longestSegment >= 12 && 'word-card-word-wide',
         longestSegment >= 18 && 'word-card-word-break',
       )}

@@ -49,8 +49,8 @@ for (const viewport of [
     ).toBe(true)
 
     for (const [label, path, heading] of [
-      ['Create a room', '/create', 'Create a room'],
-      ['Join a room', '/join', 'Join the operation'],
+      ['Create a room', '/create', 'create a room.'],
+      ['Join a room', '/join', 'join a room.'],
     ]) {
       await page.getByRole('link', { name: label, exact: true }).click()
       await expect(page).toHaveURL(new RegExp(`${path}$`))

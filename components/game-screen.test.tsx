@@ -161,9 +161,7 @@ describe('HintPhaseScreen', () => {
     )
 
     expect(screen.getByText('TELESCOPE')).toHaveClass('word-card-word-single')
-    expect(screen.getByText('TELESCOPE')).not.toHaveClass(
-      'word-card-word-compact',
-    )
+    expect(screen.getByText('TELESCOPE')).toHaveClass('word-card-word-compact')
     expect(screen.getByText('TELESCOPE')).not.toHaveClass(
       'word-card-word-break',
     )

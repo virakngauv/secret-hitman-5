@@ -32,8 +32,15 @@ test.describe('spectator experience audit', () => {
 
       await joinRoom(guest, roomCode, 'Grace')
       await joinRoom(third, roomCode, 'Linus')
-      await expect(host.getByText('Grace', { exact: true })).toBeVisible()
-      await expect(host.getByText('Linus', { exact: true })).toBeVisible()
+      const lobbyRoster = host.getByRole('list', {
+        name: 'Players in this room',
+      })
+      await expect(
+        lobbyRoster.getByText('Grace', { exact: true }),
+      ).toBeVisible()
+      await expect(
+        lobbyRoster.getByText('Linus', { exact: true }),
+      ).toBeVisible()
       await host.getByRole('button', { name: 'Start game' }).click()
 
       await makeHint(host, 'Orbit', 2)
@@ -41,7 +48,9 @@ test.describe('spectator experience audit', () => {
       await makeHint(third, 'Metal', 2)
       await host.getByRole('button', { name: 'Start guessing' }).click()
       await joinRoom(spectator, roomCode, 'Sofia')
-      await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
+      await expect(
+        spectator.getByRole('list', { name: 'Roster' }).getByText('Spectating'),
+      ).toBeVisible()
       await expect(spectator.getByText('Orbit', { exact: true })).toBeVisible()
       await expect(spectator.getByLabel('Your hint')).toHaveCount(0)
       await expect(
@@ -53,7 +62,9 @@ test.describe('spectator experience audit', () => {
       await capture(spectator, testInfo, '01-hinting-waiting-desktop.png')
 
       await spectator.reload()
-      await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
+      await expect(
+        spectator.getByRole('list', { name: 'Roster' }).getByText('Spectating'),
+      ).toBeVisible()
       await expect(spectator.getByLabel('Your hint')).toHaveCount(0)
 
       await expect(spectator.getByText('Orbit', { exact: true })).toBeVisible()
@@ -146,7 +157,9 @@ test.describe('spectator experience audit', () => {
       ).toBeVisible()
       await capture(spectator, testInfo, '07-reconnecting.png')
       await spectator.context().setOffline(false)
-      await expect(spectator.getByText(/Spectator mode/)).toBeVisible()
+      await expect(
+        spectator.getByRole('list', { name: 'Roster' }).getByText('Spectating'),
+      ).toBeVisible()
       await expect(
         spectator.getByLabel('Completed and fully revealed board'),
       ).toBeVisible()
@@ -207,7 +220,10 @@ async function makeHint(page: Page, hint: string, count: number) {
     await cards.nth(index).click()
   }
   await page.getByRole('button', { name: 'Submit' }).click()
-  await expect(page.getByText('Hint submitted')).toBeVisible()
+  await expect(page.getByLabel('Submitted hint')).toContainText(
+    `${hint} ${count}`,
+  )
+  await expect(page.getByLabel('Your hint')).toBeDisabled()
 }
 
 async function capture(page: Page, testInfo: TestInfo, name: string) {

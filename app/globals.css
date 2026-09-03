@@ -416,17 +416,40 @@ button.word-card:focus-visible {
   white-space: nowrap;
 }
 
-@container word-card (max-width: 8rem) {
+.word-card-word-compact {
+  font-size: clamp(1rem, 3.8vw, 1.35rem);
+  letter-spacing: -0.035em;
+}
+
+.word-card-word-wide {
+  font-size: clamp(0.85rem, 3.3vw, 1.15rem);
+  letter-spacing: -0.035em;
+}
+
+@container word-card (min-width: 11rem) {
   .word-card-word-compact {
-    font-size: clamp(0.9rem, 3.8vw, 1.2rem);
-    letter-spacing: -0.035em;
+    font-size: 1.45rem;
+    letter-spacing: -0.025em;
   }
 }
 
 @container word-card (max-width: 8rem) {
+  .word-card-index {
+    font-size: 0.48rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .word-card-word {
+    font-size: clamp(0.68rem, 16cqi, 1.1rem);
+  }
+
+  .word-card-word-compact {
+    font-size: clamp(0.6rem, 14cqi, 1.2rem);
+  }
+
   .word-card-word-wide {
-    font-size: clamp(0.78rem, 3.3vw, 1.05rem);
-    letter-spacing: -0.035em;
+    font-size: clamp(0.6rem, 12.5cqi, 1.05rem);
   }
 }
 
@@ -436,13 +459,6 @@ button.word-card:focus-visible {
   letter-spacing: -0.035em;
   white-space: normal;
   overflow-wrap: anywhere;
-}
-
-/* Chromium 150+ can fit single words exactly without a heuristic. */
-@supports (text-fit: shrink) {
-  .word-card-word-single:not(.word-card-word-break) {
-    text-fit: shrink 68%;
-  }
 }
 
 .word-card-claimers {
