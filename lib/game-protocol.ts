@@ -1,11 +1,11 @@
-export const GAME_PROTOCOL_VERSION = 12 as const
+export const GAME_PROTOCOL_VERSION = 13 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
 export const MIN_TARGET_COUNT = 1
 export const MAX_TARGET_COUNT = 5
 
-export type RoomPhase = 'lobby' | 'hinting' | 'guessing' | 'finished'
+export type RoomPhase = 'lobby' | 'hinting' | 'guessing'
 export type PlayerRole = 'host' | 'player'
 export type Participation = 'player' | 'spectator'
 export type CardKind = 'target' | 'civilian' | 'assassin'
@@ -26,6 +26,12 @@ export type PlayerIdentity = {
 export type ScoreboardEntry = PlayerIdentity & {
   position: number | null
   score: number | null
+}
+
+export type CompletedGameResults = {
+  gameId: string
+  scoreboard: ScoreboardEntry[]
+  winners: ScoreboardEntry[]
 }
 
 export type HintStatus = {
@@ -85,6 +91,7 @@ export type RoomSnapshot =
       status: 'lobby'
       minimumPlayers: number
       lobbyNotice?: 'player_left'
+      lastGameResults?: CompletedGameResults
     } & MemberSnapshotBase)
   | ({
       status: 'hinting'
@@ -117,23 +124,17 @@ export type RoomSnapshot =
       canAdvanceTurn: boolean
       canViewScoreboard?: boolean
     } & ActiveGameSnapshotBase)
-  | ({
-      status: 'finished'
-      scoreboard: ScoreboardEntry[]
-      winners: ScoreboardEntry[]
-    } & ActiveGameSnapshotBase)
 
 export function isMemberSnapshot(
   snapshot: RoomSnapshot,
 ): snapshot is Extract<
   RoomSnapshot,
-  { status: 'lobby' | 'hinting' | 'guessing' | 'finished' }
+  { status: 'lobby' | 'hinting' | 'guessing' }
 > {
   return (
     snapshot.status === 'lobby' ||
     snapshot.status === 'hinting' ||
-    snapshot.status === 'guessing' ||
-    snapshot.status === 'finished'
+    snapshot.status === 'guessing'
   )
 }
 
@@ -241,10 +242,6 @@ export type ClientToServerEvents = {
   ) => void
   'game:show-scoreboard': (
     payload: AdvanceTurnPayload,
-    acknowledge: (result: CommandResult) => void,
-  ) => void
-  'game:return-to-lobby': (
-    payload: GameCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
 }

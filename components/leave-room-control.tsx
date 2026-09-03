@@ -4,11 +4,13 @@ import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
+import { cn } from '@/lib/utils'
 
 export function LeaveRoomControl({
   busy,
   confirmationRequired = true,
   disabled = false,
+  className,
   error,
   gameInProgress,
   isHost,
@@ -17,6 +19,7 @@ export function LeaveRoomControl({
   busy: boolean
   confirmationRequired?: boolean
   disabled?: boolean
+  className?: string
   error?: string | null
   gameInProgress: boolean
   isHost: boolean
@@ -30,7 +33,7 @@ export function LeaveRoomControl({
       <Button
         type="button"
         variant="outline"
-        className="mt-3 w-full"
+        className={cn('mt-3 w-full', className)}
         disabled={disabled || busy}
         onClick={() => {
           if (!confirmationRequired) {

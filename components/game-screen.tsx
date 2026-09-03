@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useState } from 'react'
 
+import { HostControlCard } from '@/components/host-control-card'
 import { LeaveRoomControl } from '@/components/leave-room-control'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
@@ -13,6 +13,7 @@ import {
   MIN_TARGET_COUNT,
   type CardKind,
   type CommandResult,
+  type CompletedGameResults,
   type RoomSnapshot,
 } from '@/lib/game-protocol'
 import { getDenseRanks } from '@/lib/scoreboard'
@@ -20,7 +21,6 @@ import { cn } from '@/lib/utils'
 
 type HintingView = Extract<RoomSnapshot, { status: 'hinting' }>
 type GuessingView = Extract<RoomSnapshot, { status: 'guessing' }>
-type FinishedView = Extract<RoomSnapshot, { status: 'finished' }>
 
 export function HintPhaseScreen({
   view,
@@ -69,7 +69,9 @@ export function HintPhaseScreen({
     name: string
     resetsRound: boolean
   } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [hintActionError, setHintActionError] = useState<string | null>(null)
+  const [hostActionError, setHostActionError] = useState<string | null>(null)
+  const [removalError, setRemovalError] = useState<string | null>(null)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const isHost = view.player.role === 'host'
   const readyCount = view.hintStatuses.filter(
@@ -84,47 +86,49 @@ export function HintPhaseScreen({
       else if (next.size < MAX_TARGET_COUNT) next.add(cardId)
       return next
     })
-    setError(null)
+    setHintActionError(null)
   }
 
   const submit = async () => {
-    if (!hint.trim()) return setError('Write a one-word or short phrase hint.')
+    if (!hint.trim())
+      return setHintActionError('Write a one-word or short phrase hint.')
     if (selected.size < MIN_TARGET_COUNT)
-      return setError('Select at least one word for your hint.')
+      return setHintActionError('Select at least one word for your hint.')
     setIsSubmitting(true)
-    setError(null)
+    setHintActionError(null)
     const result = await onSubmitHint(hint.trim(), [...selected])
-    if (result.status !== 'success') setError(result.message)
+    if (result.status !== 'success') setHintActionError(result.message)
     setIsSubmitting(false)
   }
 
   const unlock = async () => {
     setIsUnlocking(true)
-    setError(null)
+    setHintActionError(null)
     const result = await onUnlockHint()
-    if (result.status !== 'success') setError(result.message)
+    if (result.status !== 'success') setHintActionError(result.message)
     setIsUnlocking(false)
   }
 
   const startGuessing = async () => {
     setIsStarting(true)
-    setError(null)
+    setHostActionError(null)
     const result = await onStartGuessing()
-    if (result.status !== 'success') setError(result.message)
+    if (result.status !== 'success') setHostActionError(result.message)
     setIsStarting(false)
   }
 
   const rejectHint = async (playerId: string) => {
     setBusyPlayer(playerId)
-    setError(null)
+    setHostActionError(null)
     const result = await onRejectHint(playerId)
-    if (result.status !== 'success') setError(result.message)
+    if (result.status !== 'success') setHostActionError(result.message)
     setBusyPlayer(null)
   }
 
   const removePlayer = async (playerId: string, name: string) => {
     const resetsRound = view.hintStatuses.length <= 2
-    setError(null)
+    setHostActionError(null)
+    setRemovalError(null)
     setRemovalTarget({ playerId, name, resetsRound })
   }
 
@@ -132,9 +136,9 @@ export function HintPhaseScreen({
     if (!removalTarget) return
     const { playerId, resetsRound } = removalTarget
     setBusyPlayer(playerId)
-    setError(null)
+    setRemovalError(null)
     const result = await onRemovePlayer(playerId, resetsRound)
-    if (result.status !== 'success') setError(result.message)
+    if (result.status !== 'success') setRemovalError(result.message)
     else setRemovalTarget(null)
     setBusyPlayer(null)
   }
@@ -148,12 +152,7 @@ export function HintPhaseScreen({
   }
 
   return (
-    <GamePageShell
-      roomCode={view.roomCode}
-      eyebrow="Phase 1 · Make your hint"
-      title="Build one clue. Pick your targets."
-      subtitle="Three civilians and the assassin are locked. Select one to five editable targets."
-    >
+    <GamePageShell>
       <div className="game-layout">
         <section className="game-panel min-w-0">
           {view.board === null ? (
@@ -163,37 +162,77 @@ export function HintPhaseScreen({
             />
           ) : (
             <>
-              <div className="hint-controls">
-                <div>
-                  <label className="field-label" htmlFor="hint">
-                    Your hint
-                  </label>
-                  <Input
-                    id="hint"
-                    value={hint}
-                    onChange={(event) => setHint(event.target.value)}
-                    maxLength={40}
-                    placeholder="e.g. orbit"
-                    autoComplete="off"
-                    readOnly={view.hintSubmitted}
-                    aria-describedby="hint-editing-status"
-                    className="mt-2 h-13 rounded-2xl text-lg"
-                  />
-                </div>
-                <div className="hint-number" aria-live="polite">
-                  <span className="hint-number-value">{selected.size}</span>
-                  <span className="hint-number-label">clue number</span>
-                </div>
-              </div>
+              {view.hintSubmitted ? (
+                <HintDisplay
+                  hint={hint}
+                  count={selected.size}
+                  label="Submitted hint"
+                  live
+                />
+              ) : (
+                <section
+                  className="hint-display"
+                  aria-label="Hint submission prompt"
+                >
+                  <p className="hint-display-text">Submit your hint</p>
+                </section>
+              )}
 
-              <p
-                id="hint-editing-status"
-                className="board-instructions text-sm text-[var(--muted-foreground)]"
-              >
-                {view.hintSubmitted
-                  ? 'Hint locked in. Your board and targets stay private until your turn.'
-                  : 'Select one to five words this hint should point to.'}
-              </p>
+              <section aria-label="Hint controls">
+                <div className="hint-controls">
+                  <div>
+                    <label className="sr-only" htmlFor="hint">
+                      Your hint
+                    </label>
+                    <Input
+                      id="hint"
+                      value={hint}
+                      onChange={(event) => {
+                        setHint(event.target.value)
+                        setHintActionError(null)
+                      }}
+                      maxLength={40}
+                      placeholder="Type your hint"
+                      autoComplete="off"
+                      disabled={view.hintSubmitted}
+                      readOnly={isSubmitting || isUnlocking}
+                      className="h-13 rounded-2xl text-lg"
+                    />
+                  </div>
+                  {view.hintSubmitted ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 w-auto justify-self-end px-5"
+                      onClick={() => void unlock()}
+                      disabled={isUnlocking}
+                    >
+                      {isUnlocking ? 'Editing…' : 'Edit'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 w-auto justify-self-end px-5"
+                      onClick={() => void submit()}
+                      disabled={
+                        isSubmitting ||
+                        selected.size < MIN_TARGET_COUNT ||
+                        !hint.trim()
+                      }
+                    >
+                      {isSubmitting ? 'Submitting…' : 'Submit'}
+                    </Button>
+                  )}
+                </div>
+
+                {hintActionError ? (
+                  <p className="action-error hint-control-error" role="alert">
+                    {hintActionError}
+                  </p>
+                ) : null}
+              </section>
+
               <div className="word-grid" aria-label="Your twelve word board">
                 {view.board.map((card) => {
                   const isAssassin = card.kind === 'assassin'
@@ -272,127 +311,137 @@ export function HintPhaseScreen({
                   )
                 })}
               </div>
-
-              <p className="form-message" role={error ? 'alert' : 'status'}>
-                {error ??
-                  (view.hintRejected
-                    ? 'The host rejected this hint. Your board was refreshed; create and lock in a new hint.'
-                    : view.hintSubmitted
-                      ? 'Unlock your hint to revise the clue or target selection.'
-                      : 'You can change your selection until you lock it in.')}
-              </p>
-              {view.hintSubmitted ? (
-                <Button
-                  variant="outline"
-                  className="mt-2 h-12 w-full sm:w-auto"
-                  onClick={() => void unlock()}
-                  disabled={isUnlocking}
-                >
-                  {isUnlocking ? 'Unlocking…' : 'Unlock / Edit hint'}
-                </Button>
-              ) : (
-                <Button
-                  className="mt-2 h-12 w-full sm:w-auto"
-                  onClick={() => void submit()}
-                  disabled={
-                    isSubmitting ||
-                    selected.size < MIN_TARGET_COUNT ||
-                    !hint.trim()
-                  }
-                >
-                  {isSubmitting
-                    ? 'Locking in…'
-                    : `Lock in hint · ${selected.size}`}
-                </Button>
-              )}
             </>
           )}
         </section>
 
-        <aside className="game-panel game-sidebar">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="sidebar-title">Hint check-in</h2>
-            <span className="phase-count">
-              {readyCount}/{view.hintStatuses.length}
-            </span>
-          </div>
-          <ul className="mt-4 grid gap-2">
-            {view.hintStatuses.map((player) => {
-              const member = view.members.find(
-                ({ playerId }) => playerId === player.playerId,
-              )
-              const isSelf = player.playerId === view.player.playerId
-              const canRemove = isHost && member?.role !== 'host'
-              return (
-                <li
-                  className="status-row flex-wrap items-center gap-x-3 gap-y-2"
-                  key={player.playerId}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">
-                      {player.name}
-                    </span>
-                    {player.hint !== null && player.hintNumber !== null ? (
-                      <span
-                        className="block truncate text-sm text-[var(--muted-foreground)]"
-                        aria-label={`${player.name}'s hint: ${player.hint}, ${player.hintNumber}`}
-                      >
-                        {player.hint} · {player.hintNumber}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span
-                    className={cn(
-                      'status-dot-label',
-                      player.submitted && 'is-ready',
-                    )}
-                  >
-                    <span className="status-dot" />
-                    {player.needsRevision
+        <aside className="game-sidebar game-sidebar-stack">
+          <section className="game-panel">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="sidebar-title">Roster</h2>
+              <span className="phase-count">
+                {readyCount}/{view.hintStatuses.length}
+              </span>
+            </div>
+            <ul className="roster-scroll" aria-label="Roster">
+              {view.members.map((member) => {
+                const hintStatus = view.hintStatuses.find(
+                  ({ playerId }) => playerId === member.playerId,
+                )
+                const hintDetail =
+                  hintStatus?.hint !== null &&
+                  hintStatus?.hint !== undefined &&
+                  hintStatus.hintNumber !== null &&
+                  hintStatus.hintNumber !== undefined
+                    ? hintStatus.hint
+                    : null
+                const status =
+                  member.participation === 'spectator'
+                    ? 'Spectating'
+                    : hintStatus?.needsRevision
                       ? 'Needs revision'
-                      : player.submitted
+                      : hintStatus?.submitted
                         ? 'Ready'
-                        : 'Choosing'}
-                  </span>
-                  {isHost && player.submitted && !isSelf && member ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      disabled={busyPlayer !== null}
-                      onClick={() => void rejectHint(player.playerId)}
-                      aria-label={`Reject ${player.name}'s hint`}
-                    >
-                      Reject hint
-                    </Button>
-                  ) : null}
-                  {canRemove ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      disabled={busyPlayer !== null}
-                      onClick={() =>
-                        void removePlayer(player.playerId, player.name)
-                      }
-                      aria-label={`Remove ${player.name} from this game`}
-                    >
-                      Remove player
-                    </Button>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
+                        : hintStatus
+                          ? 'Choosing'
+                          : 'Waiting'
+
+                return (
+                  <RosterCard
+                    key={member.playerId}
+                    name={member.name}
+                    detail={hintDetail}
+                    detailSuffix={
+                      hintDetail && hintStatus
+                        ? String(hintStatus.hintNumber)
+                        : undefined
+                    }
+                    detailLabel={
+                      hintDetail && hintStatus
+                        ? `${member.name}'s hint: ${hintStatus.hint}, ${hintStatus.hintNumber}`
+                        : undefined
+                    }
+                    status={status}
+                    tone={
+                      member.participation === 'spectator'
+                        ? 'spectating'
+                        : hintStatus?.submitted
+                          ? 'ready'
+                          : 'default'
+                    }
+                  />
+                )
+              })}
+            </ul>
+          </section>
 
           {isHost ? (
-            <div className="host-control">
-              <p className="host-control-label">Host control</p>
+            <HostControlCard>
               <OperationalHostNotice view={view} />
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Review clues as they arrive, reject any that need revision, or
-                start guessing once everyone is ready.
-              </p>
+              <ul className="host-player-controls" aria-label="Player controls">
+                {view.hintStatuses.map((player) => {
+                  const member = view.members.find(
+                    ({ playerId }) => playerId === player.playerId,
+                  )
+                  if (!member || member.role === 'host') return null
+                  const hintDetail =
+                    player.hint !== null && player.hintNumber !== null
+                      ? player.hint
+                      : null
+
+                  return (
+                    <li
+                      className="host-player-control-row"
+                      key={player.playerId}
+                    >
+                      <PlayerSummary
+                        name={player.name}
+                        detail={hintDetail}
+                        detailSuffix={
+                          hintDetail ? String(player.hintNumber) : undefined
+                        }
+                        detailLabel={
+                          hintDetail
+                            ? `${player.name}'s hint: ${player.hint}, ${player.hintNumber}`
+                            : undefined
+                        }
+                        className="host-player-summary"
+                      />
+                      <span className="host-player-actions">
+                        {player.submitted ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9 px-3 text-xs"
+                            disabled={busyPlayer !== null}
+                            onClick={() => void rejectHint(player.playerId)}
+                            aria-label={`Reject ${player.name}'s hint`}
+                          >
+                            Reject hint
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 px-3 text-xs"
+                          disabled={busyPlayer !== null}
+                          onClick={() =>
+                            void removePlayer(player.playerId, player.name)
+                          }
+                          aria-label={`Remove ${player.name} from this game`}
+                        >
+                          Remove player
+                        </Button>
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+              {hostActionError ? (
+                <p className="action-error host-action-error" role="alert">
+                  {hostActionError}
+                </p>
+              ) : null}
               <Button
                 className="mt-4 w-full"
                 disabled={!view.allHintsSubmitted || isStarting}
@@ -400,15 +449,11 @@ export function HintPhaseScreen({
               >
                 {isStarting ? 'Starting…' : 'Start guessing'}
               </Button>
-            </div>
-          ) : (
-            <p className="sidebar-note">
-              Submitted clues appear here as players lock them in. The host will
-              start guessing when everyone is ready.
-            </p>
-          )}
+            </HostControlCard>
+          ) : null}
           <LeaveRoomControl
             busy={isLeaving}
+            className="mt-0"
             confirmationRequired={!isHost || view.members.length > 1}
             error={leaveError}
             gameInProgress
@@ -431,8 +476,11 @@ export function HintPhaseScreen({
         cancelLabel="Cancel"
         confirmLabel="Remove"
         busy={busyPlayer !== null}
-        error={removalTarget ? error : null}
-        onCancel={() => setRemovalTarget(null)}
+        error={removalTarget ? removalError : null}
+        onCancel={() => {
+          setRemovalError(null)
+          setRemovalTarget(null)
+        }}
         onConfirm={() => void confirmRemoval()}
       />
     </GamePageShell>
@@ -489,7 +537,6 @@ export function GuessingScreen({
   const [advanceError, setAdvanceError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [removalError, setRemovalError] = useState<string | null>(null)
-  const isClueGiver = view.player.playerId === view.clueGiverId
   const fullyRevealed = view.board.every(
     ({ revealedKind }) => revealedKind !== null,
   )
@@ -510,13 +557,7 @@ export function GuessingScreen({
     const result = await onClaimCard(cardId, view.turnId)
     setBusyCard(null)
     if (result.status !== 'success') return setFeedback(result.message)
-    setFeedback(
-      result.kind === 'target'
-        ? `Target found. You and the clue-giver each gain ${CARD_SCORE.target} points.`
-        : result.kind === 'civilian'
-          ? `Civilian. You and the clue-giver each lose ${Math.abs(CARD_SCORE.civilian)} point; your guessing is done.`
-          : `Assassin. You and the clue-giver each lose ${Math.abs(CARD_SCORE.assassin)} points; this board is complete.`,
-    )
+    setFeedback(null)
   }
 
   const finish = async () => {
@@ -535,8 +576,7 @@ export function GuessingScreen({
       ? onShowScoreboard()
       : onAdvanceTurn())
     if (result.status !== 'success') {
-      if (confirmAdvance) setAdvanceError(result.message)
-      else setFeedback(result.message)
+      setAdvanceError(result.message)
     } else setConfirmAdvance(false)
     setIsAdvancing(false)
   }
@@ -576,32 +616,12 @@ export function GuessingScreen({
   }
 
   return (
-    <GamePageShell
-      roomCode={view.roomCode}
-      eyebrow={`Turn ${view.turnNumber} of ${view.totalTurns}`}
-      title={`${view.clueGiverName} is the clue-giver`}
-      subtitle={
-        isClueGiver
-          ? 'Your board is fully revealed. Watch the room work through your clue.'
-          : view.player.participation === 'spectator'
-            ? 'Spectator mode · follow the guesses without changing the board.'
-            : view.canGuess
-              ? `Choose carefully. A civilian costs ${Math.abs(CARD_SCORE.civilian)} point each; the assassin costs ${Math.abs(CARD_SCORE.assassin)} points each and ends the board.`
-              : 'Guessing is done for this hint. Completed and finished boards are fully revealed.'
-      }
-    >
-      <section className="clue-banner" aria-label="Current hint">
-        <div>
-          <p className="clue-label">THE HINT</p>
-          <p className="clue-word">{view.hint}</p>
-        </div>
-        <div
-          className="clue-count"
-          aria-label={`Hint number ${view.hintNumber}`}
-        >
-          {view.hintNumber}
-        </div>
-      </section>
+    <GamePageShell>
+      <HintDisplay
+        hint={view.hint}
+        count={view.hintNumber}
+        label="Current hint"
+      />
 
       <div className="game-layout game-board-layout">
         <section className="game-panel min-w-0">
@@ -648,104 +668,126 @@ export function GuessingScreen({
             ))}
           </div>
 
-          <div className="board-actions">
-            <p className="form-message m-0" role="status" aria-live="polite">
-              {feedback ??
-                (view.canGuess
-                  ? 'Pick a word, or finish guessing safely.'
-                  : ' ')}
-            </p>
-            {view.canMarkDone ? (
-              <Button
-                variant="outline"
-                onClick={() => void finish()}
-                disabled={isFinishing}
-              >
-                {isFinishing ? 'Saving…' : 'I’m done guessing'}
-              </Button>
-            ) : null}
-          </div>
+          {feedback || view.canMarkDone ? (
+            <div className="board-actions">
+              {feedback ? (
+                <p className="form-message m-0" role="alert">
+                  {feedback}
+                </p>
+              ) : null}
+              {view.canMarkDone ? (
+                <Button
+                  variant="outline"
+                  onClick={() => void finish()}
+                  disabled={isFinishing}
+                >
+                  {isFinishing ? 'Saving…' : 'I’m done guessing'}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
-        <aside className="game-panel game-sidebar">
-          <h2 className="sidebar-title">Scorecard</h2>
-          <ol className="mt-4 grid gap-2">
-            {players.map((player) => {
-              const activeMember = view.members.find(
-                ({ playerId }) => playerId === player.playerId,
-              )
-              const turnState = view.turnPlayers.find(
-                ({ playerId }) => playerId === player.playerId,
-              )?.state
-              const canRemove =
-                view.player.role === 'host' &&
-                activeMember?.role !== 'host' &&
-                activeMember !== undefined
-              return (
-                <li
-                  className="score-row flex-wrap gap-x-3 gap-y-2"
-                  key={player.playerId}
-                >
-                  <div className="min-w-0">
-                    <span className="block truncate font-semibold">
-                      {player.name}
-                    </span>
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      {!activeMember
-                        ? 'No longer active'
-                        : turnState === 'clue-giver'
-                          ? 'Clue-giver'
-                          : turnState === 'done'
-                            ? 'Done this turn'
-                            : 'Guessing'}
-                    </span>
-                  </div>
-                  <span className="score-value">{player.score}</span>
-                  {canRemove ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      disabled={busyPlayer !== null}
-                      onClick={() =>
-                        void removePlayer(player.playerId, player.name)
-                      }
-                      aria-label={`Remove ${player.name} from this game`}
-                    >
-                      Remove player
-                    </Button>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ol>
+        <aside className="game-sidebar game-sidebar-stack">
+          <section className="game-panel">
+            <h2 className="sidebar-title">Roster</h2>
+            <ul className="roster-scroll" aria-label="Roster">
+              {players.map((player) => {
+                const activeMember = view.members.find(
+                  ({ playerId }) => playerId === player.playerId,
+                )
+                const turnState = view.turnPlayers.find(
+                  ({ playerId }) => playerId === player.playerId,
+                )?.state
+                const status = !activeMember
+                  ? 'No longer active'
+                  : turnState === 'clue-giver'
+                    ? 'Clue-giver'
+                    : turnState === 'done'
+                      ? 'Done this turn'
+                      : 'Guessing'
 
-          {spectators.length ? (
-            <p className="sidebar-note">
-              Spectating: {spectators.map(({ name }) => name).join(', ')}
-            </p>
-          ) : null}
+                return (
+                  <RosterCard
+                    className="score-row"
+                    key={player.playerId}
+                    name={player.name}
+                    detail={String(player.score)}
+                    detailClassName="score-value"
+                    detailLabel={`${player.name}'s score: ${player.score}`}
+                    singleLine
+                    status={status}
+                    tone={
+                      turnState === 'done' || turnState === 'clue-giver'
+                        ? 'ready'
+                        : 'default'
+                    }
+                  />
+                )
+              })}
+              {spectators.map((spectator) => (
+                <RosterCard
+                  key={spectator.playerId}
+                  name={spectator.name}
+                  status="Spectating"
+                  tone="spectating"
+                />
+              ))}
+            </ul>
+          </section>
 
           {view.player.role === 'host' ? (
-            <div className="host-control">
-              <p className="host-control-label">Host control</p>
+            <HostControlCard>
               <OperationalHostNotice view={view} />
-              <p
-                id="host-advance-status"
-                role="status"
-                className="mt-1 text-sm text-[var(--muted-foreground)]"
-              >
-                {unfinishedPickerCount > 0
-                  ? `${unfinishedPickerCount} ${unfinishedPickerCount === 1 ? 'player is' : 'players are'} still guessing. You can move on with confirmation.`
-                  : view.isFinalTurn
-                    ? 'Everyone has finished guessing. Show the final scoreboard when the room is ready.'
-                    : 'Everyone has finished guessing. Advance when the room is ready.'}
-              </p>
+              {unfinishedPickerCount > 0 ? (
+                <p
+                  id="host-advance-warning"
+                  role="status"
+                  className="mt-1 text-sm text-[var(--muted-foreground)]"
+                >
+                  {unfinishedPickerCount}{' '}
+                  {unfinishedPickerCount === 1 ? 'player is' : 'players are'}{' '}
+                  still guessing. You can move on with confirmation.
+                </p>
+              ) : null}
+              <ul className="host-player-controls" aria-label="Player controls">
+                {players.map((player) => {
+                  const activeMember = view.members.find(
+                    ({ playerId }) => playerId === player.playerId,
+                  )
+                  if (!activeMember || activeMember.role === 'host') return null
+
+                  return (
+                    <li
+                      className="host-player-control-row"
+                      key={player.playerId}
+                    >
+                      <span className="truncate font-semibold">
+                        {player.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 px-3 text-xs"
+                        disabled={busyPlayer !== null}
+                        onClick={() =>
+                          void removePlayer(player.playerId, player.name)
+                        }
+                        aria-label={`Remove ${player.name} from this game`}
+                      >
+                        Remove player
+                      </Button>
+                    </li>
+                  )
+                })}
+              </ul>
               <Button
                 className="mt-4 w-full"
                 onClick={advance}
                 disabled={isAdvancing || !canHostAct}
-                aria-describedby="host-advance-status"
+                aria-describedby={
+                  unfinishedPickerCount > 0 ? 'host-advance-warning' : undefined
+                }
               >
                 {isAdvancing
                   ? 'Advancing…'
@@ -753,11 +795,17 @@ export function GuessingScreen({
                     ? 'View scoreboard'
                     : 'Next hint'}
               </Button>
-            </div>
+              {!confirmAdvance && advanceError ? (
+                <p className="action-error host-action-error" role="alert">
+                  {advanceError}
+                </p>
+              ) : null}
+            </HostControlCard>
           ) : null}
           {onLeave ? (
             <LeaveRoomControl
               busy={isLeaving}
+              className="mt-0"
               confirmationRequired={
                 view.player.role !== 'host' || view.members.length > 1
               }
@@ -800,11 +848,7 @@ export function GuessingScreen({
   )
 }
 
-function OperationalHostNotice({
-  view,
-}: {
-  view: HintingView | GuessingView | FinishedView
-}) {
+function OperationalHostNotice({ view }: { view: HintingView | GuessingView }) {
   if (
     view.player.role !== 'host' ||
     view.player.participation !== 'spectator'
@@ -825,6 +869,158 @@ function formatScore(score: number) {
   return score > 0 ? `+${score}` : `−${Math.abs(score)}`
 }
 
+function RosterCard({
+  name,
+  detail = null,
+  detailLabel,
+  detailClassName,
+  detailSuffix,
+  singleLine = false,
+  status,
+  tone,
+  className,
+}: {
+  name: string
+  detail?: string | null
+  detailLabel?: string
+  detailClassName?: string
+  detailSuffix?: string
+  singleLine?: boolean
+  status: string
+  tone: 'default' | 'ready' | 'spectating'
+  className?: string
+}) {
+  return (
+    <li className={cn('roster-card', className)}>
+      <PlayerSummary
+        name={name}
+        detail={detail}
+        detailLabel={detailLabel}
+        detailClassName={detailClassName}
+        detailSuffix={detailSuffix}
+        singleLine={singleLine}
+      />
+      <span
+        className={cn(
+          'status-dot-label',
+          tone === 'ready' && 'is-ready',
+          tone === 'spectating' && 'is-spectating',
+        )}
+      >
+        <span className="status-dot" />
+        {status}
+      </span>
+    </li>
+  )
+}
+
+function PlayerSummary({
+  name,
+  detail = null,
+  detailLabel,
+  detailClassName,
+  detailSuffix,
+  singleLine = false,
+  className,
+}: {
+  name: string
+  detail?: string | null
+  detailLabel?: string
+  detailClassName?: string
+  detailSuffix?: string
+  singleLine?: boolean
+  className?: string
+}) {
+  const primaryText = detail
+    ? `${name} · ${detail}${detailSuffix ? ` ${detailSuffix}` : ''}`
+    : name
+
+  return (
+    <p
+      className={cn(
+        'roster-card-primary',
+        !detail && 'roster-card-primary-alone',
+        singleLine && 'roster-card-primary-single-line',
+        className,
+      )}
+      title={primaryText}
+    >
+      {singleLine && detail ? (
+        <>
+          <span className="roster-card-name roster-card-name-single-line">
+            {name}
+          </span>
+          <span className="roster-card-inline-detail">
+            <span className="roster-card-separator" aria-hidden="true">
+              ·
+            </span>
+            <span
+              className={cn('roster-card-detail', detailClassName)}
+              aria-label={detailLabel}
+            >
+              {detail}
+            </span>
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="roster-card-copy">
+            <span className="roster-card-name">{name}</span>
+            {detail ? (
+              <>
+                <span className="roster-card-separator" aria-hidden="true">
+                  ·
+                </span>
+                <span
+                  className={cn('roster-card-detail', detailClassName)}
+                  aria-label={detailLabel}
+                >
+                  {detail}
+                </span>
+              </>
+            ) : null}
+          </span>
+          {detailSuffix ? (
+            <span className="roster-card-suffix">{detailSuffix}</span>
+          ) : null}
+        </>
+      )}
+    </p>
+  )
+}
+
+function HintDisplay({
+  hint,
+  count,
+  label,
+  live = false,
+}: {
+  hint: string
+  count: number
+  label: string
+  live?: boolean
+}) {
+  const displayHint = hint.trim()
+
+  return (
+    <section
+      className="hint-display"
+      aria-label={label}
+      aria-live={live ? 'polite' : undefined}
+    >
+      <p
+        className={cn(
+          'hint-display-text',
+          !displayHint && 'hint-preview-placeholder',
+        )}
+      >
+        <span>{displayHint || 'your hint'}</span>{' '}
+        <span className="hint-number-value">{count}</span>
+      </p>
+    </section>
+  )
+}
+
 function CardWord({ word }: { word: string }) {
   const segments = word.trim().split(/\s+/u)
   const longestSegment = Math.max(...segments.map((segment) => segment.length))
@@ -835,9 +1031,9 @@ function CardWord({ word }: { word: string }) {
       className={cn(
         'word-card-word',
         isSingleWord && 'word-card-word-single',
-        isSingleWord && longestSegment >= 7 && 'word-card-word-compact',
-        isSingleWord && longestSegment >= 10 && 'word-card-word-wide',
-        longestSegment >= 16 && 'word-card-word-break',
+        isSingleWord && longestSegment >= 9 && 'word-card-word-compact',
+        isSingleWord && longestSegment >= 12 && 'word-card-word-wide',
+        longestSegment >= 18 && 'word-card-word-break',
       )}
     >
       {word}
@@ -864,47 +1060,28 @@ function CardAttribution({ names }: { names: string[] }) {
 }
 
 export function FinishedScreen({
-  view,
+  results,
   onReturnToLobby,
 }: {
-  view: FinishedView
-  onReturnToLobby?: () => Promise<CommandResult>
+  results: CompletedGameResults
+  onReturnToLobby: () => void
 }) {
-  const [isReturning, setIsReturning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const players = [...view.scoreboard]
+  const players = [...results.scoreboard]
     .filter(({ participation }) => participation === 'player')
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
   const ranks = getDenseRanks(players.map(({ score }) => score))
-  const winnerNames = view.winners.map(({ name }) => name).join(' & ')
-  const hasWinner = view.winners.length > 0
-  const isHost = view.player.role === 'host'
-
-  const returnToLobby = async () => {
-    if (!onReturnToLobby) return
-    setError(null)
-    setIsReturning(true)
-    const result = await onReturnToLobby()
-    if (result.status !== 'success') setError(result.message)
-    setIsReturning(false)
-  }
+  const winnerNames = results.winners.map(({ name }) => name).join(' & ')
+  const hasWinner = results.winners.length > 0
 
   return (
-    <GamePageShell
-      roomCode={view.roomCode}
-      eyebrow="Game complete"
-      title={
-        hasWinner
-          ? `${winnerNames} ${view.winners.length === 1 ? 'wins' : 'win'}`
-          : 'No winner'
-      }
-      subtitle={
-        hasWinner
-          ? 'Every player gave one hint. Final scores are locked.'
-          : 'No players remain in the final standings.'
-      }
-    >
+    <GamePageShell>
       <div className="mx-auto max-w-2xl">
+        <h1 className="mb-6 text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
+          {hasWinner
+            ? `${winnerNames} ${results.winners.length === 1 ? 'wins' : 'win'}`
+            : 'No winner'}
+          <span className="text-accent">.</span>
+        </h1>
         <section className="game-panel">
           <h2 className="sidebar-title">Final standings</h2>
           {players.length === 0 ? (
@@ -948,68 +1125,19 @@ export function FinishedScreen({
               })}
             </ol>
           )}
-          {isHost ? (
-            <>
-              <OperationalHostNotice view={view} />
-              <p className="form-message" role={error ? 'alert' : 'status'}>
-                {error ??
-                  'Return everyone to the lobby before starting another game.'}
-              </p>
-              <Button
-                className="mt-2 w-full"
-                disabled={isReturning}
-                onClick={() => void returnToLobby()}
-              >
-                {isReturning ? 'Returning…' : 'Return to lobby'}
-              </Button>
-            </>
-          ) : (
-            <p className="waiting-host mt-6">
-              The host can return everyone to the lobby for another game.
-            </p>
-          )}
+          <Button className="mt-4 w-full" onClick={onReturnToLobby}>
+            Return to lobby
+          </Button>
         </section>
       </div>
     </GamePageShell>
   )
 }
 
-function GamePageShell({
-  roomCode,
-  eyebrow,
-  title,
-  subtitle,
-  children,
-}: {
-  roomCode: string
-  eyebrow: string
-  title: string
-  subtitle: string
-  children: React.ReactNode
-}) {
+function GamePageShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="game-page min-h-screen px-4 py-5 sm:px-7 sm:py-7 lg:px-10">
-      <div className="mx-auto max-w-[90rem]">
-        <header className="game-topbar">
-          <Link
-            className="brand-mark"
-            href="/home"
-            aria-label="Secret Hitman home"
-          >
-            <span className="brand-sight" aria-hidden="true">
-              ⌖
-            </span>
-            <span>SECRET HITMAN</span>
-          </Link>
-          <span className="room-chip">ROOM {roomCode.toUpperCase()}</span>
-        </header>
-        <div className="game-intro mt-10 mb-6 max-w-3xl sm:mt-14">
-          <p className="page-eyebrow">{eyebrow}</p>
-          <h1 className="page-title">{title}</h1>
-          <p className="page-subtitle">{subtitle}</p>
-        </div>
-        {children}
-      </div>
+      <div className="mx-auto max-w-[90rem]">{children}</div>
     </main>
   )
 }

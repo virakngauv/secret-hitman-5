@@ -14,7 +14,7 @@ for (const viewport of [
     await page.getByLabel('Name').fill(`Ada ${viewport.width}`)
     await create.click()
 
-    const heading = page.getByRole('heading', { name: 'Assemble the room.' })
+    const heading = page.getByRole('heading', { name: 'lobby.' })
     await expect(heading).toBeVisible()
     const roomCode = new URL(page.url()).pathname.slice(1)
     const code = page.getByLabel(`Room code ${roomCode}`)

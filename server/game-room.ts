@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import {
   CARD_SCORE,
+  type CompletedGameResults,
   MAX_TARGET_COUNT,
   MAX_STARTING_PLAYERS,
   MIN_TARGET_COUNT,
@@ -74,6 +75,10 @@ type GameState = {
     (Omit<TurnActivitySnapshot, 'message'> & { playerId: string }) | null
 }
 
+type RetainedGameResults = CompletedGameResults & {
+  viewerPlayerIds: Set<string>
+}
+
 export type GameRoomOptions = {
   now?: number
   createPlayerId?: () => string
@@ -88,6 +93,7 @@ export class GameRoom {
   private readonly members: Member[]
   private readonly removedTokenFingerprints = new Set<string>()
   private game: GameState | null = null
+  private lastGameResults: RetainedGameResults | null = null
   private readonly createPlayerId: () => string
   private readonly initialSeed: string
   private readonly commandResults = new Map<
@@ -312,6 +318,7 @@ export class GameRoom {
 
     const gameId = randomUUID()
     const seed = `${this.initialSeed}:${now}`
+    this.lastGameResults = null
     players.forEach((member, position) => {
       member.participation = 'player'
       member.lobbyNotice = undefined
@@ -685,41 +692,30 @@ export class GameRoom {
         message: 'That guessing turn is no longer current.',
       }
     }
-    this.phase = 'finished'
-    this.commandResults.clear()
-    this.touch(now)
-    return { status: 'success' }
-  }
-
-  returnToLobby(
-    token: string,
-    payload: GameCommandPayload,
-    now = Date.now(),
-  ): CommandResult {
-    const actor = this.findActiveMember(token)
-    if (!actor || actor.role !== 'host') {
-      return {
-        status: 'forbidden',
-        message: 'Only the host can return the room to the lobby.',
-      }
+    const gameId = this.requireGame().gameId
+    const scoreboard = this.scoreboard()
+    const playerScores = scoreboard.filter(
+      (entry): entry is ScoreboardEntry & { score: number } =>
+        entry.participation === 'player' && entry.score !== null,
+    )
+    const winningScore =
+      playerScores.length > 0
+        ? Math.max(...playerScores.map(({ score }) => score))
+        : null
+    this.lastGameResults = {
+      gameId,
+      scoreboard,
+      winners:
+        winningScore === null
+          ? []
+          : playerScores.filter(({ score }) => score === winningScore),
+      viewerPlayerIds: new Set(
+        this.members
+          .filter((member) => member.active || member.game !== null)
+          .map(({ playerId }) => playerId),
+      ),
     }
-    if (this.phase === 'lobby') return { status: 'success' }
-    if (!this.isCurrentGame(payload.gameId)) return this.staleGame()
-    if (this.phase !== 'finished') {
-      return {
-        status: 'invalid',
-        message: 'The room can return to the lobby only from final results.',
-      }
-    }
-
-    for (const member of this.members) {
-      member.participation = 'player'
-      member.departedGame = false
-      member.game = null
-    }
-    this.game = null
-    this.phase = 'lobby'
-    this.commandResults.clear()
+    this.resetRoundToLobby()
     this.touch(now)
     return { status: 'success' }
   }
@@ -750,10 +746,19 @@ export class GameRoom {
     }
 
     if (this.phase === 'lobby') {
+      const lastGameResults =
+        this.lastGameResults?.viewerPlayerIds.has(member.playerId) === true
+          ? {
+              gameId: this.lastGameResults.gameId,
+              scoreboard: this.lastGameResults.scoreboard,
+              winners: this.lastGameResults.winners,
+            }
+          : null
       return {
         status: 'lobby',
         minimumPlayers: MIN_STARTING_PLAYERS,
         ...(member.lobbyNotice ? { lobbyNotice: member.lobbyNotice } : {}),
+        ...(lastGameResults ? { lastGameResults } : {}),
         ...base,
       }
     }
@@ -789,28 +794,6 @@ export class GameRoom {
         hint: member.game?.hint ?? null,
         hintSubmitted: member.game?.hintSubmitted ?? false,
         hintRejected: member.game?.hintRejected ?? false,
-      }
-    }
-
-    if (this.phase === 'finished') {
-      const scoreboard = this.scoreboard()
-      const playerScores = scoreboard.filter(
-        (entry): entry is ScoreboardEntry & { score: number } =>
-          entry.participation === 'player' && entry.score !== null,
-      )
-      const winningScore =
-        playerScores.length > 0
-          ? Math.max(...playerScores.map(({ score }) => score))
-          : null
-      return {
-        status: 'finished',
-        gameId: this.requireGame().gameId,
-        ...base,
-        scoreboard,
-        winners:
-          winningScore === null
-            ? []
-            : playerScores.filter(({ score }) => score === winningScore),
       }
     }
 

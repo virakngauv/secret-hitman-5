@@ -49,11 +49,7 @@ function gameCommand(room: GameRoom) {
     spectatorToken,
   ]) {
     const snapshot = room.snapshotFor(token)
-    if (
-      snapshot.status === 'hinting' ||
-      snapshot.status === 'guessing' ||
-      snapshot.status === 'finished'
-    ) {
+    if (snapshot.status === 'hinting' || snapshot.status === 'guessing') {
       lastGameIds.set(room, snapshot.gameId)
       if (snapshot.status === 'guessing') {
         lastTurnIds.set(room, snapshot.turnId)
@@ -608,7 +604,7 @@ describe('GameRoom single-round flow', () => {
     ).toEqual({ status: 'success', kind: 'target' })
   })
 
-  it('checks turn identity before a cached command ID and rejects invalid tiles and finished games', () => {
+  it('checks turn identity before a cached command ID and rejects invalid tiles and completed games', () => {
     const room = startTwoPlayerGame(true)
     const oldTurnId = guessing(room).turnId
     finishActiveGuessers(room)
@@ -653,13 +649,16 @@ describe('GameRoom single-round flow', () => {
       }),
     ).toEqual({ status: 'success' })
     const finished = room.snapshotFor(thirdToken)
-    expect(finished.status).toBe('finished')
+    expect(finished).toMatchObject({
+      status: 'lobby',
+      lastGameResults: { gameId: finalTurn.gameId },
+    })
     const activity = room.lastMeaningfulActivityAt
     expect(room.claimCard(thirdToken, payload)).toMatchObject({
-      status: 'forbidden',
+      status: 'stale',
     })
     expect(room.finishGuessing(thirdToken, payload)).toMatchObject({
-      status: 'forbidden',
+      status: 'stale',
     })
     expect(room.snapshotFor(thirdToken)).toEqual(finished)
     expect(room.lastMeaningfulActivityAt).toBe(activity)
@@ -1914,11 +1913,10 @@ describe('GameRoom single-round flow', () => {
     ).toEqual({ status: 'success' })
 
     const finished = room.snapshotFor(hostToken)
-    expect(finished.status).toBe('finished')
-    if (finished.status === 'finished') {
-      expect(finished.winners.length).toBeGreaterThan(0)
-      expect(finished).not.toHaveProperty('board')
-    }
+    expect(finished.status).toBe('lobby')
+    if (finished.status !== 'lobby') throw new Error('Expected lobby results.')
+    expect(finished.lastGameResults?.winners.length).toBeGreaterThan(0)
+    expect(finished).not.toHaveProperty('board')
   })
 
   it('reopens the same lobby, resets game state, admits a late visitor, and rejects prior-game commands', () => {
@@ -1934,22 +1932,13 @@ describe('GameRoom single-round flow', () => {
 
     finishGameAndShowScoreboard(room)
     const results = room.snapshotFor(hostToken)
-    if (results.status !== 'finished') throw new Error('Expected results.')
-    const firstGameId = results.gameId
-    const firstScores = results.scoreboard.map(({ score }) => score)
+    if (results.status !== 'lobby' || !results.lastGameResults)
+      throw new Error('Expected retained lobby results.')
+    const firstGameId = results.lastGameResults.gameId
+    const firstScores = results.lastGameResults.scoreboard.map(
+      ({ score }) => score,
+    )
 
-    expect(
-      room.returnToLobby(guestToken, {
-        ...gameCommand(room),
-        gameId: firstGameId,
-      }),
-    ).toMatchObject({ status: 'forbidden' })
-    expect(
-      room.returnToLobby(hostToken, {
-        ...gameCommand(room),
-        gameId: firstGameId,
-      }),
-    ).toEqual({ status: 'success' })
     const reopened = room.snapshotFor(lateToken)
     expect(reopened).toMatchObject({
       status: 'lobby',
@@ -1961,20 +1950,12 @@ describe('GameRoom single-round flow', () => {
     expect(
       reopened.members.every(({ participation }) => participation === 'player'),
     ).toBe(true)
-    const activity = room.lastMeaningfulActivityAt
-    expect(
-      room.returnToLobby(hostToken, {
-        ...gameCommand(room),
-        gameId: firstGameId,
-      }),
-    ).toEqual({ status: 'success' })
-    expect(room.lastMeaningfulActivityAt).toBe(activity)
-
     expect(room.join(removedToken, 'Removed', 1_005)).toEqual({
       status: 'success',
     })
     const removedId = room.snapshotFor(hostToken)
     if (removedId.status !== 'lobby') throw new Error('Expected lobby.')
+    expect(room.snapshotFor(removedToken)).not.toHaveProperty('lastGameResults')
     const target = removedId.members.find(({ name }) => name === 'Removed')!
     expect(
       room.removePlayer(hostToken, target.playerId, false, 1_006),
@@ -2036,15 +2017,9 @@ describe('GameRoom single-round flow', () => {
     expect(secondScores).not.toEqual(firstScores)
     finishGameAndShowScoreboard(room)
     const secondResults = room.snapshotFor(hostToken)
-    if (secondResults.status !== 'finished')
-      throw new Error('Expected results.')
-    expect(
-      room.returnToLobby(hostToken, {
-        ...gameCommand(room),
-        gameId: secondResults.gameId,
-      }),
-    ).toEqual({ status: 'success' })
-    expect(room.snapshotFor(hostToken).status).toBe('lobby')
+    if (secondResults.status !== 'lobby' || !secondResults.lastGameResults)
+      throw new Error('Expected retained lobby results.')
+    expect(secondResults.lastGameResults.gameId).not.toBe(firstGameId)
   })
 
   it('rejects stale guesses without changing the score', () => {
@@ -2088,15 +2063,17 @@ describe('GameRoom single-round flow', () => {
       ).toEqual({ status: 'success' })
 
       expect(room.snapshotFor(spectatorToken)).toMatchObject({
-        status: 'finished',
-        scoreboard: [
-          {
-            name: 'Spectator',
-            participation: 'spectator',
-            score: null,
-          },
-        ],
-        winners: [],
+        status: 'lobby',
+        lastGameResults: {
+          scoreboard: [
+            {
+              name: 'Spectator',
+              participation: 'spectator',
+              score: null,
+            },
+          ],
+          winners: [],
+        },
       })
     })
 
@@ -2227,17 +2204,18 @@ describe('GameRoom single-round flow', () => {
         status: 'success',
       })
       expect(room.snapshotFor(spectatorToken)).toMatchObject({
-        status: 'finished',
-        player: { role: 'host', participation: 'spectator' },
+        status: 'lobby',
+        player: { role: 'host', participation: 'player' },
+        lastGameResults: { gameId: expect.any(String) },
       })
 
       room.join(hostToken, 'Ada', 1_009)
       room.join(guestToken, 'Grace', 1_010)
       expect(room.snapshotFor(hostToken)).toMatchObject({
-        player: { role: 'player', participation: 'spectator' },
+        player: { role: 'player', participation: 'player' },
       })
       expect(room.snapshotFor(guestToken)).toMatchObject({
-        player: { role: 'player', participation: 'spectator' },
+        player: { role: 'player', participation: 'player' },
       })
     })
   })

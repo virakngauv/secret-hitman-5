@@ -379,18 +379,6 @@ export function createGameSocketServer(
       })
     })
 
-    socket.on('game:return-to-lobby', (payload, callback) => {
-      const acknowledge = normalizeAcknowledgement(callback)
-      if (!canRun(socket, acknowledge)) return
-      safely('game:return-to-lobby', acknowledge, () => {
-        const parsed = parseGameCommand(payload)
-        if (!parsed) return acknowledge(invalid())
-        const result = gameServer.returnToLobby(socket.data.token, parsed)
-        acknowledge(result)
-        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
-      })
-    })
-
     socket.on('disconnect', (reason) => {
       socketCommands.delete(socket.id)
       logger.info(

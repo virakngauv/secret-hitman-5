@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   finishGuessing: vi.fn(),
   advanceTurn: vi.fn(),
   showScoreboard: vi.fn(),
-  returnToLobby: vi.fn(),
   removePlayer: vi.fn(),
   leaveRoom: vi.fn(),
   routerPush: vi.fn(),
@@ -29,7 +28,6 @@ vi.mock('@/components/game-socket-provider', () => ({
     finishGuessing: mocks.finishGuessing,
     advanceTurn: mocks.advanceTurn,
     showScoreboard: mocks.showScoreboard,
-    returnToLobby: mocks.returnToLobby,
     removePlayer: mocks.removePlayer,
     leaveRoom: mocks.leaveRoom,
   }),
@@ -73,6 +71,22 @@ function readyLobby(): LobbyView {
     participation: 'player',
   })
   return view
+}
+
+function completedLobby(gameId = '10000000-0000-4000-8000-000000000001') {
+  const view = readyLobby()
+  return {
+    ...view,
+    lastGameResults: {
+      gameId,
+      scoreboard: view.members.map((member, index) => ({
+        ...member,
+        score: index === 0 ? 6 : 3,
+        position: index + 1,
+      })),
+      winners: [{ ...view.members[0], score: 6, position: 1 }],
+    },
+  } satisfies LobbyView
 }
 
 function guessingView(): Extract<RoomSnapshot, { status: 'guessing' }> {
@@ -131,6 +145,7 @@ function hintingView(): Extract<RoomSnapshot, { status: 'hinting' }> {
 
 describe('RoomLobby invite prompt', () => {
   beforeEach(() => {
+    window.localStorage.clear()
     mocks.view = lobbyView()
     mocks.connectionStatus = 'connected'
     mocks.startGame.mockReset().mockResolvedValue({ status: 'success' })
@@ -290,20 +305,99 @@ describe('RoomLobby invite prompt', () => {
     expect(screen.getByRole('button', { name: 'Start game' })).toBeDisabled()
   })
 
-  it('shows the ready message and enables starting when enough players join', () => {
+  it('puts host actions in a separate Host control card', () => {
     mocks.view = readyLobby()
     render(<RoomLobby roomCode="bcdf2" />)
 
-    expect(
-      screen.getByRole('heading', { name: 'Assemble the room.' }),
-    ).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
     expect(screen.getByRole('main')).not.toHaveTextContent(
       /Everyone who is here when the host starts|Late arrivals can still watch as spectators/i,
     )
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Ready when the host is.',
+    const roster = screen.getByRole('list', { name: 'Players in this room' })
+    const hostControls = screen.getByRole('region', { name: 'Host controls' })
+    expect(within(roster).queryByRole('button')).not.toBeInTheDocument()
+    expect(
+      within(hostControls).getByRole('button', { name: 'Remove Grace' }),
+    ).toBeVisible()
+    expect(
+      within(hostControls).getByRole('button', { name: 'Start game' }),
+    ).toBeEnabled()
+    expect(
+      screen.queryByText('Ready when the host is.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the same action-free lobby list to a non-host', () => {
+    const view = readyLobby()
+    mocks.view = { ...view, player: view.members[1] }
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    const roster = screen.getByRole('list', { name: 'Players in this room' })
+    expect(within(roster).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(roster).queryByRole('button')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Host controls' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('lets each participant dismiss retained results without a server command', async () => {
+    const user = userEvent.setup()
+    mocks.view = completedLobby()
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Final standings' }),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
+
+    expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
+    expect(
+      window.localStorage.getItem('secret-hitman-5:dismissed-game-results'),
+    ).toContain('10000000-0000-4000-8000-000000000001')
+  })
+
+  it('keeps dismissed results hidden when the client returns to the room', () => {
+    window.localStorage.setItem(
+      'secret-hitman-5:dismissed-game-results',
+      JSON.stringify(['10000000-0000-4000-8000-000000000001']),
     )
-    expect(screen.getByRole('button', { name: 'Start game' })).toBeEnabled()
+    mocks.view = completedLobby()
+
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
+    expect(
+      screen.queryByRole('heading', { name: 'Final standings' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('replaces open results when the host starts the next game', () => {
+    mocks.view = completedLobby()
+    const rendered = render(<RoomLobby roomCode="bcdf2" />)
+    expect(
+      screen.getByRole('heading', { name: 'Final standings' }),
+    ).toBeVisible()
+
+    mocks.view = hintingView()
+    rendered.rerender(<RoomLobby roomCode="bcdf2" />)
+
+    expect(screen.getByLabelText('Hint submission prompt')).toHaveTextContent(
+      'Submit your hint',
+    )
+    expect(
+      screen.queryByRole('heading', { name: 'Final standings' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the lobby directly when the server omits prior results', () => {
+    mocks.view = readyLobby()
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
+    expect(
+      screen.queryByRole('heading', { name: 'Final standings' }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows a server error instead of the normal prompt after starting fails', async () => {
@@ -347,6 +441,30 @@ describe('RoomLobby invite prompt', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('keeps a removal failure inside its confirmation dialog', async () => {
+    const user = userEvent.setup()
+    mocks.view = readyLobby()
+    mocks.removePlayer.mockResolvedValue({
+      status: 'server_unavailable',
+      message: 'Could not remove this player.',
+    })
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    await user.click(screen.getByRole('button', { name: 'Remove Grace' }))
+    const dialog = screen.getByRole('alertdialog', { name: 'Remove Grace?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Could not remove this player.',
+    )
+    expect(
+      within(screen.getByRole('region', { name: 'Host controls' })).queryByRole(
+        'alert',
+      ),
+    ).not.toBeInTheDocument()
+    expect(dialog).toBeVisible()
+  })
+
   it.each(['connecting', 'disconnected'] as const)(
     'keeps the lobby visible and disables mutations while %s',
     (connectionStatus) => {
@@ -354,9 +472,7 @@ describe('RoomLobby invite prompt', () => {
       mocks.connectionStatus = connectionStatus
       render(<RoomLobby roomCode="bcdf2" />)
 
-      expect(
-        screen.getByRole('heading', { name: 'Assemble the room.' }),
-      ).toBeVisible()
+      expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
       expect(
         screen.getByText('Reconnecting · updates may be delayed'),
       ).toBeVisible()
@@ -402,9 +518,7 @@ describe('RoomLobby invite prompt', () => {
     mocks.connectionStatus = 'disconnected'
     render(<RoomLobby roomCode="bcdf2" />)
 
-    expect(
-      screen.getByRole('heading', { name: 'Grace is the clue-giver' }),
-    ).toBeVisible()
+    expect(screen.getByLabelText('Current hint')).toBeVisible()
     expect(screen.getByRole('button', { name: /moon/i })).toBeDisabled()
     expect(
       screen.getByRole('button', { name: 'I’m done guessing' }),
@@ -479,9 +593,7 @@ describe('RoomLobby invite prompt', () => {
     await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: 'Assemble the room.' }),
-    ).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
   })
 
   it('shows the explanation again after a later round ends early', async () => {

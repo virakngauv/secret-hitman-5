@@ -162,12 +162,6 @@ export class GameServer {
     )
   }
 
-  returnToLobby(token: string, payload: GameCommandPayload, now = Date.now()) {
-    return this.withRoom(payload.roomCode, (room) =>
-      room.returnToLobby(token, payload, now),
-    )
-  }
-
   snapshot(token: string, roomCode: string, now = Date.now()): RoomSnapshot {
     const room = this.rooms.get(roomCode)
     if (room) return room.snapshotFor(token)

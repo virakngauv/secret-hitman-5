@@ -21,12 +21,10 @@ export function JoinRoomScreen({
 
   return (
     <main className="flex min-h-screen items-center px-5 py-10 sm:px-8">
-      <section className="game-panel mx-auto w-full max-w-lg">
-        <p className="page-eyebrow text-center">
-          {joinsAsSpectator ? 'Game in progress' : 'Room access'}
-        </p>
-        <h1 className="text-center text-4xl leading-[1.05] font-black tracking-[-0.04em] text-balance sm:text-5xl">
-          {joinsAsSpectator ? 'Join as a spectator' : 'Join the operation'}
+      <section className="bg-card mx-auto w-full max-w-lg rounded-[2rem] border p-7 shadow-sm sm:p-10">
+        <h1 className="text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
+          {joinsAsSpectator ? 'join as a spectator' : 'join a room'}
+          <span className="text-accent">.</span>
         </h1>
         {joinsAsSpectator ? (
           <p className="mt-3 text-center text-sm text-[var(--muted-foreground)]">
