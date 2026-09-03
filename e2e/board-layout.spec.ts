@@ -170,7 +170,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
 
     await host.getByLabel('Your hint').fill('Orbit')
     await host.getByRole('button', { name: 'Submit' }).click()
-    await expect(host.getByLabel('Submitted hint')).toContainText('Orbit 1')
+    await expect(host.getByLabel('Submitted hint')).toContainText('ORBIT 1')
     await expect(host.getByLabel('Your hint')).toBeDisabled()
     await guest.getByLabel('Your hint').fill('Garden')
     const guestTarget = guest
@@ -232,7 +232,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
 
     await guest.setViewportSize({ width: 360, height: 900 })
     await host.getByRole('button', { name: 'Next hint' }).click()
-    await expect(host.getByText('Garden', { exact: true })).toBeVisible()
+    await expect(host.getByText('GARDEN', { exact: true })).toBeVisible()
     await host.locator(`button[data-card-id="${guestTargetId}"]`).click()
     const finalBoard = guest.getByLabel('Completed and fully revealed board')
     await expect(finalBoard).toBeVisible()

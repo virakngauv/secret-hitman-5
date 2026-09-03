@@ -258,7 +258,7 @@ test.describe('Secret Hitman single round', () => {
 
       await makeHint(host, 'Orbit', 2)
       await host.reload()
-      await expect(host.getByLabel('Your hint')).toHaveValue('Orbit')
+      await expect(host.getByLabel('Your hint')).toHaveValue('ORBIT')
       await expect(host.getByLabel('Your hint')).toBeDisabled()
       await expect(host.locator('button[data-card-kind="target"]')).toHaveCount(
         2,
@@ -268,7 +268,7 @@ test.describe('Secret Hitman single round', () => {
       ).toHaveCount(9)
       await host.getByRole('button', { name: 'Edit' }).click()
       await expect(host.getByLabel('Your hint')).toBeEditable()
-      await expect(host.getByLabel('Your hint')).toHaveValue('Orbit')
+      await expect(host.getByLabel('Your hint')).toHaveValue('ORBIT')
       await expect(
         host.locator('button[data-card-kind="neutral"]'),
       ).toHaveCount(6)
@@ -277,13 +277,13 @@ test.describe('Secret Hitman single round', () => {
       await host.locator('button[data-card-kind="target"]').first().click()
       await host.locator('button[data-card-kind="neutral"]').first().click()
       await host.getByRole('button', { name: 'Submit' }).click()
-      await expect(host.getByLabel('Submitted hint')).toContainText('Galaxy 2')
+      await expect(host.getByLabel('Submitted hint')).toContainText('GALAXY 2')
       await expect(host.getByLabel('Your hint')).toBeDisabled()
       await makeHint(guest, 'Garden', 3)
       await expect(host.getByText('2/2')).toBeVisible()
 
       await host.getByRole('button', { name: 'Start guessing' }).click()
-      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
+      await expect(host.getByText('GALAXY', { exact: true })).toBeVisible()
       await spectator.goto(`/${roomCode}`)
       await expect(
         spectator.getByRole('heading', { name: 'join as a spectator.' }),
@@ -319,12 +319,12 @@ test.describe('Secret Hitman single round', () => {
         '1 player is still guessing. Are you sure you want to move on?',
       )
       await host.getByRole('button', { name: 'Cancel' }).click()
-      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
+      await expect(host.getByText('GALAXY', { exact: true })).toBeVisible()
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
       await expect(nextHint).toBeEnabled()
-      await expect(host.getByText('Galaxy', { exact: true })).toBeVisible()
+      await expect(host.getByText('GALAXY', { exact: true })).toBeVisible()
       await host.getByRole('button', { name: 'Next hint' }).click()
-      await expect(host.getByText('Garden', { exact: true })).toBeVisible()
+      await expect(host.getByText('GARDEN', { exact: true })).toBeVisible()
       await expect(
         host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeEnabled()
@@ -379,7 +379,7 @@ test.describe('Secret Hitman single round', () => {
       await spectator.getByRole('button', { name: 'I’m done guessing' }).click()
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(host.getByLabel('Current hint')).toContainText(
-        'Second metal 1',
+        'SECOND METAL 1',
       )
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
@@ -424,19 +424,19 @@ test.describe('Secret Hitman single round', () => {
       await late.getByRole('button', { name: 'Join', exact: true }).click()
       await expect(late.getByLabel('Your twelve word board')).toBeVisible()
       await expect(host.getByText('1/3')).toBeVisible()
-      await expect(late.getByLabel("Ada's hint: Orbit, 2")).toBeVisible()
+      await expect(late.getByLabel("Ada's hint: ORBIT, 2")).toBeVisible()
 
       await makeHint(late, 'New York', 3)
-      await expect(host.getByLabel("Ada's hint: Orbit, 2")).toBeVisible()
+      await expect(host.getByLabel("Ada's hint: ORBIT, 2")).toBeVisible()
       await expect(
         host
           .getByRole('list', { name: 'Roster' })
-          .getByLabel("Linus's hint: New York, 3"),
+          .getByLabel("Linus's hint: NEW YORK, 3"),
       ).toBeVisible()
       await expect(
         host
           .getByRole('list', { name: 'Player controls' })
-          .getByLabel("Linus's hint: New York, 3"),
+          .getByLabel("Linus's hint: NEW YORK, 3"),
       ).toBeVisible()
 
       await host.getByRole('button', { name: "Reject Linus's hint" }).click()
@@ -456,10 +456,10 @@ test.describe('Secret Hitman single round', () => {
       await expect(
         host
           .getByRole('list', { name: 'Player controls' })
-          .getByLabel("Linus's hint: City, 3"),
+          .getByLabel("Linus's hint: CITY, 3"),
       ).toBeVisible()
       await makeHint(guest, 'Garden', 2)
-      await expect(late.getByLabel("Grace's hint: Garden, 2")).toBeVisible()
+      await expect(late.getByLabel("Grace's hint: GARDEN, 2")).toBeVisible()
 
       await host
         .getByRole('button', { name: 'Remove Grace from this game' })
@@ -496,8 +496,8 @@ test.describe('Secret Hitman single round', () => {
       ).toBeEnabled()
 
       await host.getByRole('button', { name: 'Start guessing' }).click()
-      await expect(host.getByLabel('Current hint')).toContainText('Orbit 2')
-      await expect(late.getByLabel('Current hint')).toContainText('Orbit 2')
+      await expect(host.getByLabel('Current hint')).toContainText('ORBIT 2')
+      await expect(late.getByLabel('Current hint')).toContainText('ORBIT 2')
     } finally {
       await Promise.all(contexts.map((context) => context.close()))
     }
@@ -542,14 +542,14 @@ test.describe('Secret Hitman single round', () => {
       await expect(
         removed.getByText(/host removed this browser/i),
       ).toBeVisible()
-      await expect(host.getByLabel('Current hint')).toContainText('Orbit 1')
+      await expect(host.getByLabel('Current hint')).toContainText('ORBIT 1')
 
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(
         host.getByRole('alertdialog', { name: 'Move on from this board?' }),
       ).toContainText('1 player is still guessing')
       await host.getByRole('button', { name: 'Move on' }).click()
-      await expect(host.getByLabel('Current hint')).toContainText('Garden 1')
+      await expect(host.getByLabel('Current hint')).toContainText('GARDEN 1')
       await expect(host.getByText('Linus', { exact: true })).toHaveCount(0)
       await expect(host.getByText('No longer active')).toHaveCount(0)
 
@@ -681,7 +681,7 @@ async function makeHint(page: Page, hint: string, count: number) {
   }
   await page.getByRole('button', { name: 'Submit' }).click()
   await expect(page.getByLabel('Submitted hint')).toContainText(
-    `${hint} ${count}`,
+    `${hint.toUpperCase()} ${count}`,
   )
   await expect(page.getByLabel('Your hint')).toBeDisabled()
 }
