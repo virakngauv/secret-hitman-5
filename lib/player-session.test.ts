@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   generateClientToken,
+  dismissGameResults,
   getClientToken,
   getOrCreateClientToken,
+  hasDismissedGameResults,
   saveClientToken,
   subscribeToClientToken,
 } from './player-session'
@@ -67,5 +69,25 @@ describe('player session storage', () => {
 
   it('generates a 128-bit hexadecimal token', () => {
     expect(generateClientToken()).toMatch(/^[0-9a-f]{32}$/)
+  })
+
+  it('remembers dismissed final results by game ID', () => {
+    dismissGameResults('game-1')
+    dismissGameResults('game-2')
+
+    expect(hasDismissedGameResults('game-1')).toBe(true)
+    expect(hasDismissedGameResults('game-2')).toBe(true)
+    expect(hasDismissedGameResults('game-3')).toBe(false)
+  })
+
+  it('recovers from malformed dismissed-results storage', () => {
+    window.localStorage.setItem(
+      'secret-hitman-5:dismissed-game-results',
+      'not-json',
+    )
+
+    expect(hasDismissedGameResults('game-1')).toBe(false)
+    dismissGameResults('game-1')
+    expect(hasDismissedGameResults('game-1')).toBe(true)
   })
 })

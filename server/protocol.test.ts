@@ -522,7 +522,6 @@ describe('Socket.IO Secret Hitman protocol', () => {
         'game:finish-guessing',
         'game:advance-turn',
         'game:show-scoreboard',
-        'game:return-to-lobby',
       ] satisfies (keyof ClientToServerEvents)[])(
         'handles %s without crashing',
         async (event) => {
@@ -1364,27 +1363,12 @@ describe('Socket.IO Secret Hitman protocol', () => {
       }),
     ).toEqual({ status: 'success' })
     for (const snapshot of await Promise.all(resultSnapshots)) {
-      expect(snapshot.status).toBe('finished')
-      expect(snapshot).not.toHaveProperty('board')
-    }
-    expect(
-      await guest.emitWithAck('session:resume', { roomCode }),
-    ).toMatchObject({ status: 'success', snapshot: { status: 'finished' } })
-
-    const lobbySnapshots = [host, guest, spectator].map(
-      (client) =>
-        new Promise<RoomSnapshot>((resolve) =>
-          client.once('room:snapshot', resolve),
-        ),
-    )
-    expect(
-      await host.emitWithAck('game:return-to-lobby', {
+      expect(snapshot).toMatchObject({
+        status: 'lobby',
         roomCode,
-        gameId: finalBoard.gameId,
-      }),
-    ).toEqual({ status: 'success' })
-    for (const snapshot of await Promise.all(lobbySnapshots)) {
-      expect(snapshot).toMatchObject({ status: 'lobby', roomCode })
+        lastGameResults: { gameId: finalBoard.gameId },
+      })
+      expect(snapshot).not.toHaveProperty('board')
       if (snapshot.status !== 'lobby') throw new Error('Expected lobby.')
       expect(
         snapshot.members.every(
@@ -1393,11 +1377,14 @@ describe('Socket.IO Secret Hitman protocol', () => {
       ).toBe(true)
     }
     expect(
-      await host.emitWithAck('game:return-to-lobby', {
-        roomCode,
-        gameId: finalBoard.gameId,
-      }),
-    ).toEqual({ status: 'success' })
+      await guest.emitWithAck('session:resume', { roomCode }),
+    ).toMatchObject({
+      status: 'success',
+      snapshot: {
+        status: 'lobby',
+        lastGameResults: { gameId: finalBoard.gameId },
+      },
+    })
 
     expect(await host.emitWithAck('game:start', { roomCode })).toEqual({
       status: 'success',

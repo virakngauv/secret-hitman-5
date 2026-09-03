@@ -198,7 +198,6 @@ input {
 }
 
 .page-eyebrow,
-.clue-label,
 .host-control-label,
 .field-label {
   font-size: 0.72rem;
@@ -214,26 +213,6 @@ input {
   font-size: 3rem;
 }
 
-.game-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 1rem;
-}
-
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  color: var(--foreground);
-  font-size: 0.8rem;
-  font-weight: 950;
-  letter-spacing: 0.08em;
-  text-decoration: none;
-}
-
 .brand-sight {
   color: var(--accent);
   font-family: Georgia, serif;
@@ -241,7 +220,6 @@ input {
   line-height: 1;
 }
 
-.room-chip,
 .phase-count {
   display: inline-flex;
   align-items: center;
@@ -282,21 +260,35 @@ input {
   line-height: 1.6;
 }
 
+.game-page {
+  padding: 0.75rem 0.75rem 1rem;
+}
+
 .game-layout {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 0.75rem;
 }
 
 .game-panel {
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 1.5rem;
   background: color-mix(in oklab, var(--card) 94%, transparent);
   box-shadow: 0 1.2rem 3.5rem rgb(49 41 24 / 8%);
-  padding: clamp(1rem, 3vw, 1.75rem);
+  padding: 0.75rem;
 }
 
 .game-sidebar {
+  min-width: 0;
   align-self: start;
+}
+
+.game-sidebar-stack {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
 }
 
 .sidebar-title {
@@ -306,48 +298,18 @@ input {
   letter-spacing: -0.025em;
 }
 
-.hint-number {
-  display: flex;
-  min-height: 5rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 1rem;
-  background: var(--ink-green);
-  color: var(--primary-foreground);
-}
-
-.hint-number-value {
-  font-family: var(--font-mono);
-  font-size: 2rem;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.hint-number-label {
-  margin-top: 0.25rem;
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 .hint-controls {
   display: grid;
-  gap: 1rem;
-  align-items: end;
-  margin-bottom: 1.25rem;
-}
-
-.board-instructions {
-  margin-bottom: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
 }
 
 .word-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
 }
 
 .word-card {
@@ -361,7 +323,7 @@ input {
   grid-template-columns: minmax(0, 1fr);
   /* Equal outer rows keep the word centered with or without picker labels. */
   grid-template-rows: 1fr auto 1fr;
-  row-gap: 0.4rem;
+  row-gap: 0.2rem;
   min-width: 0;
   min-height: 7.5rem;
   border: 1px solid var(--border);
@@ -378,7 +340,7 @@ input {
 
 .game-board-layout,
 .finished-board-grid {
-  margin-top: 1.25rem;
+  margin-top: 0.6rem;
 }
 
 button.word-card:not(:disabled):hover {
@@ -443,7 +405,7 @@ button.word-card:focus-visible {
   width: 100%;
   max-width: 100%;
   overflow-wrap: normal;
-  font-size: clamp(0.9rem, 2vw, 1.16rem);
+  font-size: clamp(1.1rem, 4vw, 1.45rem);
   font-weight: 950;
   letter-spacing: -0.025em;
   line-height: 1.05;
@@ -454,24 +416,23 @@ button.word-card:focus-visible {
   white-space: nowrap;
 }
 
-/* Compact likely-wide words only when the card itself is constrained. */
-@container word-card (max-width: 8rem) {
-  .word-card-word-wide {
-    font-size: clamp(0.68rem, 2vw, 1rem);
-    letter-spacing: -0.035em;
-  }
-}
-
 @container word-card (max-width: 8rem) {
   .word-card-word-compact {
-    font-size: clamp(0.68rem, 2vw, 1rem);
+    font-size: clamp(0.9rem, 3.8vw, 1.2rem);
     letter-spacing: -0.035em;
   }
 }
 
-/* 0.68rem is the bounded minimum before an extreme word may break. */
+@container word-card (max-width: 8rem) {
+  .word-card-word-wide {
+    font-size: clamp(0.78rem, 3.3vw, 1.05rem);
+    letter-spacing: -0.035em;
+  }
+}
+
+/* Extreme words can shrink further before using the break fallback. */
 .word-card-word-break {
-  font-size: clamp(0.68rem, 2vw, 1rem);
+  font-size: clamp(0.78rem, 3.3vw, 1.05rem);
   letter-spacing: -0.035em;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -480,7 +441,7 @@ button.word-card:focus-visible {
 /* Chromium 150+ can fit single words exactly without a heuristic. */
 @supports (text-fit: shrink) {
   .word-card-word-single:not(.word-card-word-break) {
-    text-fit: shrink 55%;
+    text-fit: shrink 68%;
   }
 }
 
@@ -598,7 +559,132 @@ button.word-card:focus-visible {
   box-shadow: 0 0 0 0.2rem color-mix(in oklab, var(--target) 18%, transparent);
 }
 
-.host-control,
+.status-dot-label.is-spectating .status-dot {
+  background: var(--muted-foreground);
+}
+
+.roster-scroll {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  grid-auto-columns: clamp(9rem, 18vw, 12rem);
+  grid-auto-flow: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding-bottom: 0.5rem;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 28%, transparent)
+    transparent;
+  scrollbar-width: thin;
+  scroll-snap-type: inline proximity;
+}
+
+.roster-scroll::-webkit-scrollbar {
+  height: 0.35rem;
+  width: 0.35rem;
+}
+
+.roster-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 28%, transparent);
+}
+
+.roster-card {
+  display: grid;
+  min-width: 0;
+  min-height: 4.5rem;
+  align-content: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--card);
+  padding: 0.75rem 0.85rem;
+  scroll-snap-align: start;
+  text-align: left;
+}
+
+.roster-card-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  align-items: end;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.roster-card-copy {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.roster-card-name-single-line {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-card-primary-single-line {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.roster-card-inline-detail {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.roster-card-inline-detail .roster-card-separator {
+  margin-inline: 0;
+}
+
+.roster-card-name {
+  font-weight: 700;
+}
+
+.roster-card-detail {
+  color: var(--muted-foreground);
+}
+
+.roster-card-separator {
+  margin-inline: 0.3rem;
+  color: var(--muted-foreground);
+}
+
+.roster-card-suffix {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.roster-card .status-dot-label {
+  justify-self: start;
+}
+
+.roster-card.score-row {
+  justify-content: initial;
+}
+
+.roster-card .score-value {
+  display: block;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-weight: 400;
+}
+
 .sidebar-note {
   margin-top: 1.25rem;
   border-top: 1px solid var(--border);
@@ -607,6 +693,47 @@ button.word-card:focus-visible {
 
 .host-control-label {
   color: var(--accent);
+}
+
+.host-player-controls {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.host-player-control-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.host-player-summary {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.host-player-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.action-error {
+  color: var(--accent);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.hint-control-error {
+  margin-bottom: 0.75rem;
+}
+
+.host-action-error {
+  margin-top: 0.75rem;
 }
 
 .sidebar-note {
@@ -635,44 +762,26 @@ button.word-card:focus-visible {
   line-height: 1;
 }
 
-.clue-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-radius: 1.35rem;
-  background: var(--ink-green);
-  padding: 1.2rem 1.3rem;
-  color: var(--primary-foreground);
-  box-shadow: 0 1rem 2rem rgb(20 35 25 / 18%);
+.hint-display {
+  margin-bottom: 0.75rem;
+  padding-top: 0.5rem;
+  color: var(--foreground);
+  text-align: center;
 }
 
-.clue-label {
-  color: color-mix(in oklab, var(--primary-foreground) 62%, transparent);
+.hint-preview-placeholder {
+  opacity: 0.35;
 }
 
-.clue-word {
-  margin-top: 0.2rem;
+.hint-display-text {
+  margin: 0;
+  color: var(--foreground);
   font-size: clamp(2rem, 8vw, 4.2rem);
   font-weight: 950;
   letter-spacing: -0.06em;
   line-height: 0.95;
   text-transform: uppercase;
-}
-
-.clue-count {
-  display: grid;
-  width: clamp(4.3rem, 12vw, 6.5rem);
-  height: clamp(4.3rem, 12vw, 6.5rem);
-  flex-shrink: 0;
-  place-items: center;
-  border: 2px solid
-    color-mix(in oklab, var(--primary-foreground) 50%, transparent);
-  border-radius: 999px;
-  color: var(--primary-foreground);
-  font-family: var(--font-mono);
-  font-size: clamp(1.8rem, 5vw, 3rem);
-  font-weight: 900;
+  overflow-wrap: anywhere;
 }
 
 .board-actions {
@@ -680,8 +789,8 @@ button.word-card:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .score-row {
@@ -822,82 +931,11 @@ button.word-card:focus-visible {
 }
 
 @media (max-width: 39.9375rem) {
-  .game-page {
-    padding: 0.75rem 0.75rem 1rem;
-  }
-
-  .game-topbar {
-    padding-bottom: 0.5rem;
-  }
-
-  .game-intro {
-    margin-top: 0.75rem;
-    margin-bottom: 0.65rem;
-  }
-
-  .game-intro .page-eyebrow {
-    margin-bottom: 0.25rem;
-    font-size: 0.6rem;
-  }
-
-  .game-intro .page-title {
-    font-size: clamp(1.5rem, 7vw, 1.85rem);
-    line-height: 0.98;
-  }
-
-  .game-intro .page-subtitle {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .game-layout {
-    gap: 0.75rem;
-  }
-
   .game-panel {
     border-radius: 1rem;
-    padding: 0.625rem;
-  }
-
-  .hint-controls {
-    grid-template-columns: minmax(0, 1fr) 4.5rem;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .hint-number {
-    min-height: 3.25rem;
-    border-radius: 0.8rem;
-  }
-
-  .hint-number-value {
-    font-size: 1.35rem;
-  }
-
-  .hint-number-label {
-    margin-top: 0.15rem;
-    font-size: 0.5rem;
-  }
-
-  .board-instructions {
-    margin-bottom: 0.5rem;
-    font-size: 0.75rem;
-    line-height: 1.25;
-  }
-
-  .word-grid {
-    gap: 0.35rem;
   }
 
   .word-card {
-    row-gap: 0.2rem;
     min-height: clamp(5.125rem, 23vw, 7rem);
     border-radius: 0.75rem;
   }
@@ -909,30 +947,8 @@ button.word-card:focus-visible {
     line-height: 1.25;
   }
 
-  .clue-banner {
-    gap: 0.65rem;
-    border-radius: 1rem;
-    padding: 0.625rem 0.75rem;
-  }
-
-  .clue-word {
-    font-size: clamp(1.35rem, 7vw, 2rem);
-  }
-
-  .clue-count {
-    width: 2.75rem;
-    height: 2.75rem;
-    font-size: 1.4rem;
-  }
-
-  .game-board-layout,
-  .finished-board-grid {
-    margin-top: 0.6rem;
-  }
-
-  .board-actions {
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+  .hint-display-text {
+    font-size: clamp(1.75rem, 8vw, 2.4rem);
   }
 
   .rules-role-table {
@@ -1000,35 +1016,9 @@ button.word-card:focus-visible {
   }
 }
 
-/* Keep two columns below 360px so narrow phones retain readable card content. */
-@media (min-width: 22.5rem) {
-  .word-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (min-width: 40rem) {
-  .hint-controls {
-    grid-template-columns: minmax(0, 1fr) 8rem;
-  }
-
-  .word-grid {
-    gap: 0.7rem;
-  }
-
   .word-card {
-    --word-card-padding: 0.8rem;
-    --word-card-label-margin: 0.075rem;
-
     min-height: 8.4rem;
-  }
-
-  .word-card-has-score .word-card-score {
-    bottom: 0.8rem;
-  }
-
-  .clue-banner {
-    padding: 1.5rem 1.8rem;
   }
 }
 
@@ -1041,17 +1031,23 @@ button.word-card:focus-visible {
 
   .game-layout {
     grid-template-columns: minmax(0, 1fr) 20rem;
-    gap: 1.25rem;
+  }
+
+  .roster-scroll {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-columns: unset;
+    grid-auto-flow: row;
+    max-height: 22rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-block: contain;
+    padding-right: 0.35rem;
+    padding-bottom: 0;
+    scroll-snap-type: block proximity;
   }
 
   .lobby-grid {
     grid-template-columns: minmax(0, 1fr) minmax(21rem, 0.72fr);
-  }
-}
-
-@media (min-width: 76rem) {
-  .word-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

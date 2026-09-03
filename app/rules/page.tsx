@@ -51,11 +51,11 @@ export default function RulesPage() {
               targets; every unselected non-assassin word becomes a civilian.
             </p>
             <p className="mt-3">
-              Enter your hint and select <strong>Lock in hint</strong>. The
-              number of targets you select becomes your hint’s number. For
-              example, a hint of “Orbit” with the number 2 tells the other
-              players to look for two connected targets. Keep your target
-              choices and the assassin’s location secret.
+              Enter your hint and select <strong>Submit</strong>. The number of
+              targets you select becomes your hint’s number. For example, a hint
+              of “Orbit” with the number 2 tells the other players to look for
+              two connected targets. Keep your target choices and the assassin’s
+              location secret.
             </p>
             <p className="mt-3">
               Once everyone has locked in a hint, the host selects{' '}

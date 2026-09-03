@@ -27,9 +27,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     ).toBeEnabled()
     await host.getByLabel('Name').fill('Ada Layout')
     await host.getByRole('button', { name: 'Create', exact: true }).click()
-    await expect(
-      host.getByRole('heading', { name: 'Assemble the room.' }),
-    ).toBeVisible()
+    await expect(host.getByRole('heading', { name: 'lobby.' })).toBeVisible()
     const roomCode = new URL(host.url()).pathname.slice(1)
     await guest.goto(`/${roomCode}`)
     await guest.getByLabel('Name').fill(longPickerName)
@@ -167,15 +165,15 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await checkWidths(host, 'hinting', testInfo)
 
     await host.getByLabel('Your hint').fill('Orbit')
-    await host.getByRole('button', { name: 'Lock in hint · 1' }).click()
-    await expect(host.getByText('Hint locked in')).toBeVisible()
+    await host.getByRole('button', { name: 'Submit' }).click()
+    await expect(host.getByText('Hint submitted')).toBeVisible()
     await guest.getByLabel('Your hint').fill('Garden')
     const guestTarget = guest
       .locator('button[data-card-kind="neutral"]')
       .first()
     const guestTargetId = await guestTarget.getAttribute('data-card-id')
     await guestTarget.click()
-    await guest.getByRole('button', { name: 'Lock in hint · 1' }).click()
+    await guest.getByRole('button', { name: 'Submit' }).click()
     await host.getByRole('button', { name: 'Start guessing' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
 
@@ -261,8 +259,17 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
       await page.mouse.move(0, 0)
       await page.evaluate(() => window.scrollTo(0, 0))
       const grid = page.locator('.word-grid')
+      const roster = page.locator('.roster-scroll')
       await expect(grid.locator('.word-card')).toHaveCount(12)
-      const columns = width < 360 ? 2 : width >= 1216 ? 4 : 3
+      await expect(roster).toHaveCSS(
+        'grid-auto-flow',
+        width >= 928 ? 'row' : 'column',
+      )
+      await expect(roster).toHaveCSS(
+        'overflow-x',
+        width >= 928 ? 'hidden' : 'auto',
+      )
+      const columns = 3
       await expect
         .poll(() =>
           grid.evaluate((element) => {
@@ -279,19 +286,10 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
       await assertCardContentFits(page)
       await assertResponsiveCardGeometry(page, width)
       if (phase === 'hinting' && width < 640) {
-        const clueNumberLabel = page.locator('.hint-number-label')
-        await expect(clueNumberLabel).toHaveCSS('white-space', 'nowrap')
-        expect(
-          await clueNumberLabel.evaluate(
-            (label) => label.scrollWidth <= label.parentElement!.clientWidth,
-          ),
-        ).toBe(true)
+        await expect(page.getByLabel('Hint submission prompt')).toBeVisible()
       }
       if (mobileViewportHeights.has(width)) {
-        await expect(page.locator('.game-intro .page-subtitle')).toHaveCSS(
-          'clip-path',
-          'inset(50%)',
-        )
+        await expect(page.locator('.game-intro')).toHaveCount(0)
         await assertBoardFitsViewport(page, height)
         await page.screenshot({
           path: testInfo.outputPath(`${phase}-${width}-viewport.png`),
@@ -320,32 +318,29 @@ async function checkWidths(page: Page, phase: string, testInfo: TestInfo) {
             word: 'COTTON',
           },
           {
-            className:
-              'word-card-word word-card-word-single word-card-word-compact',
+            className: 'word-card-word word-card-word-single',
             label: 'unicorn',
             word: 'UNICORN',
           },
           {
-            className:
-              'word-card-word word-card-word-single word-card-word-compact',
+            className: 'word-card-word word-card-word-single',
             label: 'telescope',
             word: 'TELESCOPE',
           },
           {
-            className:
-              'word-card-word word-card-word-single word-card-word-compact',
+            className: 'word-card-word word-card-word-single',
             label: 'snowman',
             word: 'SNOWMAN',
           },
           {
             className:
-              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide',
+              'word-card-word word-card-word-single word-card-word-compact',
             label: 'longest-deck-word',
             word: 'MILLIONAIRE',
           },
           {
             className:
-              'word-card-word word-card-word-single word-card-word-compact word-card-word-wide',
+              'word-card-word word-card-word-single word-card-word-compact',
             label: 'wide-deck-word',
             word: 'WASHINGTON',
           },

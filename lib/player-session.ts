@@ -1,6 +1,8 @@
 const CLIENT_TOKEN_KEY = 'secret-hitman-5:client-token'
 const CLIENT_TOKEN_PATTERN = /^[0-9a-f]{32}$/
 const CLIENT_TOKEN_CHANGED_EVENT = 'secret-hitman-5:client-token-changed'
+const DISMISSED_RESULTS_KEY = 'secret-hitman-5:dismissed-game-results'
+const MAX_DISMISSED_RESULTS = 25
 
 export function generateClientToken() {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -54,5 +56,30 @@ export function subscribeToClientToken(onStoreChange: () => void) {
   return () => {
     window.removeEventListener('storage', handleStorage)
     window.removeEventListener(CLIENT_TOKEN_CHANGED_EVENT, onStoreChange)
+  }
+}
+
+export function hasDismissedGameResults(gameId: string) {
+  return readDismissedGameResults().includes(gameId)
+}
+
+export function dismissGameResults(gameId: string) {
+  const dismissed = [
+    gameId,
+    ...readDismissedGameResults().filter((candidate) => candidate !== gameId),
+  ].slice(0, MAX_DISMISSED_RESULTS)
+  window.localStorage.setItem(DISMISSED_RESULTS_KEY, JSON.stringify(dismissed))
+}
+
+function readDismissedGameResults() {
+  try {
+    const parsed: unknown = JSON.parse(
+      window.localStorage.getItem(DISMISSED_RESULTS_KEY) ?? '[]',
+    )
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string')
+      : []
+  } catch {
+    return []
   }
 }

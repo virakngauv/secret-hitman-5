@@ -23,7 +23,7 @@ test.describe('Secret Hitman single round', () => {
         await host.getByLabel('Name').fill('Ada')
         await host.getByRole('button', { name: 'Create', exact: true }).click()
         await expect(
-          host.getByRole('heading', { name: 'Assemble the room.' }),
+          host.getByRole('heading', { name: 'lobby.' }),
         ).toBeVisible()
         const roomCode = new URL(host.url()).pathname.slice(1)
         await joinRoom(guest, roomCode, 'Grace')
@@ -247,9 +247,7 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('link', { name: 'Create a room' }).click()
       await host.getByLabel('Name').fill('Ada')
       await host.getByRole('button', { name: 'Create' }).click()
-      await expect(
-        host.getByRole('heading', { name: 'Assemble the room.' }),
-      ).toBeVisible()
+      await expect(host.getByRole('heading', { name: 'lobby.' })).toBeVisible()
       const roomCode = new URL(host.url()).pathname.slice(1)
       expect(roomCode).toMatch(/^[bcdfghkpqrstvz]{4}[2-9y]$/)
 
@@ -262,14 +260,14 @@ test.describe('Secret Hitman single round', () => {
       await makeHint(host, 'Orbit', 2)
       await host.reload()
       await expect(host.getByLabel('Your hint')).toHaveValue('Orbit')
-      await expect(host.getByLabel('Your hint')).toHaveAttribute('readonly')
+      await expect(host.getByLabel('Your hint')).toBeDisabled()
       await expect(host.locator('button[data-card-kind="target"]')).toHaveCount(
         2,
       )
       await expect(
         host.locator('button[data-card-kind="civilian"]'),
       ).toHaveCount(9)
-      await host.getByRole('button', { name: 'Unlock / Edit hint' }).click()
+      await host.getByRole('button', { name: 'Edit' }).click()
       await expect(host.getByLabel('Your hint')).toBeEditable()
       await expect(host.getByLabel('Your hint')).toHaveValue('Orbit')
       await expect(
@@ -279,8 +277,8 @@ test.describe('Secret Hitman single round', () => {
       await host.getByLabel('Your hint').fill('Galaxy')
       await host.locator('button[data-card-kind="target"]').first().click()
       await host.locator('button[data-card-kind="neutral"]').first().click()
-      await host.getByRole('button', { name: 'Lock in hint · 2' }).click()
-      await expect(host.getByText('Hint locked in')).toBeVisible()
+      await host.getByRole('button', { name: 'Submit' }).click()
+      await expect(host.getByText('Hint submitted')).toBeVisible()
       await makeHint(guest, 'Garden', 3)
       await expect(host.getByText('2/2')).toBeVisible()
 
@@ -335,26 +333,35 @@ test.describe('Secret Hitman single round', () => {
       ).toBeEnabled()
       await host.getByRole('button', { name: 'View scoreboard' }).click()
 
-      await expect(host.getByText('Game complete')).toBeVisible()
+      await expect(host.getByText('Final standings')).toBeVisible()
       await expect(guest.getByText('Final standings')).toBeVisible()
       await expect(spectator.getByText('Final standings')).toBeVisible()
       await expect(host.locator('button[data-card-id]')).toHaveCount(0)
       await expect(
         spectator.getByRole('button', { name: 'Return to lobby' }),
-      ).toHaveCount(0)
+      ).toBeVisible()
       await spectator.reload()
       await expect(spectator.getByText('Final standings')).toBeVisible()
 
+      await spectator.getByRole('button', { name: 'Return to lobby' }).click()
+      await expect(
+        spectator.getByRole('heading', { name: 'lobby.' }),
+      ).toBeVisible()
+      await expect(host.getByText('Final standings')).toBeVisible()
+      await expect(guest.getByText('Final standings')).toBeVisible()
+
       await host.getByRole('button', { name: 'Return to lobby' }).click()
-      for (const player of [host, guest, spectator]) {
+      for (const player of [host, spectator]) {
         await expect(
-          player.getByRole('heading', { name: 'Assemble the room.' }),
+          player.getByRole('heading', { name: 'lobby.' }),
         ).toBeVisible()
         await expect(player.getByText('Linus', { exact: true })).toBeVisible()
         expect(new URL(player.url()).pathname).toBe(`/${roomCode}`)
       }
+      await expect(guest.getByText('Final standings')).toBeVisible()
 
       await host.getByRole('button', { name: 'Start game' }).click()
+      await expect(guest.getByLabel('Hint submission prompt')).toBeVisible()
       await makeHint(host, 'Second orbit', 1)
       await makeHint(guest, 'Second garden', 1)
       await makeHint(spectator, 'Second metal', 1)
@@ -374,8 +381,10 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'View scoreboard' }).click()
       await expect(spectator.getByText('Final standings')).toBeVisible()
       await host.getByRole('button', { name: 'Return to lobby' }).click()
+      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await spectator.getByRole('button', { name: 'Return to lobby' }).click()
       await expect(
-        spectator.getByRole('heading', { name: 'Assemble the room.' }),
+        spectator.getByRole('heading', { name: 'lobby.' }),
       ).toBeVisible()
     } finally {
       await Promise.all(contexts.map((context) => context.close()))
@@ -396,9 +405,7 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('link', { name: 'Create a room' }).click()
       await host.getByLabel('Name').fill('Ada')
       await host.getByRole('button', { name: 'Create', exact: true }).click()
-      await expect(
-        host.getByRole('heading', { name: 'Assemble the room.' }),
-      ).toBeVisible()
+      await expect(host.getByRole('heading', { name: 'lobby.' })).toBeVisible()
       const roomCode = new URL(host.url()).pathname.slice(1)
       await joinRoom(guest, roomCode, 'Grace')
       await host.getByRole('button', { name: 'Start game' }).click()
@@ -542,6 +549,7 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(host)
       await expect(host).toHaveURL(/\/home$/)
+      await guest.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(guest, false)
       await expect(guest).toHaveURL(/\/home$/)
       await removed.goto('/home')
@@ -584,9 +592,7 @@ test.describe('Secret Hitman single round', () => {
       await returnToLobby.click()
 
       await expect(dialog).toHaveCount(0)
-      await expect(
-        host.getByRole('heading', { name: 'Assemble the room.' }),
-      ).toBeVisible()
+      await expect(host.getByRole('heading', { name: 'lobby.' })).toBeVisible()
       await expect(
         host.getByRole('button', { name: 'Start game' }),
       ).toBeDisabled()
@@ -662,8 +668,8 @@ async function makeHint(page: Page, hint: string, count: number) {
   for (let index = 0; index < count; index += 1) {
     await cards.nth(index).click()
   }
-  await page.getByRole('button', { name: `Lock in hint · ${count}` }).click()
-  await expect(page.getByText('Hint locked in')).toBeVisible()
+  await page.getByRole('button', { name: 'Submit' }).click()
+  await expect(page.getByText('Hint submitted')).toBeVisible()
 }
 
 async function leaveRoom(page: Page, confirmationExpected = true) {

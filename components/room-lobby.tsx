@@ -9,6 +9,7 @@ import {
   GuessingScreen,
   HintPhaseScreen,
 } from '@/components/game-screen'
+import { HostControlCard } from '@/components/host-control-card'
 import {
   useGameSocket,
   useRoomSnapshot,
@@ -21,8 +22,12 @@ import {
 } from '@/components/room-invite-card'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
-import { MAX_STARTING_PLAYERS, type RoomSnapshot } from '@/lib/game-protocol'
-import { generateClientToken } from '@/lib/player-session'
+import type { CommandResult, RoomSnapshot } from '@/lib/game-protocol'
+import {
+  dismissGameResults,
+  generateClientToken,
+  hasDismissedGameResults,
+} from '@/lib/player-session'
 
 type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
 
@@ -30,8 +35,14 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
   const channel = useRoomSnapshot(roomCode)
   const game = useGameSocket()
   const router = useRouter()
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<{
+    action: 'start' | 'leave'
+    message: string
+  } | null>(null)
   const [isActing, setIsActing] = useState(false)
+  const [dismissedResultsGameId, setDismissedResultsGameId] = useState<
+    string | null
+  >(null)
   const { snapshot, connectionStatus } = channel
   const [roundTransition, setRoundTransition] = useState<{
     snapshot: RoomSnapshot | null
@@ -47,9 +58,9 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
     const previousSnapshot = roundTransition.snapshot
     const inferredRoundEndedEarly =
       snapshot?.status === 'lobby' &&
-      previousSnapshot !== null &&
-      (previousSnapshot.status === 'hinting' ||
-        previousSnapshot.status === 'guessing') &&
+      snapshot.lastGameResults === undefined &&
+      (previousSnapshot?.status === 'hinting' ||
+        previousSnapshot?.status === 'guessing') &&
       previousSnapshot.members.length > snapshot.members.length &&
       !roundTransition.suppressInference
     setRoundTransition({
@@ -64,6 +75,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
 
   const showRoundEndedEarly =
     snapshot?.status === 'lobby' &&
+    snapshot.lastGameResults === undefined &&
     (snapshot.lobbyNotice === 'player_left' ||
       roundTransition.inferredRoundEndedEarly)
 
@@ -107,7 +119,25 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onJoined={() => {}}
         />
       )
-    case 'lobby':
+    case 'lobby': {
+      const results = snapshot.lastGameResults
+      const showResults =
+        results !== undefined &&
+        dismissedResultsGameId !== results.gameId &&
+        !hasDismissedGameResults(results.gameId)
+
+      if (results && showResults) {
+        return retainScreen(
+          <FinishedScreen
+            results={results}
+            onReturnToLobby={() => {
+              dismissGameResults(results.gameId)
+              setDismissedResultsGameId(results.gameId)
+            }}
+          />,
+        )
+      }
+
       return retainScreen(
         <LobbyScreen
           view={snapshot}
@@ -118,8 +148,11 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             setIsActing(true)
             setActionError(null)
             const result = await game.startGame(roomCode)
-            if (result.status !== 'success') setActionError(result.message)
+            if (result.status !== 'success') {
+              setActionError({ action: 'start', message: result.message })
+            }
             setIsActing(false)
+            return result
           }}
           onLeave={async () => {
             setIsActing(true)
@@ -127,17 +160,18 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             const result = await game.leaveRoom(roomCode)
             if (result.status === 'success') router.push('/home')
             else {
-              setActionError(result.message)
+              setActionError({ action: 'leave', message: result.message })
               setIsActing(false)
             }
+            return result
           }}
-          onRemove={async (playerId) => {
+          onRemove={(playerId) => {
             setActionError(null)
-            const result = await game.removePlayer(roomCode, playerId)
-            if (result.status !== 'success') setActionError(result.message)
+            return game.removePlayer(roomCode, playerId)
           }}
         />,
       )
+    }
     case 'hinting':
       return retainScreen(
         <HintPhaseScreen
@@ -234,15 +268,6 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           }}
         />,
       )
-    case 'finished':
-      return retainScreen(
-        <FinishedScreen
-          view={snapshot}
-          onReturnToLobby={() =>
-            game.returnToLobby({ roomCode, gameId: snapshot.gameId })
-          }
-        />,
-      )
     default:
       return assertNever(snapshot)
   }
@@ -258,14 +283,17 @@ function LobbyScreen({
   onRemove,
 }: {
   view: LobbyView
-  error: string | null
+  error: { action: 'start' | 'leave'; message: string } | null
   isActing: boolean
   showRoundEndedEarly: boolean
-  onStart: () => Promise<void>
-  onLeave: () => Promise<void>
-  onRemove: (playerId: string) => Promise<void>
+  onStart: () => Promise<CommandResult>
+  onLeave: () => Promise<CommandResult>
+  onRemove: (playerId: string) => Promise<CommandResult>
 }) {
   const isHost = view.player.role === 'host'
+  const removableMembers = view.members.filter(
+    (member) => member.role !== 'host',
+  )
   const canStart = view.members.length >= view.minimumPlayers
   const missingPlayers = view.minimumPlayers - view.members.length
   const [removalTarget, setRemovalTarget] = useState<{
@@ -273,6 +301,7 @@ function LobbyScreen({
     name: string
   } | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
+  const [removalError, setRemovalError] = useState<string | null>(null)
   const [roundResetNotice, setRoundResetNotice] = useState({
     active: showRoundEndedEarly,
     dismissed: false,
@@ -284,105 +313,115 @@ function LobbyScreen({
   const confirmRemoval = async () => {
     if (!removalTarget) return
     setIsRemoving(true)
-    await onRemove(removalTarget.playerId)
+    setRemovalError(null)
+    const result = await onRemove(removalTarget.playerId)
     setIsRemoving(false)
-    setRemovalTarget(null)
+    if (result.status === 'success') setRemovalTarget(null)
+    else setRemovalError(result.message)
   }
 
   return (
-    <main className="min-h-screen px-4 py-7 sm:px-7 lg:px-10">
-      <div className="mx-auto max-w-5xl">
-        <header className="game-topbar">
-          <Link className="brand-mark" href="/home">
-            <span className="brand-sight" aria-hidden="true">
-              ⌖
+    <main className="game-page flex min-h-screen items-center">
+      <div className="game-sidebar-stack mx-auto w-full max-w-xl">
+        <section className="game-panel">
+          <h1 className="text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
+            lobby<span className="text-accent">.</span>
+          </h1>
+          <RoomInviteCard roomCode={view.roomCode} />
+          <RoomInviteActions roomCode={view.roomCode} />
+        </section>
+
+        <section className="game-panel">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-xl font-semibold tracking-tight">
+              In this room
+            </h2>
+            <span className="text-muted-foreground text-sm">
+              {view.members.length}{' '}
+              {view.members.length === 1 ? 'player' : 'players'}
             </span>
-            <span>SECRET HITMAN</span>
-          </Link>
-          <span className="phase-count">LOBBY</span>
-        </header>
+          </div>
+          <ul className="mt-4 grid gap-2" aria-label="Players in this room">
+            {view.members.map((member) => (
+              <li
+                className="bg-background flex items-center justify-between gap-4 rounded-xl border px-4 py-3"
+                key={member.playerId}
+              >
+                <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
+                  {member.name}
+                </span>
+                <span className="text-muted-foreground shrink-0 text-xs font-bold tracking-[0.12em] uppercase">
+                  {member.playerId === view.player.playerId
+                    ? member.role === 'host'
+                      ? 'You · Host'
+                      : 'You'
+                    : member.role === 'host'
+                      ? 'Host'
+                      : 'Player'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-        <div className="lobby-grid">
-          <section className="min-w-0">
-            <h1 className="page-title text-center">Assemble the room.</h1>
-            <div className="mx-auto w-full max-w-lg">
-              <RoomInviteCard roomCode={view.roomCode} />
-              <RoomInviteActions roomCode={view.roomCode} />
-            </div>
-          </section>
-
-          <section className="game-panel">
-            <div className="flex items-baseline justify-between gap-4">
-              <h2 className="sidebar-title">Players</h2>
-              <span className="phase-count">
-                {view.members.length}/{MAX_STARTING_PLAYERS}
-              </span>
-            </div>
-            <ul className="mt-5 grid gap-2">
-              {view.members.map((member, index) => (
-                <li className="lobby-player" key={member.playerId}>
-                  <span className="player-number">
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-bold">
-                    {member.name}
-                  </span>
-                  <span className="player-role">
-                    {member.playerId === view.player.playerId
-                      ? member.role === 'host'
-                        ? 'YOU · HOST'
-                        : 'YOU'
-                      : member.role === 'host'
-                        ? 'HOST'
-                        : 'PLAYER'}
-                  </span>
-                  {isHost && member.role !== 'host' ? (
-                    <button
+        {isHost ? (
+          <HostControlCard>
+            {removableMembers.length > 0 ? (
+              <ul className="host-player-controls" aria-label="Player controls">
+                {removableMembers.map((member) => (
+                  <li className="host-player-control-row" key={member.playerId}>
+                    <span className="min-w-0 flex-1 truncate font-semibold">
+                      {member.name}
+                    </span>
+                    <Button
                       type="button"
-                      className="remove-player"
-                      onClick={() =>
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      disabled={isRemoving}
+                      onClick={() => {
+                        setRemovalError(null)
                         setRemovalTarget({
                           playerId: member.playerId,
                           name: member.name,
                         })
-                      }
+                      }}
                       aria-label={`Remove ${member.name}`}
                     >
-                      ×
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-
-            <p className="form-message" role={error ? 'alert' : 'status'}>
-              {error ??
-                (canStart
-                  ? 'Ready when the host is.'
-                  : `Invite at least ${missingPlayers} more ${missingPlayers === 1 ? 'player' : 'players'}.`)}
-            </p>
-
-            {isHost ? (
-              <Button
-                className="mt-2 h-12 w-full"
-                disabled={!canStart || isActing}
-                onClick={() => void onStart()}
-              >
-                {isActing ? 'Starting…' : 'Start game'}
-              </Button>
-            ) : (
-              <div className="waiting-host">Waiting for the host to start</div>
-            )}
-            <LeaveRoomControl
-              busy={isActing}
-              confirmationRequired={!isHost || view.members.length > 1}
-              error={!isHost || view.members.length > 1 ? error : null}
-              gameInProgress={false}
-              isHost={isHost}
-              onConfirm={() => void onLeave()}
-            />
-          </section>
-        </div>
+                      Remove player
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {!canStart ? (
+              <p className="form-message" role="status">
+                Invite at least {missingPlayers} more{' '}
+                {missingPlayers === 1 ? 'player' : 'players'}.
+              </p>
+            ) : null}
+            {error?.action === 'start' ? (
+              <p className="action-error host-action-error" role="alert">
+                {error.message}
+              </p>
+            ) : null}
+            <Button
+              className="mt-4 h-12 w-full"
+              disabled={!canStart || isActing}
+              onClick={() => void onStart()}
+            >
+              {isActing ? 'Starting…' : 'Start game'}
+            </Button>
+          </HostControlCard>
+        ) : null}
+        <LeaveRoomControl
+          busy={isActing}
+          className="mt-0"
+          confirmationRequired={!isHost || view.members.length > 1}
+          error={error?.action === 'leave' ? error.message : null}
+          gameInProgress={false}
+          isHost={isHost}
+          onConfirm={() => void onLeave()}
+        />
         <ConfirmationDialog
           open={showRoundEndedEarly && !roundResetNotice.dismissed}
           eyebrow="Round update"
@@ -404,7 +443,11 @@ function LobbyScreen({
           cancelLabel="Cancel"
           confirmLabel="Remove"
           busy={isRemoving}
-          onCancel={() => setRemovalTarget(null)}
+          error={removalError}
+          onCancel={() => {
+            setRemovalError(null)
+            setRemovalTarget(null)
+          }}
           onConfirm={() => void confirmRemoval()}
         />
       </div>

@@ -58,7 +58,6 @@ type GameSocketContextValue = {
   finishGuessing: (payload: FinishGuessingPayload) => Promise<CommandResult>
   advanceTurn: (payload: AdvanceTurnPayload) => Promise<CommandResult>
   showScoreboard: (payload: AdvanceTurnPayload) => Promise<CommandResult>
-  returnToLobby: (payload: GameCommandPayload) => Promise<CommandResult>
 }
 
 const GameSocketContext = createContext<GameSocketContextValue | null>(null)
@@ -420,14 +419,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       ),
     [],
   )
-  const returnToLobby = useCallback(
-    async (payload: GameCommandPayload): Promise<CommandResult> =>
-      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
-        socket.emitWithAck('game:return-to-lobby', payload),
-      ),
-    [],
-  )
-
   const value = useMemo<GameSocketContextValue>(
     () => ({
       connectionStatus,
@@ -446,7 +437,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       finishGuessing,
       advanceTurn,
       showScoreboard,
-      returnToLobby,
     }),
     [
       advanceTurn,
@@ -457,7 +447,6 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       leaveRoom,
       finishGuessing,
       removePlayer,
-      returnToLobby,
       rejectHint,
       snapshots,
       startGame,

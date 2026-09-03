@@ -27,9 +27,7 @@ test.describe('spectator experience audit', () => {
       await host.getByRole('link', { name: 'Create a room' }).click()
       await host.getByLabel('Name').fill('Ada')
       await host.getByRole('button', { name: 'Create', exact: true }).click()
-      await expect(
-        host.getByRole('heading', { name: 'Assemble the room.' }),
-      ).toBeVisible()
+      await expect(host.getByRole('heading', { name: 'lobby.' })).toBeVisible()
       const roomCode = new URL(host.url()).pathname.slice(1)
 
       await joinRoom(guest, roomCode, 'Grace')
@@ -208,8 +206,8 @@ async function makeHint(page: Page, hint: string, count: number) {
   for (let index = 0; index < count; index += 1) {
     await cards.nth(index).click()
   }
-  await page.getByRole('button', { name: `Lock in hint · ${count}` }).click()
-  await expect(page.getByText('Hint locked in')).toBeVisible()
+  await page.getByRole('button', { name: 'Submit' }).click()
+  await expect(page.getByText('Hint submitted')).toBeVisible()
 }
 
 async function capture(page: Page, testInfo: TestInfo, name: string) {
