@@ -34,14 +34,14 @@ pnpm dev
 
 This starts:
 
-- Next.js at `http://127.0.0.1:3000`
-- Socket.IO at `http://127.0.0.1:3200`
+- Next.js at `http://<lan-ip>:3000` — the printed Network URL is your LAN IP,
+  which other devices on a trusted local network can open directly
+  (`http://<hostname>.local:3000` also works)
+- Socket.IO at `http://<lan-ip>:3200`
 
-To test on a trusted local network:
-
-```bash
-WEB_HOST=0.0.0.0 HOST=0.0.0.0 pnpm dev
-```
+Both servers fall back to `127.0.0.1` when no LAN address exists. Set `HOST`
+to override the address both bind to — `HOST=127.0.0.1 pnpm dev` keeps
+everything on loopback.
 
 ## Verification
 
