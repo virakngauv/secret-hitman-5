@@ -42,7 +42,7 @@ export default function RulesPage() {
 
           <section className="game-panel" aria-labelledby="write-clue">
             <h2 id="write-clue" className="mb-3 text-2xl font-black">
-              2. Build and lock in your clue
+              2. Build and submit your clue
             </h2>
             <p>
               You receive a private board of 12 words. Three civilians and the
@@ -58,7 +58,7 @@ export default function RulesPage() {
               location secret.
             </p>
             <p className="mt-3">
-              Once everyone has locked in a hint, the host selects{' '}
+              Once everyone has submitted a hint, the host selects{' '}
               <strong>Start guessing</strong>.
             </p>
           </section>
