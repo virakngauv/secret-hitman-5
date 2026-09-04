@@ -209,8 +209,6 @@ input {
 .home-brand-sight {
   display: inline-block;
   margin-bottom: 2rem;
-  color: var(--accent);
-  font-size: 3rem;
 }
 
 .brand-sight {
