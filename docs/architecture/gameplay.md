@@ -9,7 +9,7 @@ hinting
   ├─ the selection count becomes the hint number
   ├─ visitors may join as participants until guessing starts
   ├─ each submitted clue and number appears immediately to everyone, and the host may reject it while other players are still choosing, replacing that player's private board and clearing the rejected clue
-  └─ the host manually selects “Start guessing” after every accepted or revised hint is submitted
+  └─ the host manually selects “Start game” after every accepted or revised hint is submitted
        ↓
 guessing
   ├─ one clue-giver turn per accepted participant
