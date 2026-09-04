@@ -1771,7 +1771,7 @@ describe('GuessingScreen messages', () => {
 })
 
 describe('FinishedScreen', () => {
-  it('shows an explicit no-winner result when no players remain', () => {
+  it('shows the empty standings card when no players remain', () => {
     const spectator = {
       playerId: 'spectator',
       name: 'Spectator',
@@ -1788,7 +1788,6 @@ describe('FinishedScreen', () => {
 
     render(<FinishedScreen results={results} onReturnToLobby={vi.fn()} />)
 
-    expect(screen.getByRole('heading', { name: 'No winner.' })).toBeVisible()
     expect(
       screen.getByText('No players remain in the final standings.'),
     ).toBeVisible()
@@ -1853,12 +1852,6 @@ describe('FinishedScreen', () => {
       }
       render(<FinishedScreen results={results} onReturnToLobby={vi.fn()} />)
 
-      const winnerHeading = results.winners.map(({ name }) => name).join(' & ')
-      expect(
-        screen.getByRole('heading', {
-          name: `${winnerHeading} ${results.winners.length === 1 ? 'wins' : 'win'}.`,
-        }),
-      ).toBeVisible()
       expect(screen.getByRole('main')).not.toHaveTextContent(
         /\b(?:timers?|rounds?)\b/i,
       )

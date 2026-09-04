@@ -1281,18 +1281,10 @@ export function FinishedScreen({
     .filter(({ participation }) => participation === 'player')
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
   const ranks = getDenseRanks(players.map(({ score }) => score))
-  const winnerNames = results.winners.map(({ name }) => name).join(' & ')
-  const hasWinner = results.winners.length > 0
 
   return (
     <GamePageShell>
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-6 text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
-          {hasWinner
-            ? `${winnerNames} ${results.winners.length === 1 ? 'wins' : 'win'}`
-            : 'No winner'}
-          <span className="text-accent">.</span>
-        </h1>
         <section className="game-panel">
           <h2 className="sidebar-title">Final standings</h2>
           {players.length === 0 ? (
