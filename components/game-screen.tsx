@@ -1183,12 +1183,11 @@ function useFittingHintPlaceholder(
     if (!input || typeof ResizeObserver === 'undefined') return undefined
     const sync = () => {
       const style = getComputedStyle(input)
+      // clientWidth excludes borders; only its padding sits inside it.
       const available =
         input.clientWidth -
         parseFloat(style.paddingLeft) -
-        parseFloat(style.paddingRight) -
-        parseFloat(style.borderLeftWidth) -
-        parseFloat(style.borderRightWidth)
+        parseFloat(style.paddingRight)
       setPlaceholder(pickHintPlaceholder(available))
     }
     sync()
@@ -1286,7 +1285,9 @@ export function FinishedScreen({
     <GamePageShell>
       <div className="mx-auto max-w-2xl">
         <section className="game-panel">
-          <h2 className="sidebar-title">Final standings</h2>
+          <h1 className="text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
+            scoreboard<span className="text-accent">.</span>
+          </h1>
           {players.length === 0 ? (
             <p className="mt-4 text-sm text-[var(--muted-foreground)]">
               No players remain in the final standings.

@@ -247,7 +247,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     ).toHaveCount(0)
     await checkWidths(guest, 'final-board', testInfo)
     await host.getByRole('button', { name: 'View scoreboard' }).click()
-    await expect(guest.getByText('Final standings')).toBeVisible()
+    await expect(guest.getByText('scoreboard.')).toBeVisible()
     await expect(guest.locator('.word-grid')).toHaveCount(0)
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()])

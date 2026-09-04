@@ -171,14 +171,14 @@ test.describe('spectator experience audit', () => {
         host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeEnabled()
       await host.getByRole('button', { name: 'View scoreboard' }).click()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await expect(spectator.locator('[data-card-kind="hidden"]')).toHaveCount(
         0,
       )
       await capture(spectator, testInfo, '08-final-standings.png')
 
       await spectator.reload()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await expect(
         spectator.locator('button[data-card-kind="hidden"]'),
       ).toHaveCount(0)

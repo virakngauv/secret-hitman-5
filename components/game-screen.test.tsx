@@ -1779,7 +1779,6 @@ describe('FinishedScreen', () => {
     const results = {
       gameId: hintingView.gameId,
       scoreboard: [spectator],
-      winners: [],
     }
 
     render(<FinishedScreen results={results} onReturnToLobby={vi.fn()} />)
@@ -1804,7 +1803,6 @@ describe('FinishedScreen', () => {
     const results = {
       gameId: hintingView.gameId,
       scoreboard: [player],
-      winners: [player],
     }
 
     render(
@@ -1844,7 +1842,6 @@ describe('FinishedScreen', () => {
       const results = {
         gameId: hintingView.gameId,
         scoreboard: [spectator, ...scoreboard.toReversed()],
-        winners: scoreboard.filter(({ score }) => score === scores[0]),
       }
       render(<FinishedScreen results={results} onReturnToLobby={vi.fn()} />)
 

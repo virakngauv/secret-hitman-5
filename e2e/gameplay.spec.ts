@@ -334,22 +334,22 @@ test.describe('Secret Hitman single round', () => {
       ).toBeEnabled()
       await host.getByRole('button', { name: 'View scoreboard' }).click()
 
-      await expect(host.getByText('Final standings')).toBeVisible()
-      await expect(guest.getByText('Final standings')).toBeVisible()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(host.getByText('scoreboard.')).toBeVisible()
+      await expect(guest.getByText('scoreboard.')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await expect(host.locator('button[data-card-id]')).toHaveCount(0)
       await expect(
         spectator.getByRole('button', { name: 'Return to lobby' }),
       ).toBeVisible()
       await spectator.reload()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
 
       await spectator.getByRole('button', { name: 'Return to lobby' }).click()
       await expect(
         spectator.getByRole('heading', { name: 'lobby.' }),
       ).toBeVisible()
-      await expect(host.getByText('Final standings')).toBeVisible()
-      await expect(guest.getByText('Final standings')).toBeVisible()
+      await expect(host.getByText('scoreboard.')).toBeVisible()
+      await expect(guest.getByText('scoreboard.')).toBeVisible()
 
       await host.getByRole('button', { name: 'Return to lobby' }).click()
       for (const player of [host, spectator]) {
@@ -363,7 +363,7 @@ test.describe('Secret Hitman single round', () => {
         ).toBeVisible()
         expect(new URL(player.url()).pathname).toBe(`/${roomCode}`)
       }
-      await expect(guest.getByText('Final standings')).toBeVisible()
+      await expect(guest.getByText('scoreboard.')).toBeVisible()
 
       await host.getByRole('button', { name: 'Start game' }).click()
       await expect(guest.getByLabel('Hint submission prompt')).toBeVisible()
@@ -384,9 +384,9 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
       await host.getByRole('button', { name: 'View scoreboard' }).click()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await host.getByRole('button', { name: 'Return to lobby' }).click()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await spectator.getByRole('button', { name: 'Return to lobby' }).click()
       await expect(
         spectator.getByRole('heading', { name: 'lobby.' }),
@@ -555,7 +555,7 @@ test.describe('Secret Hitman single round', () => {
 
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await host.getByRole('button', { name: 'View scoreboard' }).click()
-      await expect(host.getByText('Final standings')).toBeVisible()
+      await expect(host.getByText('scoreboard.')).toBeVisible()
       await expect(host.getByText('Linus', { exact: true })).toHaveCount(0)
       await host.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(host)
@@ -653,7 +653,7 @@ test.describe('Secret Hitman single round', () => {
         spectator.getByRole('button', { name: 'I’m done guessing' }),
       ).toHaveCount(0)
       await spectator.getByRole('button', { name: 'View scoreboard' }).click()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await spectator.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(spectator, false)
       await expect(spectator).toHaveURL(/\/$/)

@@ -1915,7 +1915,7 @@ describe('GameRoom single-round flow', () => {
     const finished = room.snapshotFor(hostToken)
     expect(finished.status).toBe('lobby')
     if (finished.status !== 'lobby') throw new Error('Expected lobby results.')
-    expect(finished.lastGameResults?.winners.length).toBeGreaterThan(0)
+    expect(finished.lastGameResults?.scoreboard.length).toBeGreaterThan(0)
     expect(finished).not.toHaveProperty('board')
   })
 
@@ -2072,7 +2072,6 @@ describe('GameRoom single-round flow', () => {
               score: null,
             },
           ],
-          winners: [],
         },
       })
     })
