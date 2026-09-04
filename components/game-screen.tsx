@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type Ref,
+  type RefObject,
 } from 'react'
 
 import { HostControlCard } from '@/components/host-control-card'
@@ -53,6 +54,8 @@ export function HintPhaseScreen({
   onStartGuessing: () => Promise<CommandResult>
 }) {
   const [hint, setHint] = useState(view.hint ?? '')
+  const hintInputRef = useRef<HTMLInputElement | null>(null)
+  const hintPlaceholder = useFittingHintPlaceholder(hintInputRef)
   const [editableSelected, setSelected] = useState<Set<string>>(
     () =>
       new Set(
@@ -285,13 +288,14 @@ export function HintPhaseScreen({
                     </label>
                     <Input
                       id="hint"
+                      ref={hintInputRef}
                       value={hint}
                       onChange={(event) => {
                         setHint(event.target.value.toUpperCase())
                         setHintActionError(null)
                       }}
                       maxLength={40}
-                      placeholder="e.g. ROCKY or PROJECT HAIL MARY"
+                      placeholder={hintPlaceholder}
                       autoComplete="off"
                       autoCapitalize="characters"
                       enterKeyHint="done"
@@ -1146,6 +1150,54 @@ function PlayerSummary({
       )}
     </p>
   )
+}
+
+/* Longest-first placeholder tiers for the hint field. Thresholds are each
+   string's measured width at the field's 18px font plus ~5px of headroom, so
+   the placeholder never clips on narrow screens. */
+const HINT_PLACEHOLDERS = [
+  { minWidth: 305, text: 'e.g. ROCKY or PROJECT HAIL MARY' },
+  { minWidth: 217, text: 'e.g. PROJECT HAIL MARY' },
+  { minWidth: 139, text: 'e.g. ANDY WEIR' },
+  { minWidth: 103, text: 'e.g. ROCKY' },
+] as const
+
+export function pickHintPlaceholder(availableWidth: number) {
+  return (
+    HINT_PLACEHOLDERS.find(({ minWidth }) => availableWidth >= minWidth)
+      ?.text ?? HINT_PLACEHOLDERS[HINT_PLACEHOLDERS.length - 1].text
+  )
+}
+
+/* Keeps the hint placeholder on one line by tracking the field's inner width
+   (which jsdom can't compute, hence the guard). */
+function useFittingHintPlaceholder(
+  inputRef: RefObject<HTMLInputElement | null>,
+) {
+  const [placeholder, setPlaceholder] = useState(
+    HINT_PLACEHOLDERS[HINT_PLACEHOLDERS.length - 1].text,
+  )
+
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    if (!input || typeof ResizeObserver === 'undefined') return undefined
+    const sync = () => {
+      const style = getComputedStyle(input)
+      const available =
+        input.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight) -
+        parseFloat(style.borderLeftWidth) -
+        parseFloat(style.borderRightWidth)
+      setPlaceholder(pickHintPlaceholder(available))
+    }
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(input)
+    return () => observer.disconnect()
+  }, [inputRef])
+
+  return placeholder
 }
 
 function HintDisplay({

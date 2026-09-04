@@ -4,7 +4,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { RoomSnapshot } from '@/lib/game-protocol'
 
-import { FinishedScreen, GuessingScreen, HintPhaseScreen } from './game-screen'
+import {
+  FinishedScreen,
+  GuessingScreen,
+  HintPhaseScreen,
+  pickHintPlaceholder,
+} from './game-screen'
 
 const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
   status: 'hinting',
@@ -1892,4 +1897,17 @@ describe('FinishedScreen', () => {
       ).not.toBeInTheDocument()
     },
   )
+})
+
+describe('pickHintPlaceholder', () => {
+  it('picks the longest placeholder that fits the field width', () => {
+    expect(pickHintPlaceholder(305)).toBe('e.g. ROCKY or PROJECT HAIL MARY')
+    expect(pickHintPlaceholder(304)).toBe('e.g. PROJECT HAIL MARY')
+    expect(pickHintPlaceholder(217)).toBe('e.g. PROJECT HAIL MARY')
+    expect(pickHintPlaceholder(216)).toBe('e.g. ANDY WEIR')
+    expect(pickHintPlaceholder(139)).toBe('e.g. ANDY WEIR')
+    expect(pickHintPlaceholder(138)).toBe('e.g. ROCKY')
+    expect(pickHintPlaceholder(103)).toBe('e.g. ROCKY')
+    expect(pickHintPlaceholder(0)).toBe('e.g. ROCKY')
+  })
 })
