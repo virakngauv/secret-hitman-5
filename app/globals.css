@@ -342,11 +342,6 @@ input {
     box-shadow 120ms ease;
 }
 
-.game-board-layout,
-.finished-board-grid {
-  margin-top: 0.6rem;
-}
-
 button.word-card:not(:disabled):hover {
   border-color: var(--foreground);
   box-shadow: 0 0.45rem 1.1rem rgb(34 31 24 / 10%);

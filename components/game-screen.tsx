@@ -768,14 +768,14 @@ export function GuessingScreen({
 
   return (
     <GamePageShell>
-      <HintDisplay
-        hint={view.hint}
-        count={view.hintNumber}
-        label="Current hint"
-      />
-
-      <div className="game-layout game-board-layout">
+      <div className="game-layout">
         <section className="game-panel min-w-0">
+          <HintDisplay
+            hint={view.hint}
+            count={view.hintNumber}
+            label="Current hint"
+          />
+
           <div
             className="word-grid"
             aria-label={
