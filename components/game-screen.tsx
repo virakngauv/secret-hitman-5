@@ -295,9 +295,6 @@ export function HintPhaseScreen({
                         view.hintSubmitted && 'uppercase',
                       )}
                     />
-                    <p className="mt-1.5 text-sm text-[var(--muted-foreground)]">
-                      Write a one-word or short phrase hint.
-                    </p>
                   </div>
                   {view.hintSubmitted ? (
                     <Button
