@@ -272,7 +272,13 @@ export function HintPhaseScreen({
               </div>
 
               <section aria-label="Hint controls">
-                <div className="hint-controls">
+                <form
+                  className="hint-controls"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void submit()
+                  }}
+                >
                   <div>
                     <label className="sr-only" htmlFor="hint">
                       Your hint
@@ -288,6 +294,7 @@ export function HintPhaseScreen({
                       placeholder="e.g. ROCKY or NEW YORK"
                       autoComplete="off"
                       autoCapitalize="characters"
+                      enterKeyHint="done"
                       disabled={view.hintSubmitted}
                       readOnly={isSubmitting || isUnlocking}
                       className={cn(
@@ -308,10 +315,9 @@ export function HintPhaseScreen({
                     </Button>
                   ) : (
                     <Button
-                      type="button"
+                      type="submit"
                       variant="outline"
                       className="h-10 w-auto justify-self-end px-5"
-                      onClick={() => void submit()}
                       disabled={
                         isSubmitting ||
                         selected.size < MIN_TARGET_COUNT ||
@@ -321,7 +327,7 @@ export function HintPhaseScreen({
                       {isSubmitting ? 'Submitting…' : 'Submit'}
                     </Button>
                   )}
-                </div>
+                </form>
 
                 {hintActionError ? (
                   <p className="action-error hint-control-error" role="alert">

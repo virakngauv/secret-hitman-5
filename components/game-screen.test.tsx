@@ -276,6 +276,31 @@ describe('HintPhaseScreen', () => {
     expect(onSubmitHint).toHaveBeenCalledWith('SPACE', ['p0-card-0'])
   })
 
+  it('submits the hint when pressing enter in the hint field', async () => {
+    const user = userEvent.setup()
+    const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={onSubmitHint}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    await user.type(input, 'orbit')
+    await user.type(input, '{Enter}')
+    expect(onSubmitHint).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /available.*moon/i }))
+    await user.type(input, '{Enter}')
+    expect(onSubmitHint).toHaveBeenCalledWith('ORBIT', ['p0-card-0'])
+  })
+
   it('auto-counts selected cards, freezes the assassin, and submits the derived targets', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
