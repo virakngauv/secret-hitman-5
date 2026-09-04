@@ -220,6 +220,10 @@ input {
   line-height: 1;
 }
 
+.eyebrow-sight {
+  font-size: 1.1rem;
+}
+
 .phase-count {
   display: inline-flex;
   align-items: center;

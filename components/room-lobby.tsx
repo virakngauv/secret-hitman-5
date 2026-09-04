@@ -9,6 +9,7 @@ import {
   GuessingScreen,
   HintPhaseScreen,
 } from '@/components/game-screen'
+import { BrandEyebrow } from '@/components/brand-eyebrow'
 import { HostControlCard } from '@/components/host-control-card'
 import {
   useGameSocket,
@@ -324,6 +325,7 @@ function LobbyScreen({
     <main className="game-page flex min-h-screen items-center">
       <div className="game-sidebar-stack mx-auto w-full max-w-xl">
         <section className="game-panel">
+          <BrandEyebrow />
           <h1 className="text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
             lobby<span className="text-accent">.</span>
           </h1>
