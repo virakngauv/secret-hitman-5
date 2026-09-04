@@ -221,7 +221,7 @@ input {
 .eyebrow-sight {
   font-size: 1.1rem;
   /* Optically center the glyph ink on the text; its ink sits low in the box */
-  transform: translateY(-0.13em);
+  transform: translateY(-0.15em);
 }
 
 .phase-count {
