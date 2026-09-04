@@ -51,7 +51,7 @@ test.describe('spectator experience audit', () => {
       await expect(
         spectator.getByRole('list', { name: 'Roster' }).getByText('Spectating'),
       ).toBeVisible()
-      await expect(spectator.getByText('Orbit', { exact: true })).toBeVisible()
+      await expect(spectator.getByText('ORBIT', { exact: true })).toBeVisible()
       await expect(spectator.getByLabel('Your hint')).toHaveCount(0)
       await expect(
         spectator.locator('button[data-card-kind="hidden"]'),
@@ -67,7 +67,7 @@ test.describe('spectator experience audit', () => {
       ).toBeVisible()
       await expect(spectator.getByLabel('Your hint')).toHaveCount(0)
 
-      await expect(spectator.getByText('Orbit', { exact: true })).toBeVisible()
+      await expect(spectator.getByText('ORBIT', { exact: true })).toBeVisible()
       await expect(
         spectator.locator('button[data-card-kind="hidden"]'),
       ).toHaveCount(12)
@@ -110,7 +110,7 @@ test.describe('spectator experience audit', () => {
       await capture(spectator, testInfo, '04-target-and-passes.png')
 
       await host.getByRole('button', { name: 'Next hint' }).click()
-      await expect(spectator.getByText('Garden', { exact: true })).toBeVisible()
+      await expect(spectator.getByText('GARDEN', { exact: true })).toBeVisible()
       await expect(spectator.getByLabel('Current guessing board')).toBeVisible()
       await expect(
         spectator.locator('button[data-card-kind="hidden"]'),
@@ -131,7 +131,7 @@ test.describe('spectator experience audit', () => {
       await capture(spectator, testInfo, '05-civilian-turn.png')
 
       await host.getByRole('button', { name: 'Next hint' }).click()
-      await expect(spectator.getByText('Metal', { exact: true })).toBeVisible()
+      await expect(spectator.getByText('METAL', { exact: true })).toBeVisible()
       const assassinId = await third
         .locator('button[data-card-kind="assassin"]')
         .getAttribute('data-card-id')
@@ -221,7 +221,7 @@ async function makeHint(page: Page, hint: string, count: number) {
   }
   await page.getByRole('button', { name: 'Submit' }).click()
   await expect(page.getByLabel('Submitted hint')).toContainText(
-    `${hint} ${count}`,
+    `${hint.toUpperCase()} ${count}`,
   )
   await expect(page.getByLabel('Your hint')).toBeDisabled()
 }

@@ -90,7 +90,7 @@ describe('HintPhaseScreen', () => {
       'px-5',
     )
     expect(screen.getByLabelText('Hint submission prompt')).toHaveTextContent(
-      'Submit your hint',
+      'Select 1-5 targets. Type your hint. Submit.',
     )
     expect(
       screen.queryByText('Select one to five words this hint should point to.'),
@@ -273,7 +273,7 @@ describe('HintPhaseScreen', () => {
     expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
     await user.click(screen.getByRole('button', { name: 'Submit' }))
-    expect(onSubmitHint).toHaveBeenCalledWith('space', ['p0-card-0'])
+    expect(onSubmitHint).toHaveBeenCalledWith('SPACE', ['p0-card-0'])
   })
 
   it('auto-counts selected cards, freezes the assassin, and submits the derived targets', async () => {
@@ -306,12 +306,12 @@ describe('HintPhaseScreen', () => {
       screen.getByRole('button', { name: /available.*satellite/i }),
     )
     expect(screen.getByLabelText('Hint submission prompt')).toHaveTextContent(
-      'Submit your hint',
+      'Select 1-5 targets. Type your hint. Submit.',
     )
     expect(screen.queryByText('orbit 2')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Submit' }))
 
-    expect(onSubmitHint).toHaveBeenCalledWith('orbit', [
+    expect(onSubmitHint).toHaveBeenCalledWith('ORBIT', [
       'p0-card-0',
       'p0-card-1',
     ])
@@ -545,7 +545,7 @@ describe('HintPhaseScreen', () => {
     await user.click(screen.getByRole('button', { name: /target.*moon/i }))
     await user.click(screen.getByRole('button', { name: /available.*word 1/i }))
     await user.click(screen.getByRole('button', { name: 'Submit' }))
-    expect(onSubmitHint).toHaveBeenCalledWith('Galaxy', [
+    expect(onSubmitHint).toHaveBeenCalledWith('GALAXY', [
       'p0-card-1',
       'p0-card-6',
     ])
@@ -1073,6 +1073,64 @@ describe('HintPhaseScreen', () => {
   })
 })
 
+describe('GuessingScreen roster order', () => {
+  it('orders the roster by score and reorders when scores change', () => {
+    const view: Extract<RoomSnapshot, { status: 'guessing' }> = {
+      status: 'guessing',
+      gameId: hintingView.gameId,
+      turnId: '00000000-0000-4000-8000-000000000001',
+      roomCode: 'bcdf2',
+      player: hintingView.player,
+      members: hintingView.members,
+      turnNumber: 1,
+      totalTurns: 2,
+      clueGiverId: 'player-1',
+      clueGiverName: 'Ada',
+      hint: 'Orbit',
+      hintNumber: 2,
+      boardCompleted: false,
+      turnSettled: false,
+      board: [],
+      turnPlayers: [],
+      scoreboard: [
+        { ...hintingView.members[0], position: 0, score: 3 },
+        { ...hintingView.members[1], position: 1, score: 7 },
+      ],
+      canGuess: false,
+      canMarkDone: false,
+      canAdvanceTurn: false,
+    }
+    const props = {
+      onClaimCard: vi.fn(),
+      onFinishGuessing: vi.fn(),
+      onRemovePlayer: vi.fn(),
+      onAdvanceTurn: vi.fn(),
+    }
+    const rosterNames = () =>
+      Array.from(
+        screen
+          .getByRole('list', { name: 'Roster' })
+          .querySelectorAll('.roster-card-name'),
+      ).map((element) => element.textContent)
+
+    const rendered = render(<GuessingScreen view={view} {...props} />)
+    expect(rosterNames()).toEqual(['Grace', 'Ada'])
+
+    rendered.rerender(
+      <GuessingScreen
+        view={{
+          ...view,
+          scoreboard: view.scoreboard.map((entry) =>
+            entry.playerId === 'player-1' ? { ...entry, score: 10 } : entry,
+          ),
+        }}
+        {...props}
+      />,
+    )
+    expect(rosterNames()).toEqual(['Ada', 'Grace'])
+  })
+})
+
 describe('GuessingScreen messages', () => {
   it('hides latest activity and explains inherited spectator host controls', () => {
     const spectatorHost = {
@@ -1195,7 +1253,13 @@ describe('GuessingScreen messages', () => {
     expect(roster.closest('.game-panel')).not.toBe(hostControls)
     expect(hostControls).toHaveClass('game-panel')
     expect(within(roster).queryByRole('button')).not.toBeInTheDocument()
-    expect(document.querySelector('.board-actions')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'I’m done guessing' }),
+    ).not.toBeInTheDocument()
+    const nextHint = screen.getByRole('button', { name: 'Next hint' })
+    expect(nextHint).toBeVisible()
+    // The advance control lives in the board card, not the host sidebar.
+    expect(nextHint.closest('.game-sidebar')).toBeNull()
     expect(
       within(hostControls).getByRole('button', {
         name: 'Remove Grace from this game',
