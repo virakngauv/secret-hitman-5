@@ -9,7 +9,7 @@ for (const viewport of [
     page,
   }, testInfo) => {
     await page.setViewportSize(viewport)
-    await page.goto('/home')
+    await page.goto('/')
 
     const main = page.getByRole('main')
     await expect(
@@ -64,7 +64,7 @@ for (const viewport of [
         backdrop.image,
       )
       await page.getByRole('link', { name: 'Back to home' }).click()
-      await expect(page).toHaveURL(/\/home$/)
+      await expect(page).toHaveURL(/\/$/)
       await expect(
         page.getByRole('heading', { name: 'Secret Hitman' }),
       ).toBeVisible()

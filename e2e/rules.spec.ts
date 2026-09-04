@@ -65,7 +65,7 @@ for (const viewport of [
     ).toBe(true)
 
     await page.getByRole('link', { name: 'Back to home' }).last().click()
-    await expect(page).toHaveURL(/\/home$/)
+    await expect(page).toHaveURL(/\/$/)
     const create = page.getByRole('link', {
       name: 'Create a room',
       exact: true,
@@ -87,6 +87,6 @@ for (const viewport of [
       page.getByRole('heading', { name: 'Rules', exact: true }),
     ).toBeVisible()
     await page.getByRole('link', { name: 'Back to home' }).first().click()
-    await expect(page).toHaveURL(/\/home$/)
+    await expect(page).toHaveURL(/\/$/)
   })
 }
