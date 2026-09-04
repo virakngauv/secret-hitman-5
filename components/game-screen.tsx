@@ -291,7 +291,7 @@ export function HintPhaseScreen({
                         setHintActionError(null)
                       }}
                       maxLength={40}
-                      placeholder="e.g. ROCKY or NEW YORK"
+                      placeholder="e.g. ROCKY or PROJECT HAIL MARY"
                       autoComplete="off"
                       autoCapitalize="characters"
                       enterKeyHint="done"
