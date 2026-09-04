@@ -167,7 +167,7 @@ describe('RoomLobby invite prompt', () => {
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(mocks.leaveRoom).toHaveBeenCalledWith('bcdf2')
-    expect(mocks.routerPush).toHaveBeenCalledWith('/home')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/')
   })
 
   it('shows a failed immediate leave without opening a confirmation dialog', async () => {
@@ -205,7 +205,7 @@ describe('RoomLobby invite prompt', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Leave room' }))
 
     expect(mocks.leaveRoom).toHaveBeenCalledWith('bcdf2')
-    expect(mocks.routerPush).toHaveBeenCalledWith('/home')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/')
   })
 
   it('keeps a hinting participant in place when leaving fails', async () => {
@@ -548,7 +548,7 @@ describe('RoomLobby invite prompt', () => {
     ).toBeVisible()
     expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute(
       'href',
-      '/home',
+      '/',
     )
     expect(screen.getByRole('link', { name: 'Create a room' })).toHaveAttribute(
       'href',

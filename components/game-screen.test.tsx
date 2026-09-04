@@ -326,7 +326,7 @@ describe('HintPhaseScreen', () => {
     ).not.toBeInTheDocument()
     expect(screen.getByRole('main')).not.toHaveTextContent(/\btimers?\b/i)
     expect(
-      screen.getByRole('button', { name: 'Start guessing' }),
+      screen.getByRole('button', { name: 'Start game' }),
     ).toBeDisabled()
     const assassin = screen.getByRole('button', { name: /assassin.*poison/i })
     expect(assassin).toBeDisabled()
@@ -681,7 +681,7 @@ describe('HintPhaseScreen', () => {
 
     expect(screen.getByText('2/3')).toBeVisible()
     expect(
-      screen.getByRole('button', { name: 'Start guessing' }),
+      screen.getByRole('button', { name: 'Start game' }),
     ).toBeDisabled()
     expect(
       screen.queryByRole('button', { name: "Reject Ada's hint" }),
@@ -848,7 +848,7 @@ describe('HintPhaseScreen', () => {
     expect(within(hostControls).getByRole('alert')).toHaveTextContent(
       'Could not reject that hint.',
     )
-    await user.click(screen.getByRole('button', { name: 'Start guessing' }))
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
     expect(within(hostControls).getByRole('alert')).toHaveTextContent(
       'Wait a moment before starting guessing.',
     )

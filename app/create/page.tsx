@@ -19,7 +19,7 @@ export default function CreateRoomPage() {
         </h1>
         <CreateRoomForm />
         <Button asChild variant="outline" className="mt-3 w-full">
-          <Link href="/home">Back to home</Link>
+          <Link href="/">Back to home</Link>
         </Button>
       </section>
     </main>

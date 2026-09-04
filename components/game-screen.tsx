@@ -347,7 +347,7 @@ export function HintPhaseScreen({
                       onClick={() => void startGuessing()}
                       disabled={!view.allHintsSubmitted || isStarting}
                     >
-                      {isStarting ? 'Starting…' : 'Start guessing'}
+                      {isStarting ? 'Starting…' : 'Start game'}
                     </Button>
                   </div>
                 </div>

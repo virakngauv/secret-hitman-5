@@ -14,7 +14,7 @@ export default function RulesPage() {
     <main className="min-h-screen px-5 py-10 sm:px-8">
       <div className="mx-auto w-full max-w-3xl">
         <Button asChild variant="outline" className="mb-8">
-          <Link href="/home">Back to home</Link>
+          <Link href="/">Back to home</Link>
         </Button>
 
         <header className="mb-8">
@@ -59,7 +59,7 @@ export default function RulesPage() {
             </p>
             <p className="mt-3">
               Once everyone has submitted a hint, the host selects{' '}
-              <strong>Start guessing</strong>.
+              <strong>Start game</strong>.
             </p>
           </section>
 
@@ -166,7 +166,7 @@ export default function RulesPage() {
         </div>
 
         <Button asChild variant="outline" className="mt-8 w-full sm:w-auto">
-          <Link href="/home">Back to home</Link>
+          <Link href="/">Back to home</Link>
         </Button>
       </div>
     </main>

@@ -159,7 +159,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
             setIsActing(true)
             setActionError(null)
             const result = await game.leaveRoom(roomCode)
-            if (result.status === 'success') router.push('/home')
+            if (result.status === 'success') router.push('/')
             else {
               setActionError({ action: 'leave', message: result.message })
               setIsActing(false)
@@ -221,7 +221,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           }}
           onLeave={async () => {
             const result = await game.leaveRoom(roomCode)
-            if (result.status === 'success') router.push('/home')
+            if (result.status === 'success') router.push('/')
             return result
           }}
         />,
@@ -264,7 +264,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onRemovePlayer={(playerId) => game.removePlayer(roomCode, playerId)}
           onLeave={async () => {
             const result = await game.leaveRoom(roomCode)
-            if (result.status === 'success') router.push('/home')
+            if (result.status === 'success') router.push('/')
             return result
           }}
         />,
@@ -558,7 +558,7 @@ function RoomMessage({
           }`}
         >
           <Button asChild>
-            <Link href="/home">Back to home</Link>
+            <Link href="/">Back to home</Link>
           </Button>
           {showRoomRecovery ? (
             <Button asChild variant="outline">
