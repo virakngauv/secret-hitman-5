@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
-  title: 'Rules — Secret Hitman',
+  title: 'Rules | Secret Hitman',
   description:
-    'The quick version of Secret Hitman: write a hint, race to find its targets, and dodge the assassin.',
+    'Learn how to play Secret Hitman and how each guess affects the score.',
 }
 
 export default function RulesPage() {
@@ -20,38 +20,48 @@ export default function RulesPage() {
         <div className="space-y-5 text-base leading-7">
           <section className="game-panel" aria-labelledby="how-a-round-plays">
             <h2 id="how-a-round-plays" className="mb-3 text-2xl font-black">
-              How a round plays
+              How to play
             </h2>
-            <ol className="space-y-4">
-              <li>
-                <strong>Write a hint.</strong> On your turn you get a secret
-                board of 12 words — four are locked in advance as three
-                civilians and an assassin. Choose 1–5 of the remaining eight as
-                targets, then share one word plus that number — “ORBIT 2” means
-                “I connected two of the words on this board.” Keep your choices
-                to yourself.
-              </li>
-              <li>
-                <strong>Race to pick.</strong> Everyone else sees only your word
-                and number, then taps words on your board. Hit a target and you
-                can keep going. Every word has one owner, so beat the other
-                pickers to the good ones.
-              </li>
-              <li>
-                <strong>
-                  Dodge the civilians and especially the assassin.
-                </strong>{' '}
-                Most words on the board are civilians — pick one and the board
-                ends for just you. The assassin is worse: one touch ends the
-                board on the spot for everyone.
-              </li>
-            </ol>
+            <div className="space-y-4">
+              <p>
+                Play with 2 to 12 players. Everyone writes a hint before
+                guessing begins.
+              </p>
+              <p>
+                Each player gets a private board of 12 words. Three civilians
+                and one assassin are locked. Choose 1 to 5 of the other eight as
+                targets, then share one word or phrase. Any words you leave
+                unselected stay civilians.
+              </p>
+              <p>
+                Enter your hint and select &quot;Submit&quot;. The app shows the
+                number of targets you chose next to your hint. Select two
+                targets and enter &quot;ORBIT&quot;, and the app shows
+                &quot;ORBIT 2&quot;. You do not need to type the number.
+              </p>
+              <p>
+                Once everyone has submitted, the host starts guessing. Play
+                through one board at a time. You do not guess on your own board.
+                The other players see its words and your hint with its target
+                count. The word roles start hidden from players who are
+                guessing.
+              </p>
+              <p>
+                Players guess at the same time. Tap an unclaimed word to claim
+                it. Each word can be claimed once, so another player may get
+                there first.
+              </p>
+            </div>
           </section>
 
           <section className="game-panel" aria-labelledby="scoring">
             <h2 id="scoring" className="mb-3 text-2xl font-black">
               Tile points
             </h2>
+            <p className="mb-4">
+              Each claimed word changes both the guesser&apos;s score and the
+              hint writer&apos;s score by the amount below.
+            </p>
             <table className="rules-role-table" aria-label="Tile points">
               <thead>
                 <tr>
@@ -66,14 +76,18 @@ export default function RulesPage() {
                   <td data-label="Points">
                     <strong>+3 each</strong>
                   </td>
-                  <td data-label="What happens">Keep going!</td>
+                  <td data-label="What happens">
+                    Keep guessing while targets remain.
+                  </td>
                 </tr>
                 <tr className="rules-role-row-civilian">
                   <th scope="row">Civilian</th>
                   <td data-label="Points">
                     <strong>−1 each</strong>
                   </td>
-                  <td data-label="What happens">The board ends for you.</td>
+                  <td data-label="What happens">
+                    You cannot guess again on this board.
+                  </td>
                 </tr>
                 <tr className="rules-role-row-assassin">
                   <th scope="row">Assassin</th>
@@ -81,18 +95,27 @@ export default function RulesPage() {
                     <strong>−5 each</strong>
                   </td>
                   <td data-label="What happens">
-                    The board ends for everyone.
+                    Guessing ends for everyone on this board.
                   </td>
                 </tr>
               </tbody>
             </table>
-            <p className="mt-4">
-              Claimers and the hint writers always gain (or lose) the same
-              points! You can stop anytime with{' '}
-              <strong>I’m done guessing</strong>. Scores may dip below zero and
-              carry over between hints. After the last board, the highest total
-              wins — ties share the crown.
-            </p>
+            <div className="mt-4 space-y-4">
+              <p>
+                The board also ends for everyone when all targets have been
+                claimed.
+              </p>
+              <p>
+                While you are still guessing, select &quot;I&apos;m done
+                guessing&quot; to stop on that board. Stopping does not change
+                your score.
+              </p>
+              <p>
+                Scores can go below zero and carry across boards in the same
+                game. The highest score in the final standings wins. Players
+                tied for the highest score share first place.
+              </p>
+            </div>
           </section>
 
           <section className="game-panel" aria-labelledby="hint-tips">
@@ -101,28 +124,19 @@ export default function RulesPage() {
             </h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                <strong>Aim for two or more targets.</strong> Any found target
-                scores, but multi-target hints are where the big rounds come
-                from.
+                Use a word or phrase that connects your targets. Names such as
+                &quot;Percy Jackson&quot; or &quot;New York City&quot; are fine.
+                Keep your hint within the 40-character limit.
               </li>
               <li>
-                <strong>One concept per hint.</strong> Multi-word hints are fine
-                when they name a single thing — “Percy Jackson” and “New York
-                City” count — but “cold enough to skate” doesn’t.
+                Try to connect your targets with one clear idea. Check the hint
+                against the civilians and the assassin, too. If it points at the
+                wrong word, change the hint or choose fewer targets.
               </li>
               <li>
-                <strong>Fit your targets and nothing else.</strong> The editable
-                words you leave behind become civilians, so a hint that also
-                matches them drags pickers into −1s.
-              </li>
-              <li>
-                <strong>Mind the assassin.</strong> One wrong pick costs more
-                than a target earns. If your hint could point anywhere near it,
-                write a different hint.
-              </li>
-              <li>
-                <strong>When in doubt, go small.</strong> One safe target beats
-                three risky ones — you still bank the +3.
+                One target is allowed. Choose more only when the connection is
+                clear. You score for targets that players claim, not targets you
+                select.
               </li>
             </ul>
           </section>
@@ -133,29 +147,37 @@ export default function RulesPage() {
             </h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                <strong>Run the flow.</strong> The host creates a room and
-                shares its code or invite link, starts the game for 2–12
-                players, selects <strong>Start game</strong> once every hint is
-                in, and moves everyone along with <strong>Next hint</strong>{' '}
-                until the last board. Advancing while someone is still picking
-                asks for a quick confirmation.
+                Create a room, share its code or invite link, and start the game
+                from the lobby. Once everyone has submitted a hint, select
+                &quot;Start game&quot; to begin guessing.
               </li>
               <li>
-                <strong>Reject hints.</strong> While players are still writing,
-                the host can reject a submitted hint — that player gets a fresh
-                board and writes again.
+                Select &quot;Next hint&quot; to move to the next board. On the
+                final board, select &quot;View scoreboard&quot;. The app asks
+                for confirmation if anyone is still guessing when you move on.
               </li>
               <li>
-                <strong>Keep the room tidy.</strong> The host can remove a
-                player. During hinting their board and hint are dropped —
-                removing the only other player instead resets the round for
-                everyone; during guessing their finished picks stand but their
-                score is hidden from the standings.
+                During hint writing, the host can reject another player&apos;s
+                submitted hint. That player gets a new board and writes again.
+                Use &quot;Edit&quot; to revise your own submitted hint before
+                guessing starts.
               </li>
               <li>
-                <strong>Hosts can change.</strong> If the host leaves, hosting
-                passes to the player who joined earliest — or, if only
-                spectators remain, the earliest of them.
+                The host can remove another player. During hint writing, this
+                removes that player&apos;s board and hint. If fewer than two
+                players would remain, confirming the removal ends the round and
+                returns everyone to the lobby.
+              </li>
+              <li>
+                During guessing, removing a player keeps the picks and scoring
+                changes already made but removes that player from the standings.
+                Their board is skipped if its turn has not started. A removed
+                player cannot rejoin the room.
+              </li>
+              <li>
+                If the host leaves, the remaining active player who joined first
+                becomes host. If only spectators remain, the active spectator
+                who joined first becomes host.
               </li>
             </ul>
           </section>
