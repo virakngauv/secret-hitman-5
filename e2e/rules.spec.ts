@@ -14,42 +14,37 @@ for (const viewport of [
       page.getByRole('heading', { name: 'Rules', exact: true }),
     ).toBeVisible()
     await expect(page.getByRole('heading', { level: 2 })).toHaveText([
-      '1. Gather your players',
-      '2. Build and submit your clue',
-      '3. Pick targets or pass',
-      '4. Count the points',
-      '5. Finish the game',
+      'How a round plays',
+      'Tile points',
+      'Hint writing tips',
+      'Host controls',
     ])
     await expect(
       page.getByText(
-        'Each means the picker and clue master receive the same score change.',
+        'Picks always split evenly: you and the hint writer gain (or lose) the same points.',
       ),
     ).toBeVisible()
 
-    const roleTable = page.getByRole('table', {
-      name: 'Role scoring and effects',
-    })
+    const roleTable = page.getByRole('table', { name: 'Tile points' })
     await expect(roleTable).toBeVisible()
     await expect(roleTable.getByRole('columnheader')).toHaveText([
-      'Role',
+      'Word',
       'Points',
-      'Effect',
-      'Locked tiles',
+      'What happens',
     ])
     await expect(roleTable.getByRole('rowheader')).toHaveText([
       'Target',
       'Civilian',
       'Assassin',
     ])
-    await expect(roleTable.getByRole('row').nth(1)).toContainText(
-      'Target+3 eachKeep going.No target tiles start locked; the clue master can select at most 5 targets total.',
-    )
-    await expect(roleTable.getByRole('row').nth(2)).toContainText(
-      'Civilian−1 eachThe player who selected it stops guessing.3 randomly selected civilian tiles start locked.',
-    )
-    await expect(roleTable.getByRole('row').nth(3)).toContainText(
-      'Assassin−5 eachThe board ends globally for everyone.1 randomly selected assassin tile starts locked.',
-    )
+    await expect(roleTable.getByRole('cell')).toHaveText([
+      '+3 each',
+      'Keep going!',
+      '−1 each',
+      'The board ends for you.',
+      '−5 each',
+      'The board ends for everyone.',
+    ])
     await expect(
       page.getByRole('button', { name: /sign in|join/i }),
     ).toHaveCount(0)
@@ -64,7 +59,17 @@ for (const viewport of [
       ),
     ).toBe(true)
 
-    await page.getByRole('link', { name: 'Back to home' }).last().click()
+    const backHome = page.getByRole('link', { name: 'Back to home' })
+    await expect(backHome).toHaveCount(1)
+    // The single back link is sticky, so it is reachable without scrolling
+    // on every viewport.
+    const dockedBox = await backHome.boundingBox()
+    expect(dockedBox).not.toBeNull()
+    expect(dockedBox!.y + dockedBox!.height).toBeLessThanOrEqual(
+      viewport.height,
+    )
+
+    await backHome.click()
     await expect(page).toHaveURL(/\/home$/)
     const create = page.getByRole('link', {
       name: 'Create a room',
@@ -86,7 +91,7 @@ for (const viewport of [
     await expect(
       page.getByRole('heading', { name: 'Rules', exact: true }),
     ).toBeVisible()
-    await page.getByRole('link', { name: 'Back to home' }).first().click()
+    await backHome.click()
     await expect(page).toHaveURL(/\/home$/)
   })
 }

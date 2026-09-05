@@ -253,13 +253,6 @@ input {
   text-wrap: balance;
 }
 
-.page-subtitle {
-  margin-top: 1rem;
-  color: var(--muted-foreground);
-  font-size: clamp(0.98rem, 2vw, 1.1rem);
-  line-height: 1.6;
-}
-
 .game-page {
   padding: 0.75rem 0.75rem 1rem;
 }
@@ -932,13 +925,6 @@ button.word-card:focus-visible {
   line-height: 1.4;
 }
 
-.rules-role-table caption {
-  margin-bottom: 0.625rem;
-  text-align: left;
-  font-size: 1.125rem;
-  font-weight: 800;
-}
-
 .rules-role-table th,
 .rules-role-table td {
   padding: 0.75rem;
@@ -967,19 +953,51 @@ button.word-card:focus-visible {
 }
 
 .rules-role-table thead th:nth-child(1) {
-  width: 16%;
+  width: 20%;
 }
 
 .rules-role-table thead th:nth-child(2) {
-  width: 16%;
+  width: 20%;
 }
 
 .rules-role-table thead th:nth-child(3) {
-  width: 28%;
+  width: 60%;
 }
 
-.rules-role-table thead th:nth-child(4) {
-  width: 40%;
+.rules-role-table .rules-role-row-target th {
+  background: var(--target-soft);
+}
+
+.rules-role-table .rules-role-row-civilian th {
+  background: color-mix(in oklab, var(--civilian) 50%, var(--card));
+}
+
+.rules-role-table .rules-role-row-assassin th {
+  background: var(--accent-soft);
+}
+
+/* Floats over the page while scrolling and docks into its natural spot at
+   the end. The pseudo-element reaches above the box to fade tint and blur
+   in from transparent so scrolling content doesn't hit a hard edge; the
+   fade zone matches the top margin, so a docked button keeps its normal
+   spacing and the backdrop disappears over the page background. */
+.rules-back-dock {
+  position: sticky;
+  bottom: 0;
+  bottom: env(safe-area-inset-bottom);
+  display: flex;
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+}
+
+.rules-back-dock::before {
+  content: '';
+  position: absolute;
+  inset: -1rem 0 0 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--background) 65%, transparent);
+  backdrop-filter: blur(8px);
+  mask-image: linear-gradient(to bottom, transparent, #000 1rem);
 }
 
 @media (max-width: 39.9375rem) {
@@ -1043,7 +1061,6 @@ button.word-card:focus-visible {
 
   .rules-role-table tbody th {
     border-right: 0;
-    background: color-mix(in oklab, var(--accent) 12%, var(--card));
     font-size: 1rem;
   }
 
