@@ -939,10 +939,6 @@ button.word-card:focus-visible {
   font-weight: 800;
 }
 
-.rules-role-table thead th {
-  background: color-mix(in oklab, var(--accent) 12%, var(--card));
-}
-
 .rules-role-table th:last-child,
 .rules-role-table td:last-child {
   border-right: 0;

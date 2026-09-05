@@ -21,7 +21,7 @@ for (const viewport of [
     ])
     await expect(
       page.getByText(
-        'Picks always split evenly: you and the hint writer gain (or lose) the same points.',
+        'Claimers and the hint writers always gain (or lose) the same points!',
       ),
     ).toBeVisible()
 
