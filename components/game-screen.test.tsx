@@ -1,4 +1,11 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -304,6 +311,44 @@ describe('HintPhaseScreen', () => {
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
     await user.type(input, '{Enter}')
     expect(onSubmitHint).toHaveBeenCalledWith('ORBIT', ['p0-card-0'])
+  })
+
+  it('ignores a repeat submit while the first hint request is in flight', async () => {
+    const user = userEvent.setup()
+    let resolveSubmit: (result: { status: 'success' }) => void = () => {}
+    const onSubmitHint = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubmit = resolve
+        }),
+    )
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={onSubmitHint}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    await user.type(input, 'orbit')
+    await user.click(screen.getByRole('button', { name: /available.*moon/i }))
+    await user.type(input, '{Enter}')
+    expect(onSubmitHint).toHaveBeenCalledTimes(1)
+
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
+    expect(onSubmitHint).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveSubmit({ status: 'success' })
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled(),
+    )
   })
 
   it('auto-counts selected cards, freezes the assassin, and submits the derived targets', async () => {

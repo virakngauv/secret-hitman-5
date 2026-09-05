@@ -100,6 +100,7 @@ export function HintPhaseScreen({
   }
 
   const submit = async () => {
+    if (isSubmitting) return
     if (!hint.trim())
       return setHintActionError('Write a one-word or short phrase hint.')
     if (selected.size < MIN_TARGET_COUNT)
