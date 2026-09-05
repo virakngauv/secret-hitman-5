@@ -64,7 +64,7 @@ for (const viewport of [
         backdrop.image,
       )
       await page.getByRole('link', { name: 'Back to home' }).click()
-      await expect(page).toHaveURL(/\/$/)
+      await expect(page).toHaveURL((url) => url.pathname === '/')
       await expect(
         page.getByRole('heading', { name: 'Secret Hitman' }),
       ).toBeVisible()

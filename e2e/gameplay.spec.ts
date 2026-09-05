@@ -559,10 +559,10 @@ test.describe('Secret Hitman single round', () => {
       await expect(host.getByText('Linus', { exact: true })).toHaveCount(0)
       await host.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(host)
-      await expect(host).toHaveURL(/\/$/)
+      await expect(host).toHaveURL((url) => url.pathname === '/')
       await guest.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(guest, false)
-      await expect(guest).toHaveURL(/\/$/)
+      await expect(guest).toHaveURL((url) => url.pathname === '/')
       await removed.goto('/')
     } finally {
       for (const context of contexts) await context.close()
@@ -588,7 +588,7 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'Start game' }).click()
 
       await leaveRoom(guest)
-      await expect(guest).toHaveURL(/\/$/)
+      await expect(guest).toHaveURL((url) => url.pathname === '/')
 
       const dialog = host.getByRole('alertdialog', {
         name: 'The round ended early',
@@ -636,10 +636,10 @@ test.describe('Secret Hitman single round', () => {
       await joinRoom(spectator, roomCode, 'Sofia')
 
       await leaveRoom(host)
-      await expect(host).toHaveURL(/\/$/)
+      await expect(host).toHaveURL((url) => url.pathname === '/')
       await expect(guest.getByText('Host control')).toBeVisible()
       await leaveRoom(guest)
-      await expect(guest).toHaveURL(/\/$/)
+      await expect(guest).toHaveURL((url) => url.pathname === '/')
 
       await expect(
         spectator.getByText(/inherited operational host duties/i),
@@ -656,7 +656,7 @@ test.describe('Secret Hitman single round', () => {
       await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await spectator.getByRole('button', { name: 'Return to lobby' }).click()
       await leaveRoom(spectator, false)
-      await expect(spectator).toHaveURL(/\/$/)
+      await expect(spectator).toHaveURL((url) => url.pathname === '/')
     } finally {
       for (const context of contexts) await context.close()
     }
