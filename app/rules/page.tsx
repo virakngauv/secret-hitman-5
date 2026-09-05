@@ -6,168 +6,166 @@ import { Button } from '@/components/ui/button'
 export const metadata: Metadata = {
   title: 'Rules — Secret Hitman',
   description:
-    'Learn how to write clues, find targets, avoid the assassin, and score in Secret Hitman.',
+    'The quick version of Secret Hitman: write a hint, race to find its targets, and dodge the assassin.',
 }
 
 export default function RulesPage() {
   return (
     <main className="min-h-screen px-5 py-10 sm:px-8">
       <div className="mx-auto w-full max-w-3xl">
-        <Button asChild variant="outline" className="mb-8">
-          <Link href="/">Back to home</Link>
-        </Button>
-
         <header className="mb-8">
-          <p className="page-eyebrow">Secret Hitman · Field guide</p>
           <h1 className="page-title">Rules</h1>
-          <p className="page-subtitle">
-            Write a clever clue. Race to find its targets. Avoid the assassin.
-            Earn points as both a clue writer and a picker to finish with the
-            highest score.
-          </p>
         </header>
 
         <div className="space-y-5 text-base leading-7">
-          <section className="game-panel" aria-labelledby="get-started">
-            <h2 id="get-started" className="mb-3 text-2xl font-black">
-              1. Gather your players
+          <section className="game-panel" aria-labelledby="how-a-round-plays">
+            <h2 id="how-a-round-plays" className="mb-3 text-2xl font-black">
+              How a round plays
             </h2>
-            <p>
-              Create a room and share its code or invite link, or join a
-              friend’s room. The host starts with 2–12 players. Everyone who
-              starts gets a turn as clue writer; people joining after the game
-              starts can watch as spectators.
-            </p>
-          </section>
-
-          <section className="game-panel" aria-labelledby="write-clue">
-            <h2 id="write-clue" className="mb-3 text-2xl font-black">
-              2. Build and submit your clue
-            </h2>
-            <p>
-              You receive a private board of 12 words. Three civilians and the
-              assassin are randomly locked: you cannot change their roles. The
-              other eight words are editable. Select one to five of them as
-              targets; every unselected non-assassin word becomes a civilian.
-            </p>
-            <p className="mt-3">
-              Enter your hint and select <strong>Submit</strong>. The number of
-              targets you select becomes your hint’s number. For example, a hint
-              of “Orbit” with the number 2 tells the other players to look for
-              two connected targets. Keep your target choices and the assassin’s
-              location secret.
-            </p>
-            <p className="mt-3">
-              Once everyone has submitted a hint, the host selects{' '}
-              <strong>Start game</strong>.
-            </p>
-          </section>
-
-          <section className="game-panel" aria-labelledby="pick-pass">
-            <h2 id="pick-pass" className="mb-3 text-2xl font-black">
-              3. Pick targets or pass
-            </h2>
-            <p>
-              Each turn shows one player’s hint, number, and word board. The
-              clue writer can see the roles but does not guess on their own
-              board. The other players pick from the same board, competing to
-              claim targets first. Targets and civilians reveal when claimed and
-              cannot be claimed again by another player.
-            </p>
-            <p className="mt-3">
-              After finding a target, you can keep guessing. Picking a civilian
-              or the assassin ends your guessing for that board. You can also
-              pass by selecting <strong>I’m done guessing</strong> to stop
-              without changing your score. Finding all targets ends guessing for
-              everyone on that board.
-            </p>
-            <p className="mt-3">
-              The first assassin hit ends the board for every picker and reveals
-              every role and claimant to players and spectators. Later or
-              in-flight picks cannot change that completed board.
-            </p>
+            <ol className="space-y-4">
+              <li>
+                <strong>Write a hint.</strong> On your turn you get a secret
+                board of 12 words — four are locked in advance as three
+                civilians and an assassin. Choose 1–5 of the remaining eight as
+                targets, then share one word plus that number — “ORBIT 2” means
+                “I connected two of the words on this board.” Keep your choices
+                to yourself.
+              </li>
+              <li>
+                <strong>Race to pick.</strong> Everyone else sees only your word
+                and number, then taps words on your board. Hit a target and you
+                can keep going. Every word has one owner, so beat the other
+                pickers to the good ones.
+              </li>
+              <li>
+                <strong>
+                  Dodge the civilians and especially the assassin.
+                </strong>{' '}
+                Most words on the board are civilians — pick one and the board
+                ends for just you. The assassin is worse: one touch ends the
+                board on the spot for everyone.
+              </li>
+            </ol>
           </section>
 
           <section className="game-panel" aria-labelledby="scoring">
             <h2 id="scoring" className="mb-3 text-2xl font-black">
-              4. Count the points
+              Tile points
             </h2>
-            <p className="mb-4">
-              <strong>Each</strong> means the picker and clue master receive the
-              same score change.
-            </p>
-            <table className="rules-role-table">
-              <caption>Role scoring and effects</caption>
+            <table className="rules-role-table" aria-label="Tile points">
               <thead>
                 <tr>
-                  <th scope="col">Role</th>
+                  <th scope="col">Word</th>
                   <th scope="col">Points</th>
-                  <th scope="col">Effect</th>
-                  <th scope="col">Locked tiles</th>
+                  <th scope="col">What happens</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr className="rules-role-row-target">
                   <th scope="row">Target</th>
                   <td data-label="Points">
                     <strong>+3 each</strong>
                   </td>
-                  <td data-label="Effect">Keep going.</td>
-                  <td data-label="Locked tiles">
-                    No target tiles start locked; the clue master can select at
-                    most <strong>5 targets total</strong>.
-                  </td>
+                  <td data-label="What happens">Keep going!</td>
                 </tr>
-                <tr>
+                <tr className="rules-role-row-civilian">
                   <th scope="row">Civilian</th>
                   <td data-label="Points">
                     <strong>−1 each</strong>
                   </td>
-                  <td data-label="Effect">
-                    The player who selected it stops guessing.
-                  </td>
-                  <td data-label="Locked tiles">
-                    <strong>3</strong> randomly selected civilian tiles start
-                    locked.
-                  </td>
+                  <td data-label="What happens">The board ends for you.</td>
                 </tr>
-                <tr>
+                <tr className="rules-role-row-assassin">
                   <th scope="row">Assassin</th>
                   <td data-label="Points">
                     <strong>−5 each</strong>
                   </td>
-                  <td data-label="Effect">
-                    The board ends globally for everyone.
-                  </td>
-                  <td data-label="Locked tiles">
-                    <strong>1</strong> randomly selected assassin tile starts
-                    locked.
+                  <td data-label="What happens">
+                    The board ends for everyone.
                   </td>
                 </tr>
               </tbody>
             </table>
             <p className="mt-4">
-              Scores can go below zero. Points carry over between clues.
+              Picks always split evenly: you and the hint writer gain (or lose)
+              the same points. You can stop anytime with{' '}
+              <strong>I’m done guessing</strong>. Scores may dip below zero and
+              carry over between hints. After the last board, the highest total
+              wins — ties share the crown.
             </p>
           </section>
 
-          <section className="game-panel" aria-labelledby="finish-game">
-            <h2 id="finish-game" className="mb-3 text-2xl font-black">
-              5. Finish the game
+          <section className="game-panel" aria-labelledby="hint-tips">
+            <h2 id="hint-tips" className="mb-3 text-2xl font-black">
+              Hint writing tips
             </h2>
-            <p>
-              The host selects <strong>Next hint</strong> to move to the next
-              clue writer. After the last clue, the host selects{' '}
-              <strong>Finish the game</strong> to reveal the final board and
-              standings. The highest total score wins; players tied for the
-              highest score share the win.
-            </p>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                <strong>Aim for two or more targets.</strong> Any found target
+                scores, but multi-target hints are where the big rounds come
+                from.
+              </li>
+              <li>
+                <strong>One concept per hint.</strong> Multi-word hints are fine
+                when they name a single thing — “Percy Jackson” and “New York
+                City” count — but “cold enough to skate” doesn’t.
+              </li>
+              <li>
+                <strong>Fit your targets and nothing else.</strong> The editable
+                words you leave behind become civilians, so a hint that also
+                matches them drags pickers into −1s.
+              </li>
+              <li>
+                <strong>Mind the assassin.</strong> One wrong pick costs more
+                than a target earns. If your hint could point anywhere near it,
+                write a different hint.
+              </li>
+              <li>
+                <strong>When in doubt, go small.</strong> One safe target beats
+                three risky ones — you still bank the +3.
+              </li>
+            </ul>
+          </section>
+
+          <section className="game-panel" aria-labelledby="host-controls">
+            <h2 id="host-controls" className="mb-3 text-2xl font-black">
+              Host controls
+            </h2>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                <strong>Run the flow.</strong> The host creates a room and
+                shares its code or invite link, starts the game for 2–12
+                players, selects <strong>Start game</strong> once every hint is
+                in, and moves everyone along with <strong>Next hint</strong>{' '}
+                until the last board. Advancing while someone is still picking
+                asks for a quick confirmation.
+              </li>
+              <li>
+                <strong>Reject hints.</strong> While players are still writing,
+                the host can reject a submitted hint — that player gets a fresh
+                board and writes again.
+              </li>
+              <li>
+                <strong>Keep the room tidy.</strong> The host can remove a
+                player. During hinting their board and hint are dropped —
+                removing the only other player instead resets the round for
+                everyone; during guessing their finished picks stand but their
+                score is hidden from the standings.
+              </li>
+              <li>
+                <strong>Hosts can change.</strong> If the host leaves, hosting
+                passes to the player who joined earliest — or, if only
+                spectators remain, the earliest of them.
+              </li>
+            </ul>
           </section>
         </div>
 
-        <Button asChild variant="outline" className="mt-8 w-full sm:w-auto">
-          <Link href="/">Back to home</Link>
-        </Button>
+        <div className="rules-back-dock">
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link href="/">Back to home</Link>
+          </Button>
+        </div>
       </div>
     </main>
   )
