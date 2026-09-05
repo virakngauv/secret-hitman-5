@@ -209,8 +209,6 @@ input {
 .home-brand-sight {
   display: inline-block;
   margin-bottom: 2rem;
-  color: var(--accent);
-  font-size: 3rem;
 }
 
 .brand-sight {
@@ -218,6 +216,12 @@ input {
   font-family: Georgia, serif;
   font-size: 1.6rem;
   line-height: 1;
+}
+
+.eyebrow-sight {
+  font-size: 1.1rem;
+  /* Optically center the glyph ink on the text; its ink sits low in the box */
+  transform: translateY(-0.19em);
 }
 
 .phase-count {
@@ -329,11 +333,6 @@ input {
     transform 120ms ease,
     border-color 120ms ease,
     box-shadow 120ms ease;
-}
-
-.game-board-layout,
-.finished-board-grid {
-  margin-top: 0.6rem;
 }
 
 button.word-card:not(:disabled):hover {
@@ -828,6 +827,7 @@ button.word-card:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
@@ -937,10 +937,6 @@ button.word-card:focus-visible {
 
 .rules-role-table th {
   font-weight: 800;
-}
-
-.rules-role-table thead th {
-  background: color-mix(in oklab, var(--accent) 12%, var(--card));
 }
 
 .rules-role-table th:last-child,

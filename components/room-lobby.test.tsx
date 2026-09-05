@@ -84,7 +84,6 @@ function completedLobby(gameId = '10000000-0000-4000-8000-000000000001') {
         score: index === 0 ? 6 : 3,
         position: index + 1,
       })),
-      winners: [{ ...view.members[0], score: 6, position: 1 }],
     },
   } satisfies LobbyView
 }
@@ -167,7 +166,7 @@ describe('RoomLobby invite prompt', () => {
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(mocks.leaveRoom).toHaveBeenCalledWith('bcdf2')
-    expect(mocks.routerPush).toHaveBeenCalledWith('/home')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/')
   })
 
   it('shows a failed immediate leave without opening a confirmation dialog', async () => {
@@ -205,7 +204,7 @@ describe('RoomLobby invite prompt', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Leave room' }))
 
     expect(mocks.leaveRoom).toHaveBeenCalledWith('bcdf2')
-    expect(mocks.routerPush).toHaveBeenCalledWith('/home')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/')
   })
 
   it('keeps a hinting participant in place when leaving fails', async () => {
@@ -354,9 +353,7 @@ describe('RoomLobby invite prompt', () => {
     mocks.view = completedLobby()
     render(<RoomLobby roomCode="bcdf2" />)
 
-    expect(
-      screen.getByRole('heading', { name: 'Final standings' }),
-    ).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'scoreboard.' })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Return to lobby' }))
 
@@ -377,16 +374,14 @@ describe('RoomLobby invite prompt', () => {
 
     expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
     expect(
-      screen.queryByRole('heading', { name: 'Final standings' }),
+      screen.queryByRole('heading', { name: 'scoreboard.' }),
     ).not.toBeInTheDocument()
   })
 
   it('replaces open results when the host starts the next game', () => {
     mocks.view = completedLobby()
     const rendered = render(<RoomLobby roomCode="bcdf2" />)
-    expect(
-      screen.getByRole('heading', { name: 'Final standings' }),
-    ).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'scoreboard.' })).toBeVisible()
 
     mocks.view = hintingView()
     rendered.rerender(<RoomLobby roomCode="bcdf2" />)
@@ -395,7 +390,7 @@ describe('RoomLobby invite prompt', () => {
       'Select 1-5 targets. Type your hint. Submit.',
     )
     expect(
-      screen.queryByRole('heading', { name: 'Final standings' }),
+      screen.queryByRole('heading', { name: 'scoreboard.' }),
     ).not.toBeInTheDocument()
   })
 
@@ -405,7 +400,7 @@ describe('RoomLobby invite prompt', () => {
 
     expect(screen.getByRole('heading', { name: 'lobby.' })).toBeVisible()
     expect(
-      screen.queryByRole('heading', { name: 'Final standings' }),
+      screen.queryByRole('heading', { name: 'scoreboard.' }),
     ).not.toBeInTheDocument()
   })
 
@@ -548,7 +543,7 @@ describe('RoomLobby invite prompt', () => {
     ).toBeVisible()
     expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute(
       'href',
-      '/home',
+      '/',
     )
     expect(screen.getByRole('link', { name: 'Create a room' })).toHaveAttribute(
       'href',

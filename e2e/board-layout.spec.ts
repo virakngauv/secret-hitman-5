@@ -179,7 +179,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const guestTargetId = await guestTarget.getAttribute('data-card-id')
     await guestTarget.click()
     await guest.getByRole('button', { name: 'Submit' }).click()
-    await host.getByRole('button', { name: 'Start guessing' }).click()
+    await host.getByRole('button', { name: 'Start game' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
 
     await guest.locator(`button[data-card-id="${targetId}"]`).click()
@@ -247,7 +247,7 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     ).toHaveCount(0)
     await checkWidths(guest, 'final-board', testInfo)
     await host.getByRole('button', { name: 'View scoreboard' }).click()
-    await expect(guest.getByText('Final standings')).toBeVisible()
+    await expect(guest.getByText('scoreboard.')).toBeVisible()
     await expect(guest.locator('.word-grid')).toHaveCount(0)
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()])

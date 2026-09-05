@@ -9,7 +9,7 @@ hinting
   ├─ the selection count becomes the hint number
   ├─ visitors may join as participants until guessing starts
   ├─ each submitted clue and number appears immediately to everyone, and the host may reject it while other players are still choosing, replacing that player's private board and clearing the rejected clue
-  └─ the host manually selects “Start guessing” after every accepted or revised hint is submitted
+  └─ the host manually selects “Start game” after every accepted or revised hint is submitted
        ↓
 guessing
   ├─ one clue-giver turn per accepted participant
@@ -70,7 +70,7 @@ Explicitly leaving during guessing removes the identity from current and future 
 
 During hinting, a new identity becomes a participant while fewer than 12 game seats exist. The server synchronously appends a private board and turn-order seat, so a join accepted before a start-guessing command makes readiness incomplete; a start accepted first closes participation and later identities become spectators. The host may remove a non-host participant. Removal deletes that board, hint, readiness, score, and future turn and preserves the room's token ban. Removing the only other participant requires explicit confirmation, abandons the current round, clears all round state, and returns every remaining identity to the lobby as a player while preserving the room code and removal bans.
 
-During guessing, host removal deactivates the participant and ends their current and future guessing eligibility without rewriting accepted history. The removed participant is excluded from public scoreboards and winners, and retained current-turn attribution uses `xxxx` instead of their name. Points already awarded to other players and completed board history remain unchanged. A not-yet-started authored turn is removed from the remaining rotation; an already active authored board remains intact for the other pickers or warned host advancement. The removed identity cannot act or rejoin.
+During guessing, host removal deactivates the participant and ends their current and future guessing eligibility without rewriting accepted history. The removed participant is excluded from the public scoreboard, and retained current-turn attribution uses `xxxx` instead of their name. Points already awarded to other players and completed board history remain unchanged. A not-yet-started authored turn is removed from the remaining rotation; an already active authored board remains intact for the other pickers or warned host advancement. The removed identity cannot act or rejoin.
 
 ## Host succession
 

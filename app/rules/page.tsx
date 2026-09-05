@@ -87,8 +87,8 @@ export default function RulesPage() {
               </tbody>
             </table>
             <p className="mt-4">
-              Picks always split evenly: you and the hint writer gain (or lose)
-              the same points. You can stop anytime with{' '}
+              Claimers and the hint writers always gain (or lose) the same
+              points! You can stop anytime with{' '}
               <strong>I’m done guessing</strong>. Scores may dip below zero and
               carry over between hints. After the last board, the highest total
               wins — ties share the crown.
@@ -163,7 +163,7 @@ export default function RulesPage() {
 
         <div className="rules-back-dock">
           <Button asChild variant="outline" className="w-full sm:w-auto">
-            <Link href="/home">Back to home</Link>
+            <Link href="/">Back to home</Link>
           </Button>
         </div>
       </div>

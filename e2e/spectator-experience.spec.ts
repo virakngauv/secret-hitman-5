@@ -23,7 +23,7 @@ test.describe('spectator experience audit', () => {
       const third = await newPlayer(browser, contexts)
       const spectator = await newPlayer(browser, contexts)
 
-      await host.goto('/home')
+      await host.goto('/')
       await host.getByRole('link', { name: 'Create a room' }).click()
       await host.getByLabel('Name').fill('Ada')
       await host.getByRole('button', { name: 'Create', exact: true }).click()
@@ -46,7 +46,7 @@ test.describe('spectator experience audit', () => {
       await makeHint(host, 'Orbit', 2)
       await makeHint(guest, 'Garden', 2)
       await makeHint(third, 'Metal', 2)
-      await host.getByRole('button', { name: 'Start guessing' }).click()
+      await host.getByRole('button', { name: 'Start game' }).click()
       await joinRoom(spectator, roomCode, 'Sofia')
       await expect(
         spectator.getByRole('list', { name: 'Roster' }).getByText('Spectating'),
@@ -171,21 +171,21 @@ test.describe('spectator experience audit', () => {
         host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeEnabled()
       await host.getByRole('button', { name: 'View scoreboard' }).click()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await expect(spectator.locator('[data-card-kind="hidden"]')).toHaveCount(
         0,
       )
       await capture(spectator, testInfo, '08-final-standings.png')
 
       await spectator.reload()
-      await expect(spectator.getByText('Final standings')).toBeVisible()
+      await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await expect(
         spectator.locator('button[data-card-kind="hidden"]'),
       ).toHaveCount(0)
       await expect(spectator.locator('.word-grid')).toHaveCount(0)
       await expect(
         spectator.getByRole('button', {
-          name: /^(Start guessing|Next hint|View scoreboard)$/,
+          name: /^(Start game|Next hint|View scoreboard)$/,
         }),
       ).toHaveCount(0)
     } finally {

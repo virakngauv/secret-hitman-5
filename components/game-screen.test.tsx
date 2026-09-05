@@ -1,10 +1,22 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { RoomSnapshot } from '@/lib/game-protocol'
 
-import { FinishedScreen, GuessingScreen, HintPhaseScreen } from './game-screen'
+import {
+  FinishedScreen,
+  GuessingScreen,
+  HintPhaseScreen,
+  pickHintPlaceholder,
+} from './game-screen'
 
 const hintingView: Extract<RoomSnapshot, { status: 'hinting' }> = {
   status: 'hinting',
@@ -276,6 +288,69 @@ describe('HintPhaseScreen', () => {
     expect(onSubmitHint).toHaveBeenCalledWith('SPACE', ['p0-card-0'])
   })
 
+  it('submits the hint when pressing enter in the hint field', async () => {
+    const user = userEvent.setup()
+    const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={onSubmitHint}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    await user.type(input, 'orbit')
+    await user.type(input, '{Enter}')
+    expect(onSubmitHint).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /available.*moon/i }))
+    await user.type(input, '{Enter}')
+    expect(onSubmitHint).toHaveBeenCalledWith('ORBIT', ['p0-card-0'])
+  })
+
+  it('ignores a repeat submit while the first hint request is in flight', async () => {
+    const user = userEvent.setup()
+    let resolveSubmit: (result: { status: 'success' }) => void = () => {}
+    const onSubmitHint = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubmit = resolve
+        }),
+    )
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={onSubmitHint}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn().mockResolvedValue({ status: 'success' })}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    await user.type(input, 'orbit')
+    await user.click(screen.getByRole('button', { name: /available.*moon/i }))
+    await user.type(input, '{Enter}')
+    expect(onSubmitHint).toHaveBeenCalledTimes(1)
+
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
+    expect(onSubmitHint).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveSubmit({ status: 'success' })
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled(),
+    )
+  })
+
   it('auto-counts selected cards, freezes the assassin, and submits the derived targets', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
@@ -295,9 +370,7 @@ describe('HintPhaseScreen', () => {
       screen.queryByText(/review clues as they arrive/i),
     ).not.toBeInTheDocument()
     expect(screen.getByRole('main')).not.toHaveTextContent(/\btimers?\b/i)
-    expect(
-      screen.getByRole('button', { name: 'Start guessing' }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start game' })).toBeDisabled()
     const assassin = screen.getByRole('button', { name: /assassin.*poison/i })
     expect(assassin).toBeDisabled()
     await user.type(screen.getByLabelText('Your hint'), 'orbit')
@@ -650,9 +723,7 @@ describe('HintPhaseScreen', () => {
     )
 
     expect(screen.getByText('2/3')).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: 'Start guessing' }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start game' })).toBeDisabled()
     expect(
       screen.queryByRole('button', { name: "Reject Ada's hint" }),
     ).not.toBeInTheDocument()
@@ -818,7 +889,7 @@ describe('HintPhaseScreen', () => {
     expect(within(hostControls).getByRole('alert')).toHaveTextContent(
       'Could not reject that hint.',
     )
-    await user.click(screen.getByRole('button', { name: 'Start guessing' }))
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
     expect(within(hostControls).getByRole('alert')).toHaveTextContent(
       'Wait a moment before starting guessing.',
     )
@@ -1741,7 +1812,7 @@ describe('GuessingScreen messages', () => {
 })
 
 describe('FinishedScreen', () => {
-  it('shows an explicit no-winner result when no players remain', () => {
+  it('shows the empty standings card when no players remain', () => {
     const spectator = {
       playerId: 'spectator',
       name: 'Spectator',
@@ -1753,12 +1824,10 @@ describe('FinishedScreen', () => {
     const results = {
       gameId: hintingView.gameId,
       scoreboard: [spectator],
-      winners: [],
     }
 
     render(<FinishedScreen results={results} onReturnToLobby={vi.fn()} />)
 
-    expect(screen.getByRole('heading', { name: 'No winner.' })).toBeVisible()
     expect(
       screen.getByText('No players remain in the final standings.'),
     ).toBeVisible()
@@ -1779,7 +1848,6 @@ describe('FinishedScreen', () => {
     const results = {
       gameId: hintingView.gameId,
       scoreboard: [player],
-      winners: [player],
     }
 
     render(
@@ -1819,16 +1887,9 @@ describe('FinishedScreen', () => {
       const results = {
         gameId: hintingView.gameId,
         scoreboard: [spectator, ...scoreboard.toReversed()],
-        winners: scoreboard.filter(({ score }) => score === scores[0]),
       }
       render(<FinishedScreen results={results} onReturnToLobby={vi.fn()} />)
 
-      const winnerHeading = results.winners.map(({ name }) => name).join(' & ')
-      expect(
-        screen.getByRole('heading', {
-          name: `${winnerHeading} ${results.winners.length === 1 ? 'wins' : 'win'}.`,
-        }),
-      ).toBeVisible()
       expect(screen.getByRole('main')).not.toHaveTextContent(
         /\b(?:timers?|rounds?)\b/i,
       )
@@ -1867,4 +1928,17 @@ describe('FinishedScreen', () => {
       ).not.toBeInTheDocument()
     },
   )
+})
+
+describe('pickHintPlaceholder', () => {
+  it('picks the longest placeholder that fits the field width', () => {
+    expect(pickHintPlaceholder(305)).toBe('e.g. ROCKY or PROJECT HAIL MARY')
+    expect(pickHintPlaceholder(304)).toBe('e.g. PROJECT HAIL MARY')
+    expect(pickHintPlaceholder(217)).toBe('e.g. PROJECT HAIL MARY')
+    expect(pickHintPlaceholder(216)).toBe('e.g. ANDY WEIR')
+    expect(pickHintPlaceholder(139)).toBe('e.g. ANDY WEIR')
+    expect(pickHintPlaceholder(138)).toBe('e.g. ROCKY')
+    expect(pickHintPlaceholder(103)).toBe('e.g. ROCKY')
+    expect(pickHintPlaceholder(0)).toBe('e.g. ROCKY')
+  })
 })

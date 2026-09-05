@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type Ref,
+  type RefObject,
 } from 'react'
 
 import { HostControlCard } from '@/components/host-control-card'
@@ -53,6 +54,8 @@ export function HintPhaseScreen({
   onStartGuessing: () => Promise<CommandResult>
 }) {
   const [hint, setHint] = useState(view.hint ?? '')
+  const hintInputRef = useRef<HTMLInputElement | null>(null)
+  const hintPlaceholder = useFittingHintPlaceholder(hintInputRef)
   const [editableSelected, setSelected] = useState<Set<string>>(
     () =>
       new Set(
@@ -97,6 +100,7 @@ export function HintPhaseScreen({
   }
 
   const submit = async () => {
+    if (isSubmitting) return
     if (!hint.trim())
       return setHintActionError('Write a one-word or short phrase hint.')
     if (selected.size < MIN_TARGET_COUNT)
@@ -272,22 +276,30 @@ export function HintPhaseScreen({
               </div>
 
               <section aria-label="Hint controls">
-                <div className="hint-controls">
+                <form
+                  className="hint-controls"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void submit()
+                  }}
+                >
                   <div>
                     <label className="sr-only" htmlFor="hint">
                       Your hint
                     </label>
                     <Input
                       id="hint"
+                      ref={hintInputRef}
                       value={hint}
                       onChange={(event) => {
                         setHint(event.target.value.toUpperCase())
                         setHintActionError(null)
                       }}
                       maxLength={40}
-                      placeholder="Type your hint"
+                      placeholder={hintPlaceholder}
                       autoComplete="off"
                       autoCapitalize="characters"
+                      enterKeyHint="done"
                       disabled={view.hintSubmitted}
                       readOnly={isSubmitting || isUnlocking}
                       className={cn(
@@ -308,10 +320,9 @@ export function HintPhaseScreen({
                     </Button>
                   ) : (
                     <Button
-                      type="button"
+                      type="submit"
                       variant="outline"
                       className="h-10 w-auto justify-self-end px-5"
-                      onClick={() => void submit()}
                       disabled={
                         isSubmitting ||
                         selected.size < MIN_TARGET_COUNT ||
@@ -321,7 +332,7 @@ export function HintPhaseScreen({
                       {isSubmitting ? 'Submitting…' : 'Submit'}
                     </Button>
                   )}
-                </div>
+                </form>
 
                 {hintActionError ? (
                   <p className="action-error hint-control-error" role="alert">
@@ -337,7 +348,7 @@ export function HintPhaseScreen({
                       onClick={() => void startGuessing()}
                       disabled={!view.allHintsSubmitted || isStarting}
                     >
-                      {isStarting ? 'Starting…' : 'Start guessing'}
+                      {isStarting ? 'Starting…' : 'Start game'}
                     </Button>
                   </div>
                 </div>
@@ -762,14 +773,14 @@ export function GuessingScreen({
 
   return (
     <GamePageShell>
-      <HintDisplay
-        hint={view.hint}
-        count={view.hintNumber}
-        label="Current hint"
-      />
-
-      <div className="game-layout game-board-layout">
+      <div className="game-layout">
         <section className="game-panel min-w-0">
+          <HintDisplay
+            hint={view.hint}
+            count={view.hintNumber}
+            label="Current hint"
+          />
+
           <div
             className="word-grid"
             aria-label={
@@ -1142,6 +1153,53 @@ function PlayerSummary({
   )
 }
 
+/* Longest-first placeholder tiers for the hint field. Thresholds are each
+   string's measured width at the field's 18px font plus ~5px of headroom, so
+   the placeholder never clips on narrow screens. */
+const HINT_PLACEHOLDERS = [
+  { minWidth: 305, text: 'e.g. ROCKY or PROJECT HAIL MARY' },
+  { minWidth: 217, text: 'e.g. PROJECT HAIL MARY' },
+  { minWidth: 139, text: 'e.g. ANDY WEIR' },
+  { minWidth: 103, text: 'e.g. ROCKY' },
+] as const
+
+export function pickHintPlaceholder(availableWidth: number) {
+  return (
+    HINT_PLACEHOLDERS.find(({ minWidth }) => availableWidth >= minWidth)
+      ?.text ?? HINT_PLACEHOLDERS[HINT_PLACEHOLDERS.length - 1].text
+  )
+}
+
+/* Keeps the hint placeholder on one line by tracking the field's inner width
+   (which jsdom can't compute, hence the guard). */
+function useFittingHintPlaceholder(
+  inputRef: RefObject<HTMLInputElement | null>,
+) {
+  const [placeholder, setPlaceholder] = useState(
+    HINT_PLACEHOLDERS[HINT_PLACEHOLDERS.length - 1].text,
+  )
+
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    if (!input || typeof ResizeObserver === 'undefined') return undefined
+    const sync = () => {
+      const style = getComputedStyle(input)
+      // clientWidth excludes borders; only its padding sits inside it.
+      const available =
+        input.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight)
+      setPlaceholder(pickHintPlaceholder(available))
+    }
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(input)
+    return () => observer.disconnect()
+  }, [inputRef])
+
+  return placeholder
+}
+
 function HintDisplay({
   hint,
   count,
@@ -1223,20 +1281,14 @@ export function FinishedScreen({
     .filter(({ participation }) => participation === 'player')
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
   const ranks = getDenseRanks(players.map(({ score }) => score))
-  const winnerNames = results.winners.map(({ name }) => name).join(' & ')
-  const hasWinner = results.winners.length > 0
 
   return (
     <GamePageShell>
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-6 text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
-          {hasWinner
-            ? `${winnerNames} ${results.winners.length === 1 ? 'wins' : 'win'}`
-            : 'No winner'}
-          <span className="text-accent">.</span>
-        </h1>
         <section className="game-panel">
-          <h2 className="sidebar-title">Final standings</h2>
+          <h1 className="text-center text-4xl leading-[1.05] font-bold tracking-[-0.04em] text-balance sm:text-5xl">
+            scoreboard<span className="text-accent">.</span>
+          </h1>
           {players.length === 0 ? (
             <p className="mt-4 text-sm text-[var(--muted-foreground)]">
               No players remain in the final standings.

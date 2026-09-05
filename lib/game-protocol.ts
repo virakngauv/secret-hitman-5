@@ -31,7 +31,6 @@ export type ScoreboardEntry = PlayerIdentity & {
 export type CompletedGameResults = {
   gameId: string
   scoreboard: ScoreboardEntry[]
-  winners: ScoreboardEntry[]
 }
 
 export type HintStatus = {

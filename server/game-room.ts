@@ -693,22 +693,9 @@ export class GameRoom {
       }
     }
     const gameId = this.requireGame().gameId
-    const scoreboard = this.scoreboard()
-    const playerScores = scoreboard.filter(
-      (entry): entry is ScoreboardEntry & { score: number } =>
-        entry.participation === 'player' && entry.score !== null,
-    )
-    const winningScore =
-      playerScores.length > 0
-        ? Math.max(...playerScores.map(({ score }) => score))
-        : null
     this.lastGameResults = {
       gameId,
-      scoreboard,
-      winners:
-        winningScore === null
-          ? []
-          : playerScores.filter(({ score }) => score === winningScore),
+      scoreboard: this.scoreboard(),
       viewerPlayerIds: new Set(
         this.members
           .filter((member) => member.active || member.game !== null)
@@ -751,7 +738,6 @@ export class GameRoom {
           ? {
               gameId: this.lastGameResults.gameId,
               scoreboard: this.lastGameResults.scoreboard,
-              winners: this.lastGameResults.winners,
             }
           : null
       return {

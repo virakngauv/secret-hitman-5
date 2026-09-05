@@ -21,7 +21,7 @@ for (const viewport of [
     ])
     await expect(
       page.getByText(
-        'Picks always split evenly: you and the hint writer gain (or lose) the same points.',
+        'Claimers and the hint writers always gain (or lose) the same points!',
       ),
     ).toBeVisible()
 
@@ -70,7 +70,7 @@ for (const viewport of [
     )
 
     await backHome.click()
-    await expect(page).toHaveURL(/\/home$/)
+    await expect(page).toHaveURL((url) => url.pathname === '/')
     const create = page.getByRole('link', {
       name: 'Create a room',
       exact: true,
@@ -92,6 +92,6 @@ for (const viewport of [
       page.getByRole('heading', { name: 'Rules', exact: true }),
     ).toBeVisible()
     await backHome.click()
-    await expect(page).toHaveURL(/\/home$/)
+    await expect(page).toHaveURL((url) => url.pathname === '/')
   })
 }
