@@ -22,36 +22,36 @@ export default function RulesPage() {
             <h2 id="how-a-round-plays" className="mb-3 text-2xl font-black">
               How to play
             </h2>
-            <div className="space-y-4">
-              <p>
+            <ol className="space-y-4">
+              <li>
                 Play with 2 to 12 players. Everyone writes a hint before
                 guessing begins.
-              </p>
-              <p>
+              </li>
+              <li>
                 Each player gets a private board of 12 words. Three civilians
                 and one assassin are locked. Choose 1 to 5 of the other eight as
                 targets, then share one word or phrase. Any words you leave
                 unselected stay civilians.
-              </p>
-              <p>
+              </li>
+              <li>
                 Enter your hint and select &quot;Submit&quot;. The app shows the
                 number of targets you chose next to your hint. Select two
                 targets and enter &quot;ORBIT&quot;, and the app shows
                 &quot;ORBIT 2&quot;. You do not need to type the number.
-              </p>
-              <p>
+              </li>
+              <li>
                 Once everyone has submitted, the host starts guessing. Play
                 through one board at a time. You do not guess on your own board.
                 The other players see its words and your hint with its target
                 count. The word roles start hidden from players who are
                 guessing.
-              </p>
-              <p>
+              </li>
+              <li>
                 Players guess at the same time. Tap an unclaimed word to claim
                 it. Each word can be claimed once, so another player may get
                 there first.
-              </p>
-            </div>
+              </li>
+            </ol>
           </section>
 
           <section className="game-panel" aria-labelledby="scoring">
