@@ -20,12 +20,15 @@ for (const viewport of [
       'Host controls',
     ])
     // The play sequence keeps ordered-list semantics for assistive
-    // technology, even though Tailwind's preflight hides the numbering.
+    // technology. Safari drops list semantics from unstyled lists, so the
+    // explicit role guards against Tailwind's preflight hiding the
+    // numbering.
     const playSteps = page
       .getByRole('region', { name: 'How to play' })
       .getByRole('list')
     await expect(playSteps).toBeVisible()
     expect(await playSteps.evaluate((list) => list.tagName)).toBe('OL')
+    await expect(playSteps).toHaveAttribute('role', 'list')
     await expect(playSteps.getByRole('listitem')).toHaveCount(5)
     await expect(page.getByText('then share one word or phrase')).toBeVisible()
     await expect(

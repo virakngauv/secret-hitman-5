@@ -22,7 +22,9 @@ export default function RulesPage() {
             <h2 id="how-a-round-plays" className="mb-3 text-2xl font-black">
               How to play
             </h2>
-            <ol className="space-y-4">
+            {/* Safari drops list semantics when the numbering is unstyled
+                (Tailwind preflight), so keep the explicit role. */}
+            <ol className="space-y-4" role="list">
               <li>
                 Play with 2 to 12 players. Everyone writes a hint before
                 guessing begins.
