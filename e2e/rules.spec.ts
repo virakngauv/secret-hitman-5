@@ -9,19 +9,37 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport)
     await page.goto('/rules')
-    await expect(page).toHaveTitle('Rules — Secret Hitman')
+    await expect(page).toHaveTitle('Rules | Secret Hitman')
     await expect(
       page.getByRole('heading', { name: 'Rules', exact: true }),
     ).toBeVisible()
     await expect(page.getByRole('heading', { level: 2 })).toHaveText([
-      'How a round plays',
+      'How to play',
       'Tile points',
       'Hint writing tips',
       'Host controls',
     ])
+    // The play sequence keeps ordered-list semantics for assistive
+    // technology. Safari drops list semantics from unstyled lists, so the
+    // explicit role guards against Tailwind's preflight hiding the
+    // numbering.
+    const playSteps = page
+      .getByRole('region', { name: 'How to play' })
+      .getByRole('list')
+    await expect(playSteps).toBeVisible()
+    expect(await playSteps.evaluate((list) => list.tagName)).toBe('OL')
+    await expect(playSteps).toHaveAttribute('role', 'list')
+    await expect(playSteps.getByRole('listitem')).toHaveCount(5)
+    await expect(page.getByText('then share one word or phrase')).toBeVisible()
+    await expect(
+      page.getByText('then share one word plus that number'),
+    ).toHaveCount(0)
+    await expect(
+      page.getByText('You do not need to type the number.'),
+    ).toBeVisible()
     await expect(
       page.getByText(
-        'Claimers and the hint writers always gain (or lose) the same points!',
+        "Each claimed word changes both the guesser's score and the hint writer's score by the amount below.",
       ),
     ).toBeVisible()
 
@@ -39,11 +57,11 @@ for (const viewport of [
     ])
     await expect(roleTable.getByRole('cell')).toHaveText([
       '+3 each',
-      'Keep going!',
+      'Keep guessing while targets remain.',
       '−1 each',
-      'The board ends for you.',
+      'You cannot guess again on this board.',
       '−5 each',
-      'The board ends for everyone.',
+      'Guessing ends for everyone on this board.',
     ])
     await expect(
       page.getByRole('button', { name: /sign in|join/i }),
