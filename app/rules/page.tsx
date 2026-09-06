@@ -26,8 +26,14 @@ export default function RulesPage() {
                 (Tailwind preflight), so keep the explicit role. */}
             <ol className="space-y-4" role="list">
               <li>
-                Play with 2 to 12 players. Everyone writes a hint before
+                Play with 3*–12 players. Everyone writes a hint before
                 guessing begins.
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  *2 players are supported, but 3 or more are recommended. In a
+                  2-player game, the guesser and hint writer receive the same
+                  point changes on every guess, so both players will always
+                  finish tied.
+                </p>
               </li>
               <li>
                 Each player gets a private board of 12 words. Three civilians
