@@ -37,6 +37,18 @@ for (const viewport of [
     await expect(
       page.getByText('You do not need to type the number.'),
     ).toBeVisible()
+    // Three players are the recommended minimum; the footnote explains why
+    // 2-player games are supported but always tie.
+    await expect(page.getByText('Play with 3*–12 players')).toBeVisible()
+    await expect(page.getByText('2 to 12 players')).toHaveCount(0)
+    await expect(
+      page.getByText(
+        '*2 players are supported, but 3 or more are recommended.',
+      ),
+    ).toBeVisible()
+    await expect(
+      page.getByText('both players will always finish tied.'),
+    ).toBeVisible()
     await expect(
       page.getByText(
         "Each claimed word changes both the guesser's score and the hint writer's score by the amount below.",

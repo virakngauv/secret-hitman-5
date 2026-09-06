@@ -4,7 +4,9 @@
 - Keep the Next.js App Router and TypeScript strict mode enabled.
 - Add reusable UI primitives under `components/ui` and application components under `components`.
 - Treat Clerk and PostHog as optional in local development until their environment variables are set.
-- Run lint, typecheck, unit tests, and a production build before handing off meaningful changes.
+- Run format:check, lint, typecheck, unit tests, a production build, and the
+  Playwright e2e tests before handing off meaningful changes. These steps mirror
+  the CI workflow (.github/workflows/ci.yml).
 - Create or identify a tracking issue before opening a pull request, and include `Closes #<issue-number>` in the pull request description so GitHub links and closes the issue on merge.
 
 ## Multiplayer Browser Testing
