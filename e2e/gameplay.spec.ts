@@ -232,6 +232,7 @@ test.describe('Secret Hitman single round', () => {
   test('runs consecutive games after a late spectator returns to the lobby as a player', async ({
     browser,
   }) => {
+    test.setTimeout(60_000)
     const contexts: BrowserContext[] = []
     try {
       const host = await newPlayer(browser, contexts)
@@ -321,7 +322,7 @@ test.describe('Secret Hitman single round', () => {
       await host.getByRole('button', { name: 'Cancel' }).click()
       await expect(host.getByText('GALAXY', { exact: true })).toBeVisible()
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
-      await expect(nextHint).toBeEnabled()
+      await expectPickersSettled(host)
       await expect(host.getByText('GALAXY', { exact: true })).toBeVisible()
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(host.getByText('GARDEN', { exact: true })).toBeVisible()
@@ -329,6 +330,7 @@ test.describe('Secret Hitman single round', () => {
         host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeEnabled()
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
+      await expectPickersSettled(host)
       await expect(
         host.getByRole('button', { name: 'View scoreboard' }),
       ).toBeEnabled()
@@ -374,15 +376,18 @@ test.describe('Secret Hitman single round', () => {
 
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
       await spectator.getByRole('button', { name: 'I’m done guessing' }).click()
+      await expectPickersSettled(host)
       await host.getByRole('button', { name: 'Next hint' }).click()
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await spectator.getByRole('button', { name: 'I’m done guessing' }).click()
+      await expectPickersSettled(host)
       await host.getByRole('button', { name: 'Next hint' }).click()
       await expect(host.getByLabel('Current hint')).toContainText(
         'SECOND METAL 1',
       )
       await host.getByRole('button', { name: 'I’m done guessing' }).click()
       await guest.getByRole('button', { name: 'I’m done guessing' }).click()
+      await expectPickersSettled(host)
       await host.getByRole('button', { name: 'View scoreboard' }).click()
       await expect(spectator.getByText('scoreboard.')).toBeVisible()
       await host.getByRole('button', { name: 'Return to lobby' }).click()
@@ -697,6 +702,17 @@ async function leaveRoom(page: Page, confirmationExpected = true) {
   })
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
   await dialog.getByRole('button', { name: 'Leave room' }).click()
+}
+
+// A successful click in one context only proves that browser sent its intent;
+// the other contexts receive the server snapshot asynchronously. The host's
+// advance buttons stay enabled while pickers are still guessing, and clicking
+// them early opens the confirmation dialog instead of advancing, so wait until
+// the host's server-driven "still guessing" warning is gone before advancing.
+async function expectPickersSettled(host: Page) {
+  await expect(
+    host.getByText(/players? (?:is|are) still guessing/),
+  ).toBeHidden()
 }
 
 async function joinRoom(page: Page, roomCode: string, name: string) {
