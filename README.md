@@ -63,3 +63,61 @@ The frontend can be deployed to Vercel. Run the game server as exactly one long-
 Set `NEXT_PUBLIC_GAME_SERVER_URL` to an HTTPS endpoint on the frontend and set `ALLOWED_ORIGINS` to the frontend origin on the game server. Production clients refuse insecure socket endpoints; HTTP is available only in development for local/LAN testing.
 
 The App Platform example opts into `TRUST_DIGITALOCEAN_PROXY=true`, using the provider's [`do-connecting-ip` header](https://docs.digitalocean.com/support/where-can-i-find-the-client-ip-address-of-a-request-connecting-to-my-app/) rather than trusting a private address range. Enable this only behind that managed ingress, which sets the header; never use it on a directly reachable server. Missing or invalid headers fall back to the peer IP for conservative rate limiting.
+
+### Predefined packs and Clerk Billing (development)
+
+Base hosting and guest play require no account. The original Movies and Travel
+packs are public development samples, not an approved commercial catalog. Their
+full pools ship only with server code, but are readable in this public repository.
+The catalog and socket snapshots expose descriptions and sampled boards, never
+full pools. Do not put private content into this repository without a separate
+content delivery decision.
+
+Clerk Next.js 7.5.20 and backend 3.11.7 are pinned for this integration. Use a Clerk
+**development** instance with individual-user Billing. Create a user Plan with
+Features `pack_movies_v1` and `pack_travel_v1`; do not enable trials or complimentary
+offers. The backend uses fresh subscription items and their millisecond periods,
+not the parent subscription status or client claims. Canceled items retain access
+until period end; past-due items cannot start new premium rounds. This conservative
+development policy needs approval before launch.
+
+Set both Clerk keys, `CLERK_ISSUER`, and `CLERK_AUTHORIZED_PARTIES` in **both** Next.js
+and the standalone Node process. `tsx` does not load Next's `.env.local`; export
+these variables in the process environment or configure the deployment environment.
+Use exact frontend origins and optionally `CLERK_AUDIENCE` if your tokens include a
+configured audience. Partial configuration disables protected use. Never expose
+`CLERK_SECRET_KEY` under a `NEXT_PUBLIC_` name.
+
+- `ENABLE_PREMIUM_PACKS=true` makes the sample packs available for authenticated
+  selection and hosting. It defaults to false.
+- `ENABLE_CLERK_CHECKOUT=true` enables Clerk's user PricingTable on `/pricing`.
+  It defaults to false and is independent of hosting access. Prices come from
+  Clerk; this repository defines no prices or offers.
+- `/account` provides Clerk's account/subscription UI plus an access preview.
+  It is protected when Clerk is configured. Pricing opens separately from the lobby
+  so checkout cancellation or failure leaves the browser's game identity intact.
+- Each protected command gets a fresh session token in memory. Tokens do not enter
+  local storage, guesses, logs, or analytics. A 4.5-second operation deadline and
+  room revision checks prevent late authorization from committing a stale start.
+- All boards in an authorized round use the same fixed content version, including
+  replacement boards and late hinting joins. Provider outages and subscription
+  changes do not interrupt that round. Returning to the lobby or host succession
+  clears the selection to Base; each new premium round requires current host access.
+- Rooms remain ephemeral and expire after two idle hours. Restarts discard rooms;
+  later access checks read Clerk directly without a database, ledger, or webhooks.
+
+Before live charges, the owner must approve recurring terms, intervals/prices,
+exact catalog and Feature mapping, future pack inclusion, past-due policy,
+content rights/public source availability, and a support/refund process. Verify
+Clerk's current currency, geographic, tax/VAT, 3DS, and refund limitations. A gateway
+refund must not be assumed to end Clerk subscription access. Do not add direct
+Stripe Checkout, an app payment ledger, or billing webhooks as a workaround.
+
+Development release verification must exercise Clerk sign-in/account switching,
+checkout cancel/failure/success and access refresh, cancellation through exact
+expiry, renewal, past-due/recovery, revoked sessions, and provider outage with a
+real development instance. Automated adapter tests do not replace these provider
+flows. Deploy frontend and game server together for protocol version 14; old
+clients receive a reload message. Rollback requires coordinated versions and loses
+active rooms. Verify no premium pools or credentials appear in browser bundles,
+public responses, or logs before enabling a paid catalog.

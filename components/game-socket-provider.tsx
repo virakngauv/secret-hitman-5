@@ -12,9 +12,12 @@ import {
   type ReactNode,
 } from 'react'
 
+import { useAccount } from './account-bridge'
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
   GAME_PROTOCOL_VERSION,
+  type PackSummary,
+  type SelectPackPayload,
   type AdvanceTurnPayload,
   type CardKind,
   type ClaimCardPayload,
@@ -47,7 +50,16 @@ type GameSocketContextValue = {
     playerId: string,
     allowRoundReset?: boolean,
   ) => Promise<CommandResult>
-  startGame: (roomCode: string) => Promise<CommandResult>
+  catalog: () => Promise<CommandResult<{ packs: PackSummary[] }>>
+  selectPack: (
+    payload: Omit<SelectPackPayload, 'accountToken'>,
+    premium: boolean,
+  ) => Promise<CommandResult>
+  startGame: (
+    roomCode: string,
+    configurationRevision?: number,
+    premium?: boolean,
+  ) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
   unlockHint: (payload: GameCommandPayload) => Promise<CommandResult>
   rejectHint: (payload: RejectHintPayload) => Promise<CommandResult>
@@ -76,6 +88,7 @@ export function defaultGameServerUrl(hostname: string): string {
 }
 
 export function GameSocketProvider({ children }: { children: ReactNode }) {
+  const account = useAccount()
   const { clientToken, ensureClientToken } = usePlayerSession()
   const socketRef = useRef<GameSocket | null>(null)
   const watchedRoomsRef = useRef(new Map<string, number>())
@@ -339,12 +352,65 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
-  const startGame = useCallback(
-    async (roomCode: string): Promise<CommandResult> =>
-      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
-        socket.emitWithAck('game:start', { roomCode }),
+  const catalog = useCallback(
+    async () =>
+      runCommand<{ packs: PackSummary[] }>(
+        socketRef.current,
+        synchronizedRef.current,
+        (socket) => socket.emitWithAck('packs:catalog', {}),
       ),
     [],
+  )
+  const selectPack = useCallback(
+    async (
+      payload: Omit<SelectPackPayload, 'accountToken'>,
+      premium: boolean,
+    ): Promise<CommandResult> => {
+      try {
+        const accountToken = premium
+          ? ((await account.getToken()) ?? undefined)
+          : undefined
+        return await runCommand(
+          socketRef.current,
+          synchronizedRef.current,
+          (socket) =>
+            socket.emitWithAck('room:select-pack', {
+              ...payload,
+              accountToken,
+            }),
+        )
+      } catch {
+        return unavailable()
+      }
+    },
+    [account],
+  )
+  const startGame = useCallback(
+    async (
+      roomCode: string,
+      configurationRevision = 0,
+      premium = false,
+    ): Promise<CommandResult> => {
+      try {
+        const accountToken = premium
+          ? ((await account.getToken()) ?? undefined)
+          : undefined
+        return await runCommand(
+          socketRef.current,
+          synchronizedRef.current,
+          (socket) =>
+            socket.emitWithAck('game:start', {
+              roomCode,
+              configurationRevision,
+              requestId: crypto.randomUUID(),
+              accountToken,
+            }),
+        )
+      } catch {
+        return unavailable()
+      }
+    },
+    [account],
   )
   const removePlayer = useCallback(
     async (
@@ -429,6 +495,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       leaveRoom,
       removePlayer,
       startGame,
+      catalog,
+      selectPack,
       submitHint,
       unlockHint,
       rejectHint,
@@ -450,6 +518,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       rejectHint,
       snapshots,
       startGame,
+      catalog,
+      selectPack,
       startGuessing,
       showScoreboard,
       submitHint,

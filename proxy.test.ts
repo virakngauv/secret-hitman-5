@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
   next: vi.fn(),
 }))
-vi.mock('@clerk/nextjs/server', () => ({ clerkMiddleware: mocks.middleware }))
+vi.mock('@clerk/nextjs/server', () => ({
+  clerkMiddleware: mocks.middleware,
+  createRouteMatcher: () => () => false,
+}))
 vi.mock('next/server', () => ({ NextResponse: { next: mocks.next } }))
 
 describe('optional Clerk proxy', () => {
@@ -43,10 +46,7 @@ describe('optional Clerk proxy', () => {
     const request = {} as NextRequest
     const event = {} as NextFetchEvent
     proxy(request, event)
-    expect(mocks.middleware).toHaveBeenCalledWith({
-      publishableKey: 'key',
-      secretKey: 'secret',
-    })
+    expect(mocks.middleware).toHaveBeenCalledWith(expect.any(Function))
     expect(mocks.handle).toHaveBeenCalledWith(request, event)
     expect(mocks.next).not.toHaveBeenCalled()
     proxy(request, event)

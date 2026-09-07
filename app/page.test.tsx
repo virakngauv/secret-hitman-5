@@ -30,7 +30,7 @@ describe('HomePage', () => {
       '/rules',
     )
     expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual(
-      ['Create a room', 'Join a room', 'Rules'],
+      ['Word packs', 'Create a room', 'Join a room', 'Rules'],
     )
   })
 })

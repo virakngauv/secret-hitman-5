@@ -10,6 +10,16 @@ import type {
   RejectHintPayload,
   SubmitHintPayload,
 } from '../lib/game-protocol'
+import { PACKS, type Pack } from './packs'
+import {
+  createPackAuthorizer,
+  accessUnavailable,
+  type AuthorizePack,
+} from './pack-access'
+import type {
+  PackCommandPayload,
+  SelectPackPayload,
+} from '../lib/game-protocol'
 import { GameRoom } from './game-room'
 import {
   ROOM_CODE_CONSONANTS,
@@ -32,12 +42,18 @@ export const DEFAULT_ROOM_EXPIRATION = {
 export class GameServer {
   readonly rooms = new Map<string, GameRoom>()
   private readonly expiredRooms = new Map<string, number>()
+  private readonly packOperations = new WeakMap<
+    GameRoom,
+    { pending: boolean; nextAt: number }
+  >()
   private readonly expiration: Required<RoomExpirationPolicy>
 
   constructor(
     expiration: RoomExpirationPolicy = DEFAULT_ROOM_EXPIRATION,
     private readonly random: () => number = () => randomInt(2 ** 30) / 2 ** 30,
     private readonly maxRooms = MAX_ACTIVE_ROOMS,
+    private readonly authorizePack: AuthorizePack = createPackAuthorizer(),
+    readonly packs: readonly Pack[] = PACKS,
   ) {
     this.expiration = {
       roomIdleMs: expiration.roomIdleMs,
@@ -107,7 +123,78 @@ export class GameServer {
   }
 
   startGame(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.start(token, now))
+    return this.withRoom(roomCode, (room) =>
+      room.selectedPack.feature
+        ? {
+            status: 'forbidden',
+            message: 'Premium rounds require a fresh access check.',
+          }
+        : room.start(token, now),
+    )
+  }
+
+  async packCommand(
+    token: string,
+    payload: PackCommandPayload | SelectPackPayload,
+    start: boolean,
+  ): Promise<CommandResult> {
+    const room = this.rooms.get(payload.roomCode)
+    if (!room) return { status: 'room_not_found', message: 'Room not found.' }
+    const check = room.checkPackCommand(token, payload.configurationRevision)
+    if (check.status !== 'success') return check
+    const packId = start
+      ? room.selectedPack.id
+      : 'packId' in payload
+        ? payload.packId
+        : ''
+    const pack = this.packs.find(
+      (entry) => entry.id === packId && entry.enabled,
+    )
+    if (!pack)
+      return { status: 'invalid', message: 'That pack is unavailable.' }
+    const guard = this.packOperations.get(room)
+    if (guard?.pending || (pack.feature && guard && Date.now() < guard.nextAt))
+      return {
+        status: 'rate_limited',
+        message: 'Checking access. Please try again shortly.',
+      }
+    const operation = { pending: true, nextAt: Date.now() + 2000 }
+    this.packOperations.set(room, operation)
+    const deadline = Date.now() + 4500
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      if (pack.feature) {
+        const result = await Promise.race([
+          this.authorizePack(payload.accountToken, pack.feature),
+          new Promise<CommandResult>((resolve) => {
+            timer = setTimeout(() => resolve(accessUnavailable()), 4500)
+          }),
+        ])
+        if (result.status !== 'success') return result
+      }
+      if (
+        Date.now() >= deadline ||
+        this.rooms.get(payload.roomCode) !== room ||
+        Date.now() - room.lastMeaningfulActivityAt >= this.expiration.roomIdleMs
+      )
+        return {
+          status: 'stale',
+          message: 'The room changed or expired. Please try again.',
+        }
+      const current = room.checkPackCommand(
+        token,
+        payload.configurationRevision,
+      )
+      if (current.status !== 'success') return current
+      return start
+        ? room.start(token, Date.now(), pack)
+        : room.selectPack(token, payload.configurationRevision, pack)
+    } catch {
+      return accessUnavailable()
+    } finally {
+      clearTimeout(timer)
+      operation.pending = false
+    }
   }
 
   submitHint(token: string, payload: SubmitHintPayload, now = Date.now()) {

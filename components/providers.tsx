@@ -1,5 +1,7 @@
 'use client'
 
+import { AccountBridge } from './account-bridge'
+import { shadcn } from '@clerk/ui/themes'
 import { ClerkProvider } from '@clerk/nextjs'
 import posthog from 'posthog-js'
 import { PostHogProvider } from 'posthog-js/react'
@@ -8,7 +10,13 @@ import { useEffect, type ReactNode } from 'react'
 import { GameSocketProvider } from '@/components/game-socket-provider'
 import { PlayerSessionProvider } from '@/components/player-session-provider'
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({
+  children,
+  clerkEnabled = false,
+}: {
+  children: ReactNode
+  clerkEnabled?: boolean
+}) {
   const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
   const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim()
   const posthogHost =
@@ -34,8 +42,12 @@ export function Providers({ children }: { children: ReactNode }) {
     content = <PostHogProvider client={posthog}>{content}</PostHogProvider>
   }
 
-  if (clerkKey) {
-    content = <ClerkProvider publishableKey={clerkKey}>{content}</ClerkProvider>
+  if (clerkKey && clerkEnabled) {
+    content = (
+      <ClerkProvider publishableKey={clerkKey} appearance={{ theme: shadcn }}>
+        <AccountBridge>{content}</AccountBridge>
+      </ClerkProvider>
+    )
   }
 
   return content

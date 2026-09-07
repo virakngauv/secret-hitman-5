@@ -61,3 +61,25 @@ function isHttpsUrl(value) {
     return false
   }
 }
+
+if (process.env.ENABLE_PREMIUM_PACKS === 'true') {
+  for (const name of [
+    ...clerkVariables,
+    'CLERK_ISSUER',
+    'CLERK_AUTHORIZED_PARTIES',
+  ]) {
+    if (!isConfigured(name)) {
+      console.error(
+        `Premium hosting requires ${name} in both web and game processes.`,
+      )
+      process.exitCode = 1
+    }
+  }
+}
+if (
+  process.env.ENABLE_CLERK_CHECKOUT === 'true' &&
+  configuredClerkVariables.length !== 2
+) {
+  console.error('Clerk checkout requires both Clerk keys.')
+  process.exitCode = 1
+}

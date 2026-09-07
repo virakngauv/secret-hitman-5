@@ -1,4 +1,4 @@
-import { clerkMiddleware } from '@clerk/nextjs/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import {
   NextResponse,
   type NextFetchEvent,
@@ -7,9 +7,12 @@ import {
 
 const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
 const secretKey = process.env.CLERK_SECRET_KEY?.trim()
+const isAccountRoute = createRouteMatcher(['/account(.*)'])
 const clerkProxy =
   publishableKey && secretKey
-    ? clerkMiddleware({ publishableKey, secretKey })
+    ? clerkMiddleware(async (auth, request) => {
+        if (isAccountRoute(request)) await auth.protect()
+      })
     : null
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {

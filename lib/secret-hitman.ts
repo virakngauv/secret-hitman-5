@@ -11,8 +11,12 @@ export type GameCard = {
   claimers: Array<{ playerId: string; name: string }>
 }
 
-export function createPlayerBoard(seed: string, position: number): GameCard[] {
-  const words = shuffle(SECRET_HITMAN_WORDS, `${seed}:words:${position}`).slice(
+export function createPlayerBoard(
+  seed: string,
+  position: number,
+  pool: readonly string[] = SECRET_HITMAN_WORDS,
+): GameCard[] {
+  const words = shuffle(pool, `${seed}:words:${position}`).slice(
     0,
     BOARD_CARD_COUNT,
   )

@@ -55,6 +55,8 @@ function lobbyView(minimumPlayers = 2): LobbyView {
   }
   return {
     status: 'lobby',
+    selectedPackId: 'base',
+    configurationRevision: 0,
     roomCode: 'bcdf2',
     player,
     members: [player],
@@ -415,7 +417,7 @@ describe('RoomLobby invite prompt', () => {
 
     await user.click(screen.getByRole('button', { name: 'Start game' }))
 
-    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2')
+    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2', 0, false)
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Too many commands.',
     )

@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 13 as const
+export const GAME_PROTOCOL_VERSION = 14 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -88,6 +88,8 @@ export type RoomSnapshot =
   | { status: 'removed_from_room'; roomCode: string }
   | ({
       status: 'lobby'
+      selectedPackId: string
+      configurationRevision: number
       minimumPlayers: number
       lobbyNotice?: 'player_left'
       lastGameResults?: CompletedGameResults
@@ -164,6 +166,19 @@ export type SessionResumePayload = { roomCode?: string }
 export type CreateRoomPayload = { name: string }
 export type JoinRoomPayload = { roomCode: string; name: string }
 export type RoomCommandPayload = { roomCode: string }
+export type PackSummary = {
+  id: string
+  name: string
+  description: string
+  version: string
+  premium: boolean
+}
+export type PackCommandPayload = RoomCommandPayload & {
+  configurationRevision: number
+  requestId: string
+  accountToken?: string
+}
+export type SelectPackPayload = PackCommandPayload & { packId: string }
 export type GameCommandPayload = RoomCommandPayload & { gameId: string }
 export type FinishGuessingPayload = GameCommandPayload & { turnId: string }
 export type AdvanceTurnPayload = GameCommandPayload & { turnId: string }
@@ -207,8 +222,16 @@ export type ClientToServerEvents = {
     payload: RemovePlayerPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
+  'packs:catalog': (
+    payload: Record<string, never>,
+    acknowledge: (result: CommandResult<{ packs: PackSummary[] }>) => void,
+  ) => void
+  'room:select-pack': (
+    payload: SelectPackPayload,
+    acknowledge: (result: CommandResult) => void,
+  ) => void
   'game:start': (
-    payload: RoomCommandPayload,
+    payload: PackCommandPayload,
     acknowledge: (result: CommandResult) => void,
   ) => void
   'game:submit-hint': (

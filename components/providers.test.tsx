@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Providers } from './providers'
 
 const mocks = vi.hoisted(() => ({ init: vi.fn() }))
+vi.mock('./account-bridge', () => ({
+  AccountBridge: ({ children }: { children: ReactNode }) => children,
+}))
 vi.mock('@clerk/nextjs', () => ({
   ClerkProvider: ({
     children,
@@ -57,7 +60,7 @@ describe('optional integration providers', () => {
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', ' analytics-key ')
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', ' ')
     render(
-      <Providers>
+      <Providers clerkEnabled>
         <span>Game</span>
       </Providers>,
     )

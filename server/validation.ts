@@ -2,6 +2,8 @@ import {
   GAME_PROTOCOL_VERSION,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
+  type PackCommandPayload,
+  type SelectPackPayload,
   type ClaimCardPayload,
   type CreateRoomPayload,
   type FinishGuessingPayload,
@@ -240,4 +242,38 @@ export function parseLeaveIntentForm(body: string) {
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function parsePackCommand(value: unknown): PackCommandPayload | null {
+  const room = parseRoomCommand(value)
+  if (
+    !room ||
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.configurationRevision) ||
+    (value.configurationRevision as number) < 0 ||
+    typeof value.requestId !== 'string' ||
+    !COMMAND_ID_PATTERN.test(value.requestId) ||
+    (value.accountToken !== undefined &&
+      (typeof value.accountToken !== 'string' ||
+        value.accountToken.length < 1 ||
+        value.accountToken.length > 8192))
+  )
+    return null
+  return {
+    ...room,
+    configurationRevision: value.configurationRevision as number,
+    requestId: value.requestId,
+    ...(typeof value.accountToken === 'string'
+      ? { accountToken: value.accountToken }
+      : {}),
+  }
+}
+export function parseSelectPack(value: unknown): SelectPackPayload | null {
+  const command = parsePackCommand(value)
+  return command &&
+    isRecord(value) &&
+    typeof value.packId === 'string' &&
+    /^[a-z0-9-]{1,64}$/.test(value.packId)
+    ? { ...command, packId: value.packId }
+    : null
 }

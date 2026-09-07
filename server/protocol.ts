@@ -9,6 +9,7 @@ import {
   type CommandResult,
   type ServerToClientEvents,
 } from '../lib/game-protocol'
+import { publicCatalog } from './packs'
 import { GameServer } from './game-server'
 import { isPrivateNetworkOrigin } from './origins'
 import {
@@ -16,6 +17,8 @@ import {
   resolveDigitalOceanClientAddress,
 } from './proxy-trust'
 import {
+  parsePackCommand,
+  parseSelectPack,
   parseCreateRoom,
   parseClaimCard,
   parseFinishGuessing,
@@ -135,7 +138,10 @@ export function createGameSocketServer(
 
   io.use((socket, next) => {
     const auth = parseHandshakeAuth(socket.handshake.auth)
-    if (!auth) return next(new Error('Unsupported or invalid game session.'))
+    if (!auth)
+      return next(
+        new Error('Unsupported or invalid game session. Reload the page.'),
+      )
     socket.data.token = auth.token
     socket.data.address =
       options.trustDigitalOceanProxy === true
@@ -271,13 +277,56 @@ export function createGameSocketServer(
       })
     })
 
+    socket.on('packs:catalog', (_payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      acknowledge({ status: 'success', packs: publicCatalog(gameServer.packs) })
+    })
+    socket.on('room:select-pack', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('room:select-pack', acknowledge, async () => {
+        const parsed = parseSelectPack(payload)
+        if (!parsed) return acknowledge(invalid())
+        const accessStartedAt = Date.now()
+        const result = await gameServer.packCommand(
+          socket.data.token,
+          parsed,
+          false,
+        )
+        logger.info(
+          JSON.stringify({
+            event: 'pack_command',
+            operation: 'select',
+            status: result.status,
+            durationMs: Date.now() - accessStartedAt,
+          }),
+        )
+        acknowledge(result)
+        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
+      })
+    })
+
     socket.on('game:start', (payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
-      safely('game:start', acknowledge, () => {
-        const parsed = parseRoomCommand(payload)
+      safely('game:start', acknowledge, async () => {
+        const parsed = parsePackCommand(payload)
         if (!parsed) return acknowledge(invalid())
-        const result = gameServer.startGame(socket.data.token, parsed.roomCode)
+        const accessStartedAt = Date.now()
+        const result = await gameServer.packCommand(
+          socket.data.token,
+          parsed,
+          true,
+        )
+        logger.info(
+          JSON.stringify({
+            event: 'pack_command',
+            operation: 'start',
+            status: result.status,
+            durationMs: Date.now() - accessStartedAt,
+          }),
+        )
         acknowledge(result)
         if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })

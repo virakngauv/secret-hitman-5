@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { AccountControl } from '@/components/account-bridge'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
@@ -20,6 +21,10 @@ export default function HomePage() {
       </div>
 
       <div className="relative z-10 w-full max-w-5xl">
+        <nav className="mb-4 flex items-center justify-end gap-4 text-sm">
+          <Link href="/pricing">Word packs</Link>
+          <AccountControl />
+        </nav>
         <p className="page-eyebrow">A social word game</p>
         <section className="home-card">
           <div>

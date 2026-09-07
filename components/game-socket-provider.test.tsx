@@ -975,6 +975,8 @@ describe('defaultGameServerUrl', () => {
 function lobbySnapshot(roomCode: string): RoomSnapshot {
   return {
     status: 'lobby',
+    selectedPackId: 'base',
+    configurationRevision: 0,
     roomCode,
     minimumPlayers: 2,
     members: [

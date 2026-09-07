@@ -1,5 +1,6 @@
 'use client'
 
+import { PackSelector } from './pack-selector'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -148,7 +149,11 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
           onStart={async () => {
             setIsActing(true)
             setActionError(null)
-            const result = await game.startGame(roomCode)
+            const result = await game.startGame(
+              roomCode,
+              snapshot.configurationRevision,
+              snapshot.selectedPackId !== 'base',
+            )
             if (result.status !== 'success') {
               setActionError({ action: 'start', message: result.message })
             }
@@ -365,6 +370,7 @@ function LobbyScreen({
             ))}
           </ul>
 
+          <PackSelector view={view} disabled={isActing} />
           {isHost ? (
             <>
               {!canStart ? (
