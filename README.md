@@ -73,7 +73,11 @@ The catalog and socket snapshots expose descriptions and sampled boards, never
 full pools. Do not put private content into this repository without a separate
 content delivery decision.
 
-Clerk Next.js 7.5.20 and backend 3.11.7 are pinned for this integration. Use a Clerk
+Clerk Next.js 7.9.1, backend 3.17.1, and UI 1.32.2 are pinned for this integration.
+The provider imports the installed UI implementation, and `next.config.ts` pins
+the browser ClerkJS runtime to 6.31.0 through the SDK-supported
+`NEXT_PUBLIC_CLERK_JS_VERSION` setting. Upgrade these together and repeat configured
+Clerk account/billing verification. Use a Clerk
 **development** instance with individual-user Billing. Create a user Plan with
 Features `pack_movies_v1` and `pack_travel_v1`; do not enable trials or complimentary
 offers. The backend uses fresh subscription items and their millisecond periods,
@@ -106,6 +110,8 @@ configured audience. Partial configuration disables protected use. Never expose
   request: a process-wide limit of 32 operations and per-room/per-preview guards
   retain capacity until underlying requests settle. Timeouts permit Base recovery
   but cannot spawn overlapping protected work for the same room/account.
+  Browser token minting also has a 4.5-second deadline: controls recover on timeout,
+  Base remains usable, and a late token cannot emit the expired command.
 - All boards in an authorized round use the same fixed content version, including
   replacement boards and late hinting joins. Provider outages and subscription
   changes do not interrupt that round. Returning to the lobby or host succession
@@ -159,3 +165,9 @@ flows. Deploy frontend and game server together for protocol version 14; old
 clients receive a reload message. Rollback requires coordinated versions and loses
 active rooms. Verify no premium pools or credentials appear in browser bundles,
 public responses, or logs before enabling a paid catalog.
+
+The lobby avatar has an explicit “Sign out and stay in room” action that ends
+the Clerk session without navigation, retaining the independent anonymous game seat. Verify the actual configured Clerk avatar action beyond the
+three-second leave grace period, then select/start Base. The Next.js middleware
+and socket authorizer both use `CLERK_AUTHORIZED_PARTIES` as the token-origin
+allowlist.

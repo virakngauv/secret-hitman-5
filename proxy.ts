@@ -7,12 +7,22 @@ import {
 
 const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
 const secretKey = process.env.CLERK_SECRET_KEY?.trim()
+const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
 const isAccountRoute = createRouteMatcher(['/account(.*)'])
 const clerkProxy =
   publishableKey && secretKey
-    ? clerkMiddleware(async (auth, request) => {
-        if (isAccountRoute(request)) await auth.protect()
-      })
+    ? clerkMiddleware(
+        async (auth, request) => {
+          if (isAccountRoute(request)) await auth.protect()
+        },
+        {
+          authorizedParties: authorizedParties?.length
+            ? authorizedParties
+            : undefined,
+        },
+      )
     : null
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {

@@ -79,6 +79,24 @@ const RESUME_RETRY_DELAY_MS = 1_000
 const MAX_RESUME_RETRIES = 3
 const DEFAULT_GAME_SERVER_PORT = 3200
 
+// Clerk token minting precedes the socket deadline and may never settle.
+async function freshAccountToken(getToken: () => Promise<string | null>) {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      getToken(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('Account request timed out')),
+          4_500,
+        )
+      }),
+    ])
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export function defaultGameServerUrl(hostname: string): string {
   const bareHostname =
     hostname.startsWith('[') && hostname.endsWith(']')
@@ -377,7 +395,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       try {
         if (premium && !secureAccountTransport.current) return unavailable()
         const accountToken = premium
-          ? ((await account.getToken()) ?? undefined)
+          ? ((await freshAccountToken(account.getToken)) ?? undefined)
           : undefined
         return await runCommand(
           socketRef.current,
@@ -403,7 +421,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       try {
         if (premium && !secureAccountTransport.current) return unavailable()
         const accountToken = premium
-          ? ((await account.getToken()) ?? undefined)
+          ? ((await freshAccountToken(account.getToken)) ?? undefined)
           : undefined
         return await runCommand(
           socketRef.current,

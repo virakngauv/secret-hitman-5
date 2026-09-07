@@ -1,6 +1,7 @@
 'use client'
 
 import { AccountBridge } from './account-bridge'
+import { ui } from '@clerk/ui'
 import { shadcn } from '@clerk/ui/themes'
 import { ClerkProvider } from '@clerk/nextjs'
 import posthog from 'posthog-js'
@@ -44,7 +45,11 @@ export function Providers({
 
   if (clerkKey && clerkEnabled) {
     content = (
-      <ClerkProvider publishableKey={clerkKey} appearance={{ theme: shadcn }}>
+      <ClerkProvider
+        publishableKey={clerkKey}
+        appearance={{ theme: shadcn }}
+        ui={ui}
+      >
         <AccountBridge>{content}</AccountBridge>
       </ClerkProvider>
     )

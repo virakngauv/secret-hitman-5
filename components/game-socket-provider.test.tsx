@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -136,6 +136,72 @@ function UnlockHintProbe({ roomCode }: { roomCode: string }) {
 }
 
 describe('GameSocketProvider', () => {
+  it.each(['select', 'start'] as const)(
+    'recovers from a stalled %s token without sending a late command',
+    async (command) => {
+      vi.useFakeTimers()
+      vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'https://game.example.com')
+      let complete!: (value: string) => void
+      mocks.getToken.mockReturnValue(
+        new Promise<string>((resolve) => {
+          complete = resolve
+        }),
+      )
+      function Probe() {
+        const game = useGameSocket()
+        const [busy, setBusy] = useState(false)
+        const [status, setStatus] = useState('idle')
+        async function run(premium: boolean) {
+          setBusy(true)
+          const result =
+            command === 'start'
+              ? await game.startGame('bcdf2', 0, premium)
+              : await game.selectPack(
+                  {
+                    roomCode: 'bcdf2',
+                    configurationRevision: 0,
+                    requestId: 'request-001',
+                    packId: premium ? 'movies-v1' : 'base',
+                  },
+                  premium,
+                )
+          setStatus(result.status)
+          setBusy(false)
+        }
+        return (
+          <>
+            <button disabled={busy} onClick={() => void run(true)}>
+              Premium
+            </button>
+            <button disabled={busy} onClick={() => void run(false)}>
+              Base
+            </button>
+            <span>{status}</span>
+          </>
+        )
+      }
+      render(
+        <GameSocketProvider>
+          <Probe />
+        </GameSocketProvider>,
+      )
+      fireEvent.click(screen.getByText('Premium'))
+      expect(screen.getByText('Base')).toBeDisabled()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_500)
+      })
+      expect(screen.getByText('server_unavailable')).toBeVisible()
+      expect(screen.getByText('Base')).toBeEnabled()
+      await act(async () => {
+        fireEvent.click(screen.getByText('Base'))
+      })
+      expect(screen.getByText('success')).toBeVisible()
+      expect(mocks.emitWithAck).toHaveBeenCalledTimes(1)
+      await act(async () => complete('expired-token'))
+      expect(mocks.emitWithAck).toHaveBeenCalledTimes(1)
+      expect(mocks.emitWithAck.mock.calls[0][1].accountToken).toBeUndefined()
+    },
+  )
   it('does not retrieve Clerk tokens for HTTP LAN premium commands', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'http://192.168.1.8:3001')
@@ -175,6 +241,7 @@ describe('GameSocketProvider', () => {
   })
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'development')
+    mocks.getToken.mockReset()
     mocks.clientToken = 'a'.repeat(32)
     mocks.handlers.clear()
     mocks.resumeSnapshots.clear()

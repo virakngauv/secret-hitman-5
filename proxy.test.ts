@@ -46,11 +46,28 @@ describe('optional Clerk proxy', () => {
     const request = {} as NextRequest
     const event = {} as NextFetchEvent
     proxy(request, event)
-    expect(mocks.middleware).toHaveBeenCalledWith(expect.any(Function))
+    expect(mocks.middleware).toHaveBeenCalledWith(expect.any(Function), {
+      authorizedParties: undefined,
+    })
     expect(mocks.handle).toHaveBeenCalledWith(request, event)
     expect(mocks.next).not.toHaveBeenCalled()
     proxy(request, event)
     expect(mocks.middleware).toHaveBeenCalledOnce()
     expect(mocks.handle).toHaveBeenCalledTimes(2)
   })
+})
+
+it('supplies the explicit origin allowlist to Clerk authentication', async () => {
+  vi.resetModules()
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
+  vi.stubEnv('CLERK_SECRET_KEY', 'secret')
+  vi.stubEnv(
+    'CLERK_AUTHORIZED_PARTIES',
+    ' https://game.example.com, ,http://localhost:3140 ',
+  )
+  await import('./proxy')
+  expect(mocks.middleware).toHaveBeenLastCalledWith(expect.any(Function), {
+    authorizedParties: ['https://game.example.com', 'http://localhost:3140'],
+  })
+  vi.unstubAllEnvs()
 })

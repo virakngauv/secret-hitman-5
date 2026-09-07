@@ -1,11 +1,18 @@
 'use client'
 
-import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs'
+import {
+  SignInButton,
+  SignUpButton,
+  UserButton,
+  useAuth,
+  useClerk,
+} from '@clerk/nextjs'
 import Link from 'next/link'
 import {
   createContext,
   useContext,
   useRef,
+  useState,
   useLayoutEffect,
   type ReactNode,
 } from 'react'
@@ -67,7 +74,7 @@ export function AccountControl({
       >
         Account & Billing
       </Link>
-      <UserButton />
+      {preserveRoom ? <RoomUserButton /> : <UserButton />}
     </div>
   ) : (
     <div className="flex items-center gap-3">
@@ -82,5 +89,56 @@ export function AccountControl({
         </button>
       </SignUpButton>
     </div>
+  )
+}
+
+function RoomUserButton() {
+  const { signOut } = useClerk()
+  const pending = useRef(false)
+  const [error, setError] = useState(false)
+  async function leaveAccount() {
+    if (pending.current) return
+    pending.current = true
+    setError(false)
+    try {
+      // A callback replaces Clerk's default navigation while still ending the session.
+      await signOut(() => {})
+    } catch {
+      setError(true)
+    } finally {
+      pending.current = false
+    }
+  }
+  return (
+    <>
+      <UserButton
+        appearance={{
+          elements: {
+            userButtonPopoverActionButton__signOut: { display: 'none' },
+          },
+        }}
+      >
+        <UserButton.MenuItems>
+          <UserButton.Action
+            label="Sign out and stay in room"
+            labelIcon={
+              <svg
+                aria-hidden="true"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M9 5H5v14h4M10 12h10m-4-4 4 4-4 4" />
+              </svg>
+            }
+            onClick={() => void leaveAccount()}
+          />
+        </UserButton.MenuItems>
+      </UserButton>
+      {error && <span role="alert">Could not sign out. Please try again.</span>}
+    </>
   )
 }

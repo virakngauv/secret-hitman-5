@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Providers } from './providers'
 
 const mocks = vi.hoisted(() => ({ init: vi.fn() }))
+vi.mock('@clerk/ui', () => ({ ui: {} }))
 vi.mock('./account-bridge', () => ({
   AccountBridge: ({ children }: { children: ReactNode }) => children,
 }))
@@ -35,7 +36,9 @@ vi.mock('@/components/player-session-provider', () => ({
 }))
 
 describe('optional integration providers', () => {
-  beforeEach(() => mocks.init.mockReset())
+  beforeEach(() => {
+    mocks.init.mockReset()
+  })
   afterEach(() => vi.unstubAllEnvs())
 
   it.each([undefined, '', ' \t '])(
