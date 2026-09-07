@@ -204,6 +204,36 @@ describe('guarded pack transitions', () => {
     ).toBe('invalid')
     expect(authorize).not.toHaveBeenCalled()
   })
+  it('keeps authorization exceptions recoverable and allows Base recovery', async () => {
+    const { server, roomCode } = setup(
+      vi.fn(async () => {
+        throw new Error('provider unavailable')
+      }),
+    )
+    expect(
+      await server.packCommand(
+        'host',
+        {
+          ...request,
+          roomCode,
+          packId: premium.id,
+        },
+        false,
+      ),
+    ).toMatchObject({ status: 'server_unavailable' })
+    expect(
+      await server.packCommand(
+        'host',
+        {
+          ...request,
+          roomCode,
+          packId: 'base',
+        },
+        false,
+      ),
+    ).toMatchObject({ status: 'success' })
+  })
+
   it('times out without a late start and allows deliberate base recovery', async () => {
     vi.useFakeTimers()
     let resolve!: (result: CommandResult) => void

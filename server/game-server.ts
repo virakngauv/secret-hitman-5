@@ -184,6 +184,8 @@ export class GameServer {
               pack.feature!,
               controller.signal,
             )
+          } catch {
+            return accessUnavailable()
           } finally {
             this.pendingAuthorizations.delete(room)
           }
@@ -216,8 +218,6 @@ export class GameServer {
       return start
         ? room.start(token, Date.now(), pack)
         : room.selectPack(token, payload.configurationRevision, pack)
-    } catch {
-      return accessUnavailable()
     } finally {
       controller.abort()
       clearTimeout(timer)

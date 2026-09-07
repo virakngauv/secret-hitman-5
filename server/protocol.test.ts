@@ -604,6 +604,43 @@ describe('Socket.IO Secret Hitman protocol', () => {
     },
   )
 
+  it.each(['room:select-pack', 'game:start'] as const)(
+    'logs unexpected room failures in %s and releases the command guard',
+    async (event) => {
+      const client = await connect(hostToken)
+      const created = await client.emitWithAck('room:create', { name: 'Ada' })
+      if (created.status !== 'success') throw new Error('creation failed')
+      const room = socketServer.gameServer.rooms.get(created.roomCode)!
+      vi.spyOn(
+        room,
+        event === 'game:start' ? 'start' : 'selectPack',
+      ).mockImplementationOnce(() => {
+        throw new Error('unexpected room failure')
+      })
+      const payload = {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        requestId: 'failed-pack-request',
+        packId: 'base',
+      }
+      expect(await client.emitWithAck(event, payload)).toMatchObject({
+        status: 'server_unavailable',
+      })
+      expect(logError).toHaveBeenCalledOnce()
+      expect(JSON.parse(logError.mock.calls[0][0] as string)).toEqual({
+        event: 'command_failed',
+        command: event,
+        message: 'unexpected room failure',
+      })
+      expect(
+        await client.emitWithAck('room:select-pack', {
+          ...payload,
+          requestId: 'retry-pack-request',
+        }),
+      ).toMatchObject({ status: 'success' })
+    },
+  )
+
   it('does not grant the local token exemption to forwarded loopback clients', async () => {
     const first = await connect(hostToken, '127.0.0.1')
     const second = await connect(guestToken, '127.0.0.1')
