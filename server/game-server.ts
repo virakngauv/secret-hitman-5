@@ -44,7 +44,7 @@ export class GameServer {
   private readonly expiredRooms = new Map<string, number>()
   private readonly packOperations = new WeakMap<
     GameRoom,
-    { pending: boolean; nextAt: number }
+    { pending: boolean; nextSelectAt: number; nextStartAt: number }
   >()
   private readonly expiration: Required<RoomExpirationPolicy>
 
@@ -153,12 +153,21 @@ export class GameServer {
     if (!pack)
       return { status: 'invalid', message: 'That pack is unavailable.' }
     const guard = this.packOperations.get(room)
-    if (guard?.pending || (pack.feature && guard && Date.now() < guard.nextAt))
+    if (
+      guard?.pending ||
+      (pack.feature &&
+        guard &&
+        Date.now() < (start ? guard.nextStartAt : guard.nextSelectAt))
+    )
       return {
         status: 'rate_limited',
         message: 'Checking access. Please try again shortly.',
       }
-    const operation = { pending: true, nextAt: Date.now() + 2000 }
+    const operation = {
+      pending: true,
+      nextSelectAt: start ? (guard?.nextSelectAt ?? 0) : Date.now() + 2000,
+      nextStartAt: start ? Date.now() + 2000 : (guard?.nextStartAt ?? 0),
+    }
     this.packOperations.set(room, operation)
     const deadline = Date.now() + 4500
     let timer: ReturnType<typeof setTimeout> | undefined

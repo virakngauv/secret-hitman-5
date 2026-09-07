@@ -22,6 +22,16 @@ it('has a safe no-provider fallback', () => {
   render(<AccountControl />)
   expect(screen.getByText('Account features unavailable')).toBeVisible()
 })
+it('opens account management separately when preserving a room', () => {
+  render(
+    <AccountBridge>
+      <AccountControl preserveRoom />
+    </AccountBridge>,
+  )
+  const link = screen.getByRole('link', { name: 'Account & Billing' })
+  expect(link).toHaveAttribute('target', '_blank')
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+})
 it('offers signup and login, then account controls after authentication', () => {
   mocks.auth.userId = undefined
   const view = render(

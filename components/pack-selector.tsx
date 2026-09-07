@@ -143,7 +143,7 @@ export function PackSelector({
                   : 'The host must sign in to select premium packs.'}{' '}
                 Guests always play free.
               </p>
-              <AccountControl />
+              <AccountControl preserveRoom />
               <Link
                 href="/pricing"
                 target="_blank"

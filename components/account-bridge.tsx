@@ -45,7 +45,11 @@ export function AccountBridge({ children }: { children: ReactNode }) {
   )
 }
 
-export function AccountControl() {
+export function AccountControl({
+  preserveRoom = false,
+}: {
+  preserveRoom?: boolean
+}) {
   const account = useAccount()
   if (!account.configured)
     return (
@@ -56,7 +60,13 @@ export function AccountControl() {
   if (!account.loaded) return <span role="status">Checking account…</span>
   return account.userId ? (
     <div className="flex items-center gap-3">
-      <Link href="/account">Account & Billing</Link>
+      <Link
+        href="/account"
+        target={preserveRoom ? '_blank' : undefined}
+        rel={preserveRoom ? 'noopener noreferrer' : undefined}
+      >
+        Account & Billing
+      </Link>
       <UserButton />
     </div>
   ) : (

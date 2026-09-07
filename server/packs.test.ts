@@ -75,8 +75,6 @@ describe('guarded pack transitions', () => {
     expect((await server.packCommand('host', select, false)).status).toBe(
       'success',
     )
-    vi.useFakeTimers()
-    vi.setSystemTime(Date.now() + 2001)
     expect(
       (
         await server.packCommand(
