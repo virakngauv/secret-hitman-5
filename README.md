@@ -92,7 +92,9 @@ configured audience. Partial configuration disables protected use. Never expose
   selection and hosting. It defaults to false.
 - `ENABLE_CLERK_CHECKOUT=true` enables Clerk's user PricingTable on `/pricing`.
   It defaults to false and is independent of hosting access. Prices come from
-  Clerk; this repository defines no prices or offers.
+  Clerk; this repository defines no prices or offers. This flag controls only
+  `/pricing`; it is not a provider checkout kill switch. Clerk also exposes
+  public Plans through `/account`, the avatar's UserProfile, and hosted account UI.
 - `/account` provides Clerk's account/subscription UI plus an access preview.
   It is protected when Clerk is configured. Pricing opens separately from the lobby
   so checkout cancellation or failure leaves the browser's game identity intact.
@@ -117,6 +119,37 @@ content rights/public source availability, and a support/refund process. Verify
 Clerk's current currency, geographic, tax/VAT, 3DS, and refund limitations. A gateway
 refund must not be assumed to end Clerk subscription access. Do not add direct
 Stripe Checkout, an app payment ledger, or billing webhooks as a workaround.
+
+To pause new offers or keep an instance unlaunched, first turn **Publicly
+available off for every non-default user Plan** in that Clerk instance, then set
+`ENABLE_CLERK_CHECKOUT=false` and redeploy. Keep Billing enabled, keep existing
+subscriptions and Feature attachments, and retain the account/profile UI so users
+can manage payment methods and cancel. Do not turn off `ENABLE_PREMIUM_PACKS` merely
+to stop purchases: it independently controls hosting. Clerk documents this
+[Plan visibility control](https://clerk.com/docs/react/guides/billing/for-b2c).
+Private Plans remove offers from Clerk components; this is not a claim that
+already-open checkouts or direct provider API calls are revoked. A hard stop on
+in-flight purchases needs a separately verified provider procedure before launch.
+The app must not add direct checkout links for private Plan IDs.
+
+`pnpm deploy:check-env` reads all user Plans and rejects non-default public Plans
+when checkout is off; a provider error also fails this check. Run it with the
+target instance's normal environment (never copy credentials into commands or
+logs). It checks deployment-time configuration, not later Dashboard changes.
+Before reopening offers, approve the launch terms and verify premium hosting in
+both processes; publish only the approved Plans as the final launch step.
+
+Configured-Clerk regression scenario (required for every offer shutdown): with
+both keys set, Billing enabled, the pricing flag false, and paid Plans non-public,
+sign in as a free user and inspect `/pricing`, `/account` > Billing, and the avatar
+menu > Manage account > Billing. No paid purchase should be able to proceed.
+Clerk may retain a Resubscribe action for a canceled subscription; opening it
+must reject the non-public Plan before payment (do not submit a payment).
+Repeat with an existing paid subscriber: current subscription details, payment
+management and cancellation must remain available, and a new premium round must
+still authorize during the paid period. Check hosted account UI too if enabled.
+Re-run after a full reload to avoid stale provider configuration. This scenario
+requires real Clerk UI; the no-Clerk automated browser suite cannot establish it.
 
 Development release verification must exercise Clerk sign-in/account switching,
 checkout cancel/failure/success and access refresh, cancellation through exact
