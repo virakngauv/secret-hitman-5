@@ -11,6 +11,12 @@ export function generateClientToken() {
   )
 }
 
+export function generateRequestId() {
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : generateClientToken()
+}
+
 export function saveClientToken(clientToken: string) {
   if (!CLIENT_TOKEN_PATTERN.test(clientToken)) {
     throw new Error('Invalid client token.')

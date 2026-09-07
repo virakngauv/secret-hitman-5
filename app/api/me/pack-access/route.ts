@@ -1,6 +1,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { PACKS } from '@/server/packs'
 import { hasPackFeature } from '@/server/pack-access'
+import { withClerkCapacity } from '@/server/clerk-capacity'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,8 +25,12 @@ export async function GET() {
         { status: 401, headers },
       )
     const subscription = await Promise.race([
-      clerkClient().then((client) =>
-        client.billing.getUserBillingSubscription(userId),
+      withClerkCapacity(
+        () =>
+          clerkClient().then((client) =>
+            client.billing.getUserBillingSubscription(userId),
+          ),
+        `preview:${userId}`,
       ),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error('timeout')), 4500)

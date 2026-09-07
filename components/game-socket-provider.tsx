@@ -13,6 +13,7 @@ import {
 } from 'react'
 
 import { useAccount } from './account-bridge'
+import { generateRequestId } from '@/lib/player-session'
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
   GAME_PROTOCOL_VERSION,
@@ -91,6 +92,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const account = useAccount()
   const { clientToken, ensureClientToken } = usePlayerSession()
   const socketRef = useRef<GameSocket | null>(null)
+  const secureAccountTransport = useRef(false)
   const watchedRoomsRef = useRef(new Map<string, number>())
   const synchronizedRef = useRef(false)
   const synchronizationGenerationRef = useRef(0)
@@ -118,6 +120,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     // the socket so a production misconfiguration cannot expose the token.
     try {
       const endpoint = new URL(gameServerUrl)
+      secureAccountTransport.current =
+        endpoint.protocol === 'https:' ||
+        (process.env.NODE_ENV === 'development' &&
+          endpoint.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname))
       if (
         endpoint.protocol !== 'https:' &&
         !(
@@ -131,6 +138,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
         return
       }
     } catch {
+      secureAccountTransport.current = false
       setConnectionStatus('disconnected')
       return
     }
@@ -367,6 +375,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       premium: boolean,
     ): Promise<CommandResult> => {
       try {
+        if (premium && !secureAccountTransport.current) return unavailable()
         const accountToken = premium
           ? ((await account.getToken()) ?? undefined)
           : undefined
@@ -392,6 +401,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       premium = false,
     ): Promise<CommandResult> => {
       try {
+        if (premium && !secureAccountTransport.current) return unavailable()
         const accountToken = premium
           ? ((await account.getToken()) ?? undefined)
           : undefined
@@ -402,7 +412,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
             socket.emitWithAck('game:start', {
               roomCode,
               configurationRevision,
-              requestId: crypto.randomUUID(),
+              requestId: generateRequestId(),
               accountToken,
             }),
         )

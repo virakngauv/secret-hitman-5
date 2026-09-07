@@ -1,5 +1,6 @@
 import { createClerkClient, verifyToken } from '@clerk/backend'
 import type { CommandResult } from '../lib/game-protocol'
+import { withClerkCapacity } from './clerk-capacity'
 
 export const accessUnavailable = (): CommandResult => ({
   status: 'server_unavailable',
@@ -50,6 +51,7 @@ export function hasPackFeature(
 export type AuthorizePack = (
   token: string | undefined,
   feature: string,
+  signal?: AbortSignal,
 ) => Promise<CommandResult>
 export function createPackAuthorizer(
   env: Record<string, string | undefined> = process.env,
@@ -63,7 +65,8 @@ export function createPackAuthorizer(
   if (!secretKey || !publishableKey || !issuer || !authorizedParties?.length)
     return async () => accessUnavailable()
   const client = createClerkClient({ secretKey, publishableKey })
-  return async (token, feature) => {
+  const authorize: AuthorizePack = async (token, feature, signal) => {
+    if (signal?.aborted) return accessUnavailable()
     if (!token) return denied()
     let claims
     try {
@@ -77,6 +80,7 @@ export function createPackAuthorizer(
       return denied()
     }
     const now = Date.now()
+    if (signal?.aborted) return accessUnavailable()
     if (
       claims.iss !== issuer ||
       !claims.sub?.startsWith('user_') ||
@@ -93,6 +97,7 @@ export function createPackAuthorizer(
       return denied()
     try {
       const session = await client.sessions.getSession(claims.sid)
+      if (signal?.aborted) return accessUnavailable()
       if (
         session.status !== 'active' ||
         session.userId !== claims.sub ||
@@ -102,10 +107,18 @@ export function createPackAuthorizer(
       const subscription = await client.billing.getUserBillingSubscription(
         claims.sub,
       )
+      if (signal?.aborted) return accessUnavailable()
       if (claims.exp * 1000 <= Date.now()) return denied()
       return hasPackFeature(subscription, feature, Date.now())
         ? { status: 'success' }
         : denied()
+    } catch {
+      return accessUnavailable()
+    }
+  }
+  return async (token, feature, signal) => {
+    try {
+      return await withClerkCapacity(() => authorize(token, feature, signal))
     } catch {
       return accessUnavailable()
     }

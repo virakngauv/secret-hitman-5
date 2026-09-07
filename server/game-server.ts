@@ -42,6 +42,7 @@ export const DEFAULT_ROOM_EXPIRATION = {
 export class GameServer {
   readonly rooms = new Map<string, GameRoom>()
   private readonly expiredRooms = new Map<string, number>()
+  private readonly pendingAuthorizations = new WeakSet<GameRoom>()
   private readonly packOperations = new WeakMap<
     GameRoom,
     { pending: boolean; nextSelectAt: number; nextStartAt: number }
@@ -154,6 +155,7 @@ export class GameServer {
       return { status: 'invalid', message: 'That pack is unavailable.' }
     const guard = this.packOperations.get(room)
     if (
+      (pack.feature && this.pendingAuthorizations.has(room)) ||
       guard?.pending ||
       (pack.feature &&
         guard &&
@@ -171,12 +173,28 @@ export class GameServer {
     this.packOperations.set(room, operation)
     const deadline = Date.now() + 4500
     let timer: ReturnType<typeof setTimeout> | undefined
+    const controller = new AbortController()
     try {
       if (pack.feature) {
+        this.pendingAuthorizations.add(room)
+        const authorization = (async () => {
+          try {
+            return await this.authorizePack(
+              payload.accountToken,
+              pack.feature!,
+              controller.signal,
+            )
+          } finally {
+            this.pendingAuthorizations.delete(room)
+          }
+        })()
         const result = await Promise.race([
-          this.authorizePack(payload.accountToken, pack.feature),
+          authorization,
           new Promise<CommandResult>((resolve) => {
-            timer = setTimeout(() => resolve(accessUnavailable()), 4500)
+            timer = setTimeout(() => {
+              controller.abort()
+              resolve(accessUnavailable())
+            }, 4500)
           }),
         ])
         if (result.status !== 'success') return result
@@ -201,6 +219,7 @@ export class GameServer {
     } catch {
       return accessUnavailable()
     } finally {
+      controller.abort()
       clearTimeout(timer)
       operation.pending = false
     }

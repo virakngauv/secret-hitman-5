@@ -222,12 +222,22 @@ describe('guarded pack transitions', () => {
     )
     await vi.advanceTimersByTimeAsync(4500)
     expect((await pending).status).toBe('server_unavailable')
-    resolve({ status: 'success' })
-    await Promise.resolve()
+    expect(
+      (
+        await server.packCommand(
+          'host',
+          { ...request, roomCode, packId: premium.id },
+          false,
+        )
+      ).status,
+    ).toBe('rate_limited')
     expect(server.rooms.get(roomCode)?.selectedPack.id).toBe('base')
     expect(
       (await server.packCommand('host', { ...request, roomCode }, true)).status,
     ).toBe('success')
+    resolve({ status: 'success' })
+    await Promise.resolve()
+    expect(server.snapshot('host', roomCode).status).toBe('hinting')
   })
   it('denies unknown packs, duplicate starts and stale revisions', async () => {
     const { server, roomCode } = setup()

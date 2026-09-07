@@ -99,6 +99,11 @@ configured audience. Partial configuration disables protected use. Never expose
 - Each protected command gets a fresh session token in memory. Tokens do not enter
   local storage, guesses, logs, or analytics. A 4.5-second operation deadline and
   room revision checks prevent late authorization from committing a stale start.
+  Premium tokens require HTTPS, except for loopback HTTP in local development;
+  HTTP LAN play supports only Base. The pinned Clerk SDK cannot cancel an in-flight
+  request: a process-wide limit of 32 operations and per-room/per-preview guards
+  retain capacity until underlying requests settle. Timeouts permit Base recovery
+  but cannot spawn overlapping protected work for the same room/account.
 - All boards in an authorized round use the same fixed content version, including
   replacement boards and late hinting joins. Provider outages and subscription
   changes do not interrupt that round. Returning to the lobby or host succession

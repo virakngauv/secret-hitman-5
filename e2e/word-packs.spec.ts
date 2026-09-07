@@ -3,6 +3,12 @@ import { expect, test } from '@playwright/test'
 test('base packs and public account pages work without Clerk configuration', async ({
   browser,
 }) => {
+  test.skip(
+    Boolean(
+      process.env.PLAYWRIGHT_BASE_URL || process.env.PW_REUSE_SERVER === '1',
+    ),
+    'Requires the managed server with explicitly empty Clerk keys; external/reused servers may be configured.',
+  )
   const hostContext = await browser.newContext()
   const guestContext = await browser.newContext()
   try {

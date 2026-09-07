@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { generateRequestId } from '@/lib/player-session'
 import { useEffect, useState } from 'react'
 import { useAccount, AccountControl } from './account-bridge'
 import { useGameSocket } from './game-socket-provider'
@@ -105,7 +106,7 @@ export function PackSelector({
                   roomCode: view.roomCode,
                   configurationRevision: view.configurationRevision,
                   packId,
-                  requestId: crypto.randomUUID(),
+                  requestId: generateRequestId(),
                 },
                 premium,
               )

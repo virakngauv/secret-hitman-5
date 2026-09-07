@@ -13,6 +13,7 @@ import type { RoomSnapshot } from '../lib/game-protocol'
 
 const mocks = vi.hoisted(() => ({
   clientToken: 'a'.repeat(32) as string | null,
+  getToken: vi.fn(),
   handlers: new Map<string, (...args: never[]) => void>(),
   resumeSnapshots: new Map<string, RoomSnapshot>(),
   delayResumes: false,
@@ -34,6 +35,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('socket.io-client', () => ({
   io: mocks.io,
+}))
+vi.mock('./account-bridge', () => ({
+  useAccount: () => ({ getToken: mocks.getToken }),
 }))
 
 vi.mock('@/components/player-session-provider', () => ({
@@ -132,6 +136,43 @@ function UnlockHintProbe({ roomCode }: { roomCode: string }) {
 }
 
 describe('GameSocketProvider', () => {
+  it('does not retrieve Clerk tokens for HTTP LAN premium commands', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'http://192.168.1.8:3001')
+    function PremiumProbe() {
+      const game = useGameSocket()
+      return (
+        <button
+          onClick={() => {
+            void game.startGame('bcdf2', 0, true)
+            void game.selectPack(
+              {
+                roomCode: 'bcdf2',
+                configurationRevision: 0,
+                requestId: 'request-001',
+                packId: 'movies-v1',
+              },
+              true,
+            )
+          }}
+        >
+          Premium
+        </button>
+      )
+    }
+    render(
+      <GameSocketProvider>
+        <PremiumProbe />
+      </GameSocketProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Premium' }))
+    expect(mocks.getToken).not.toHaveBeenCalled()
+    expect(
+      mocks.emitWithAck.mock.calls.some(
+        ([event]) => event === 'game:start' || event === 'room:select-pack',
+      ),
+    ).toBe(false)
+  })
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'development')
     mocks.clientToken = 'a'.repeat(32)
