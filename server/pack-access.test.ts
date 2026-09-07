@@ -155,3 +155,65 @@ describe('account verification', () => {
     expect(JSON.stringify(result)).not.toContain('secret-token')
   })
 })
+
+it('limits outstanding entitlement work by verified account across authorizer calls', async () => {
+  const claims = setup()
+  let finish!: (value: unknown) => void
+  mocks.subscription.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const authorize = createPackAuthorizer(env)
+  const abort = new AbortController()
+  const first = authorize('first-token', 'pack_movies_v1', abort.signal)
+  await vi.waitFor(() => expect(mocks.subscription).toHaveBeenCalledOnce())
+  abort.abort()
+  expect((await authorize('second-token', 'pack_movies_v1')).status).toBe(
+    'server_unavailable',
+  )
+  expect(mocks.session).toHaveBeenCalledTimes(1)
+  mocks.verify.mockResolvedValueOnce({
+    ...claims,
+    sub: 'user_other',
+    sid: 'sess_other',
+  })
+  mocks.session.mockResolvedValueOnce({
+    id: 'sess_other',
+    userId: 'user_other',
+    status: 'active',
+  })
+  expect((await authorize('other-token', 'pack_movies_v1')).status).toBe(
+    'success',
+  )
+  finish({ subscriptionItems: [] })
+  expect((await first).status).toBe('server_unavailable')
+  expect((await authorize('retry-token', 'pack_movies_v1')).status).toBe(
+    'success',
+  )
+})
+
+it('bounds token verification before trusting any account identifier', async () => {
+  const claims = setup()
+  let finish!: (value: unknown) => void
+  mocks.verify.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  const authorize = createPackAuthorizer(env)
+  const requests = Array.from({ length: 32 }, () =>
+    authorize('token', 'pack_movies_v1'),
+  )
+  expect((await authorize('extra-token', 'pack_movies_v1')).status).toBe(
+    'server_unavailable',
+  )
+  expect(mocks.verify).toHaveBeenCalledTimes(32)
+  expect(mocks.session).not.toHaveBeenCalled()
+  finish(claims)
+  await Promise.all(requests)
+  expect((await authorize('retry-token', 'pack_movies_v1')).status).toBe(
+    'success',
+  )
+})

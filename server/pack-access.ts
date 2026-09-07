@@ -65,20 +65,23 @@ export function createPackAuthorizer(
   if (!secretKey || !publishableKey || !issuer || !authorizedParties?.length)
     return async () => accessUnavailable()
   const client = createClerkClient({ secretKey, publishableKey })
-  const authorize: AuthorizePack = async (token, feature, signal) => {
+  return async (token, feature, signal) => {
     if (signal?.aborted) return accessUnavailable()
     if (!token) return denied()
     let claims
     try {
-      claims = await verifyToken(token, {
-        secretKey,
-        authorizedParties,
-        audience: env.CLERK_AUDIENCE || undefined,
-        clockSkewInMs: 0,
-      })
+      claims = await withClerkCapacity(() =>
+        verifyToken(token, {
+          secretKey,
+          authorizedParties,
+          audience: env.CLERK_AUDIENCE || undefined,
+          clockSkewInMs: 0,
+        }).catch(() => null),
+      )
     } catch {
-      return denied()
+      return accessUnavailable()
     }
+    if (!claims) return denied()
     const now = Date.now()
     if (signal?.aborted) return accessUnavailable()
     if (
@@ -96,29 +99,25 @@ export function createPackAuthorizer(
     )
       return denied()
     try {
-      const session = await client.sessions.getSession(claims.sid)
-      if (signal?.aborted) return accessUnavailable()
-      if (
-        session.status !== 'active' ||
-        session.userId !== claims.sub ||
-        session.id !== claims.sid
-      )
-        return denied()
-      const subscription = await client.billing.getUserBillingSubscription(
-        claims.sub,
-      )
-      if (signal?.aborted) return accessUnavailable()
-      if (claims.exp * 1000 <= Date.now()) return denied()
-      return hasPackFeature(subscription, feature, Date.now())
-        ? { status: 'success' }
-        : denied()
-    } catch {
-      return accessUnavailable()
-    }
-  }
-  return async (token, feature, signal) => {
-    try {
-      return await withClerkCapacity(() => authorize(token, feature, signal))
+      // Only verified subjects may reserve account capacity across rooms.
+      return await withClerkCapacity(async () => {
+        const session = await client.sessions.getSession(claims.sid)
+        if (signal?.aborted) return accessUnavailable()
+        if (
+          session.status !== 'active' ||
+          session.userId !== claims.sub ||
+          session.id !== claims.sid
+        )
+          return denied()
+        const subscription = await client.billing.getUserBillingSubscription(
+          claims.sub,
+        )
+        if (signal?.aborted) return accessUnavailable()
+        if (claims.exp * 1000 <= Date.now()) return denied()
+        return hasPackFeature(subscription, feature, Date.now())
+          ? { status: 'success' }
+          : denied()
+      }, `host:${claims.sub}`)
     } catch {
       return accessUnavailable()
     }
