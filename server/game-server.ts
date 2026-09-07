@@ -167,8 +167,10 @@ export class GameServer {
       }
     const operation = {
       pending: true,
-      nextSelectAt: start ? (guard?.nextSelectAt ?? 0) : Date.now() + 2000,
-      nextStartAt: start ? Date.now() + 2000 : (guard?.nextStartAt ?? 0),
+      nextSelectAt:
+        !start && pack.feature ? Date.now() + 2000 : (guard?.nextSelectAt ?? 0),
+      nextStartAt:
+        start && pack.feature ? Date.now() + 2000 : (guard?.nextStartAt ?? 0),
     }
     this.packOperations.set(room, operation)
     const deadline = Date.now() + 4500

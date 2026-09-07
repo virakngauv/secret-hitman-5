@@ -204,6 +204,33 @@ describe('guarded pack transitions', () => {
     ).toBe('invalid')
     expect(authorize).not.toHaveBeenCalled()
   })
+  it('allows immediate premium selection after Base without bypassing premium cooldowns', async () => {
+    vi.useFakeTimers()
+    const { server, roomCode, authorize } = setup()
+    const select = async (packId: string) =>
+      server.packCommand(
+        'host',
+        {
+          ...request,
+          roomCode,
+          configurationRevision:
+            server.rooms.get(roomCode)!.configurationRevision,
+          packId,
+        },
+        false,
+      )
+    expect((await select('base')).status).toBe('success')
+    expect((await select(premium.id)).status).toBe('success')
+    expect(authorize).toHaveBeenCalledOnce()
+    expect((await select('base')).status).toBe('success')
+    expect((await select(premium.id)).status).toBe('rate_limited')
+    expect(authorize).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect((await select('base')).status).toBe('success')
+    expect((await select(premium.id)).status).toBe('success')
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps authorization exceptions recoverable and allows Base recovery', async () => {
     const { server, roomCode } = setup(
       vi.fn(async () => {
