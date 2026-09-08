@@ -29,9 +29,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
   let url: string
   const clients: TestClient[] = []
   const logError = vi.fn()
+  const logInfo = vi.fn()
 
   beforeEach(async () => {
     logError.mockClear()
+    logInfo.mockClear()
     httpServer = createServer()
     socketServer = createGameSocketServer(httpServer, {
       allowedOrigins: [allowedOrigin],
@@ -41,7 +43,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         perAddressPerMinute: 2,
         globalPerMinute: 2_000,
       },
-      logger: { info() {}, warn() {}, error: logError },
+      logger: { info: logInfo, warn() {}, error: logError },
     })
     await new Promise<void>((resolve) =>
       httpServer.listen(0, '127.0.0.1', resolve),
@@ -601,6 +603,36 @@ describe('Socket.IO Secret Hitman protocol', () => {
       await expect(
         client.timeout(2_000).emitWithAck('session:resume', {}),
       ).resolves.toEqual({ status: 'success' })
+    },
+  )
+
+  it.each(['room:select-pack', 'game:start'] as const)(
+    'correlates %s results without logging account tokens',
+    async (event) => {
+      const client = await connect(hostToken)
+      const accountToken = 'sensitive-account-token'
+      const result = await client.emitWithAck(event, {
+        roomCode: 'bcdf2',
+        configurationRevision: 0,
+        requestId: 'correlated-request',
+        packId: 'base',
+        accountToken,
+      })
+      expect(result.status).toBe('room_not_found')
+      const records = logInfo.mock.calls.map(([entry]) => JSON.parse(entry))
+      expect(records.filter((entry) => entry.event === 'pack_command')).toEqual(
+        [
+          {
+            event: 'pack_command',
+            operation: event === 'game:start' ? 'start' : 'select',
+            roomCode: 'bcdf2',
+            requestId: 'correlated-request',
+            status: 'room_not_found',
+            durationMs: expect.any(Number),
+          },
+        ],
+      )
+      expect(JSON.stringify(logInfo.mock.calls)).not.toContain(accountToken)
     },
   )
 

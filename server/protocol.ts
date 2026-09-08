@@ -298,6 +298,8 @@ export function createGameSocketServer(
           JSON.stringify({
             event: 'pack_command',
             operation: 'select',
+            roomCode: parsed.roomCode,
+            requestId: parsed.requestId,
             status: result.status,
             durationMs: Date.now() - accessStartedAt,
           }),
@@ -323,6 +325,8 @@ export function createGameSocketServer(
           JSON.stringify({
             event: 'pack_command',
             operation: 'start',
+            roomCode: parsed.roomCode,
+            requestId: parsed.requestId,
             status: result.status,
             durationMs: Date.now() - accessStartedAt,
           }),
