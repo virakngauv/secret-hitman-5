@@ -33,16 +33,27 @@ for (const name of optionalVercelVariables) {
 
 const clerkVariables = ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY']
 const configuredClerkVariables = clerkVariables.filter(isConfigured)
+const clerkOrigins =
+  process.env.CLERK_AUTHORIZED_PARTIES?.split(',').map((origin) =>
+    origin.trim(),
+  ) ?? []
 if (
   configuredClerkVariables.length === clerkVariables.length &&
-  !process.env.CLERK_AUTHORIZED_PARTIES?.split(',').some((origin) =>
-    origin.trim(),
-  )
+  (!clerkOrigins.length || !clerkOrigins.every(isExactOrigin))
 ) {
   console.error(
     'Clerk authentication requires CLERK_AUTHORIZED_PARTIES with exact frontend origins.',
   )
   process.exitCode = 1
+}
+
+function isExactOrigin(value) {
+  try {
+    const url = new URL(value)
+    return ['http:', 'https:'].includes(url.protocol) && value === url.origin
+  } catch {
+    return false
+  }
 }
 if (
   configuredClerkVariables.length > 0 &&

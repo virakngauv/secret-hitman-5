@@ -109,7 +109,7 @@ describe('account verification', () => {
       'token',
       expect.objectContaining({
         authorizedParties: ['https://game.example'],
-        clockSkewInMs: 0,
+        clockSkewInMs: 5000,
       }),
     )
   })
@@ -154,6 +154,77 @@ describe('account verification', () => {
     expect(result.status).toBe('server_unavailable')
     expect(JSON.stringify(result)).not.toContain('secret-token')
   })
+  it.each(['jwk-remote-failed-to-load', undefined])(
+    'treats verification infrastructure failures as retryable (%s)',
+    async (reason) => {
+      setup()
+      mocks.verify.mockRejectedValue(
+        Object.assign(new Error('secret-token'), { reason }),
+      )
+      const result = await createPackAuthorizer(env)(
+        'secret-token',
+        'pack_movies_v1',
+      )
+      expect(result.status).toBe('server_unavailable')
+      expect(JSON.stringify(result)).not.toContain('secret-token')
+      expect(mocks.session).not.toHaveBeenCalled()
+    },
+  )
+  it.each(['token-invalid-signature', 'token-expired', 'token-invalid'])(
+    'denies invalid tokens (%s)',
+    async (reason) => {
+      setup()
+      mocks.verify.mockRejectedValue({ reason })
+      expect(
+        (await createPackAuthorizer(env)('token', 'pack_movies_v1')).status,
+      ).toBe('forbidden')
+      expect(mocks.subscription).not.toHaveBeenCalled()
+    },
+  )
+  it.each([
+    [1, 'success'],
+    [6, 'forbidden'],
+  ] as const)(
+    'allows bounded clock skew of %s seconds',
+    async (seconds, status) => {
+      const claims = setup()
+      mocks.verify.mockResolvedValue({
+        ...claims,
+        iat: Date.now() / 1000 + seconds,
+        nbf: Date.now() / 1000 + seconds,
+      })
+      expect(
+        (await createPackAuthorizer(env)('token', 'pack_movies_v1')).status,
+      ).toBe(status)
+    },
+  )
+  it.each([
+    [undefined, undefined, 'success'],
+    ['other-app', undefined, 'forbidden'],
+    ['other-app', ' game ', 'forbidden'],
+    [undefined, 'game', 'forbidden'],
+    ['game', ' game ', 'success'],
+    [['other-app', 'game'], 'game', 'success'],
+  ] as const)(
+    'enforces the audience contract (%j, %s)',
+    async (aud, audience, status) => {
+      mocks.verify.mockResolvedValue({ ...setup(), aud })
+      expect(
+        (
+          await createPackAuthorizer({ ...env, CLERK_AUDIENCE: audience })(
+            'token',
+            'pack_movies_v1',
+          )
+        ).status,
+      ).toBe(status)
+      expect(mocks.verify).toHaveBeenCalledWith(
+        'token',
+        expect.objectContaining({ audience: audience?.trim() }),
+      )
+      if (status === 'forbidden')
+        expect(mocks.subscription).not.toHaveBeenCalled()
+    },
+  )
 })
 
 it('limits outstanding entitlement work by verified account across authorizer calls', async () => {

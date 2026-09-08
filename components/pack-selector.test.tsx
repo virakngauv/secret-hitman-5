@@ -36,6 +36,49 @@ const packs = [
   { id: 'base', name: 'Base', premium: false },
   { id: 'movies-v1', name: 'Movies', premium: true },
 ]
+it('preserves the actual selected pack when the catalog fails and permits retry', async () => {
+  mocks.userId = null
+  mocks.catalog
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue({ status: 'success', packs })
+  render(
+    <PackSelector
+      view={{ ...view, selectedPackId: 'movies-v1' }}
+      disabled={false}
+    />,
+  )
+  const retry = await screen.findByRole('button', { name: 'Retry pack list' })
+  expect(screen.getByRole('combobox')).toHaveValue('movies-v1')
+  expect(
+    screen.getByRole('option', { name: /Selected pack \(movies-v1\)/ }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText('Sign in again or choose Base to start a new round.'),
+  ).toBeVisible()
+  fireEvent.click(retry)
+  await screen.findByRole('option', { name: 'Movies · Sign in required' })
+  expect(screen.getByRole('combobox')).toHaveValue('movies-v1')
+  expect(
+    screen.queryByRole('button', { name: 'Retry pack list' }),
+  ).not.toBeInTheDocument()
+})
+it('lets a host retry an unavailable preview without changing focus', async () => {
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  const fetcher = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('busy'))
+    .mockResolvedValue({
+      ok: true,
+      json: async () => ({ userId: 'user_one', packIds: ['movies-v1'] }),
+    })
+  vi.stubGlobal('fetch', fetcher)
+  render(<PackSelector view={view} disabled={false} />)
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Retry access check' }),
+  )
+  await screen.findByRole('option', { name: 'Movies · Available' })
+  expect(fetcher).toHaveBeenCalledTimes(2)
+})
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.resetAllMocks()

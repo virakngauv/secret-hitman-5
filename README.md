@@ -99,6 +99,25 @@ Lobby login and signup open separate tabs so OAuth redirects and account transfe
 cannot unload the game tab or remove its player. Return to the original game tab
 after completing or canceling authentication.
 
+Clerk configuration is required at **build time and runtime**. Static pages embed
+the account-enabled flag during `next build`; adding only the secret to a running
+image does not enable those pages. Run the deployment environment check with both
+keys and the origin allowlist before building, and rebuild when enabling or
+disabling Clerk. The secret remains server-side and is not serialized to the browser.
+
+The example allowlist covers localhost development only. If opening the app at
+a LAN address, custom hostname, or different port, add that exact frontend origin
+to `CLERK_AUTHORIZED_PARTIES` in both processes. Next.js `allowedDevOrigins` only
+permits development requests; it does not authorize Clerk sessions. Plain HTTP
+LAN sockets cannot carry account tokens: use localhost or HTTPS for premium play.
+Origin entries must have no trailing slash, path, query, fragment, or credentials.
+
+Default Clerk session tokens have no audience claim. Leave `CLERK_AUDIENCE` unset
+for those tokens. If customizing session tokens with an audience, configure the
+same expected value; audience-bearing tokens are denied without that setting.
+Token issue/not-before times permit five seconds of clock skew, while token expiry
+and paid subscription period boundaries remain strict. Keep server clocks synchronized.
+
 - `ENABLE_PREMIUM_PACKS=true` makes the sample packs available for authenticated
   selection and hosting. It defaults to false.
 - `ENABLE_CLERK_CHECKOUT=true` enables Clerk's user PricingTable on `/pricing`.

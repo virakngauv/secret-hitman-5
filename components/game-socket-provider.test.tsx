@@ -136,15 +136,22 @@ function UnlockHintProbe({ roomCode }: { roomCode: string }) {
 }
 
 describe('GameSocketProvider', () => {
-  it.each(['select', 'start'] as const)(
-    'recovers from a stalled %s token without sending a late command',
-    async (command) => {
+  it.each([
+    ['select', 'resolve'],
+    ['start', 'resolve'],
+    ['select', 'reject'],
+    ['start', 'reject'],
+  ] as const)(
+    'recovers from a stalled %s token with late %s settlement',
+    async (command, settlement) => {
       vi.useFakeTimers()
       vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'https://game.example.com')
       let complete!: (value: string) => void
+      let fail!: (error: Error) => void
       mocks.getToken.mockReturnValue(
-        new Promise<string>((resolve) => {
+        new Promise<string>((resolve, reject) => {
           complete = resolve
+          fail = reject
         }),
       )
       function Probe() {
@@ -197,9 +204,58 @@ describe('GameSocketProvider', () => {
       })
       expect(screen.getByText('success')).toBeVisible()
       expect(mocks.emitWithAck).toHaveBeenCalledTimes(1)
-      await act(async () => complete('expired-token'))
+      await act(async () => {
+        if (settlement === 'resolve') complete('expired-token')
+        else fail(new Error('Account changed. Please try again.'))
+      })
       expect(mocks.emitWithAck).toHaveBeenCalledTimes(1)
       expect(mocks.emitWithAck.mock.calls[0][1].accountToken).toBeUndefined()
+    },
+  )
+  it.each(['disconnected', 'synchronizing'] as const)(
+    'does not mint premium tokens while %s',
+    async (state) => {
+      vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'https://game.example.com')
+      mocks.socket.connected = state !== 'disconnected'
+      mocks.delayResumes = state === 'synchronizing'
+      const result = vi.fn()
+      function Probe() {
+        const game = useGameSocket()
+        useRoomSnapshot('bcdf2')
+        return (
+          <button
+            onClick={() => {
+              void game.startGame('bcdf2', 0, true).then(result)
+              void game
+                .selectPack(
+                  {
+                    roomCode: 'bcdf2',
+                    configurationRevision: 0,
+                    requestId: 'request-001',
+                    packId: 'movies-v1',
+                  },
+                  true,
+                )
+                .then(result)
+            }}
+          >
+            Try premium
+          </button>
+        )
+      }
+      render(
+        <GameSocketProvider>
+          <Probe />
+        </GameSocketProvider>,
+      )
+      if (state === 'synchronizing')
+        act(() => mocks.handlers.get('connect')?.())
+      await act(async () => fireEvent.click(screen.getByText('Try premium')))
+      expect(result).toHaveBeenCalledTimes(2)
+      expect(result).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'server_unavailable' }),
+      )
+      expect(mocks.getToken).not.toHaveBeenCalled()
     },
   )
   it('does not retrieve Clerk tokens for HTTP LAN premium commands', async () => {

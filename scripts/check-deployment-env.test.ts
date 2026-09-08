@@ -98,7 +98,20 @@ describe('deployment environment check', () => {
     expect(result.stdout).not.toContain('test-publishable-key')
     expect(result.stdout).not.toContain('test-secret-key')
   })
-  it.each([undefined, '', ' , , '])(
+  it.each([
+    undefined,
+    '',
+    ' , , ',
+    'https://game.example.com/path',
+    'https://game.example.com/',
+    'https://game.example.com?x=1',
+    'https://game.example.com#x',
+    'https://user:pass@game.example.com',
+    'not-an-origin',
+    'https://game.example.com,broken',
+    'https://game.example.com,',
+    'ftp://game.example.com',
+  ])(
     'requires allowed origins whenever Clerk is configured (%s)',
     (origins) => {
       const result = checkEnvironment({
@@ -114,4 +127,14 @@ describe('deployment environment check', () => {
       )
     },
   )
+  it('accepts exact HTTPS and loopback HTTP origins', () => {
+    const result = checkEnvironment({
+      NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'key',
+      CLERK_SECRET_KEY: 'secret',
+      CLERK_AUTHORIZED_PARTIES:
+        ' https://game.example.com, http://localhost:3140, http://127.0.0.1:3000 ',
+    })
+    expect(result.status).toBe(0)
+  })
 })

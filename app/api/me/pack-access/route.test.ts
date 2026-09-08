@@ -59,7 +59,12 @@ it('returns only enabled eligible IDs without caching or full provider data', as
 })
 it('bounds provider latency and redacts errors', async () => {
   vi.useFakeTimers()
-  mocks.subscription.mockReturnValue(new Promise(() => {}))
+  let complete!: (value: unknown) => void
+  mocks.subscription.mockReturnValue(
+    new Promise((resolve) => {
+      complete = resolve
+    }),
+  )
   const pending = GET()
   await vi.advanceTimersByTimeAsync(4500)
   const response = await pending
@@ -67,4 +72,30 @@ it('bounds provider latency and redacts errors', async () => {
   expect(await response.json()).toEqual({
     message: 'Access preview unavailable. Try again.',
   })
+  complete({ subscriptionItems: [] })
+  await Promise.resolve()
+})
+
+it('shares outstanding previews across retries, then refreshes after settlement', async () => {
+  vi.useFakeTimers()
+  mocks.auth.mockResolvedValue({ userId: 'user_shared' })
+  let complete!: (value: unknown) => void
+  mocks.subscription.mockReturnValue(
+    new Promise((resolve) => {
+      complete = resolve
+    }),
+  )
+  const first = GET()
+  await vi.advanceTimersByTimeAsync(4500)
+  expect((await first).status).toBe(503)
+  const retry = GET()
+  const otherTab = GET()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.subscription).toHaveBeenCalledOnce()
+  complete({ subscriptionItems: [] })
+  expect((await retry).status).toBe(200)
+  expect((await otherTab).status).toBe(200)
+  mocks.subscription.mockResolvedValue({ subscriptionItems: [] })
+  expect((await GET()).status).toBe(200)
+  expect(mocks.subscription).toHaveBeenCalledTimes(2)
 })

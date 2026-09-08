@@ -606,6 +606,29 @@ describe('Socket.IO Secret Hitman protocol', () => {
     },
   )
 
+  it('delivers the selected configuration before its acknowledgement', async () => {
+    const client = await connect(hostToken)
+    const created = await client.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('creation failed')
+    let latest: RoomSnapshot | undefined
+    client.on('room:snapshot', (snapshot) => {
+      latest = snapshot
+    })
+    expect(
+      await client.emitWithAck('room:select-pack', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        requestId: 'select-snapshot',
+        packId: 'base',
+      }),
+    ).toMatchObject({ status: 'success' })
+    expect(latest).toMatchObject({
+      status: 'lobby',
+      configurationRevision: 1,
+      selectedPackId: 'base',
+    })
+  })
+
   it.each(['room:select-pack', 'game:start'] as const)(
     'correlates %s results without logging account tokens',
     async (event) => {

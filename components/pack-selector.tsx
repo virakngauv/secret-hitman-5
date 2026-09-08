@@ -19,6 +19,9 @@ export function PackSelector({
   const { catalog, connectionStatus } = game
   const account = useAccount()
   const [packs, setPacks] = useState<PackSummary[]>([])
+  const [catalogError, setCatalogError] = useState(false)
+  const [catalogAttempt, setCatalogAttempt] = useState(0)
+  const [previewAttempt, setPreviewAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [access, setAccess] = useState<{
@@ -68,23 +71,51 @@ export function PackSelector({
       controller?.abort()
       window.removeEventListener('focus', onFocus)
     }
-  }, [account.userId, view.player.role])
+  }, [account.userId, view.player.role, previewAttempt])
   useEffect(() => {
     let active = true
-    void catalog?.().then((result) => {
-      if (active && result.status === 'success') setPacks(result.packs)
-    })
+    const load = async () => {
+      try {
+        const result = await catalog?.()
+        if (!active) return
+        if (result?.status === 'success') {
+          setPacks(result.packs)
+          setCatalogError(false)
+        } else setCatalogError(true)
+      } catch {
+        if (active) setCatalogError(true)
+      }
+    }
+    void load()
     return () => {
       active = false
     }
-  }, [catalog, connectionStatus])
+  }, [catalog, connectionStatus, catalogAttempt])
   const selectedId = view.selectedPackId ?? 'base'
-  const choices = packs.length
-    ? packs
-    : [{ id: 'base', name: 'Base', premium: false }]
+  const choices: Array<Pick<PackSummary, 'id' | 'name' | 'premium'>> =
+    packs.length ? [...packs] : [{ id: 'base', name: 'Base', premium: false }]
+  if (!choices.some((pack) => pack.id === selectedId)) {
+    choices.push({
+      id: selectedId,
+      name: `Selected pack (${selectedId})`,
+      premium: selectedId !== 'base',
+    })
+  }
   return (
     <div className="mt-4 space-y-2 rounded-xl border p-3">
       <p className="font-semibold">Word pack</p>
+      {catalogError && (
+        <p role="status">
+          Pack list unavailable.{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setCatalogAttempt((attempt) => attempt + 1)}
+          >
+            Retry pack list
+          </button>
+        </p>
+      )}
       {view.player.role !== 'host' ? (
         <p>
           {choices.find((pack) => pack.id === selectedId)?.name ?? selectedId} ·
@@ -165,9 +196,21 @@ export function PackSelector({
             </>
           )}
           {busy && <p role="status">Checking access…</p>}
+          {!account.userId && selectedId !== 'base' && (
+            <p role="status">
+              Sign in again or choose Base to start a new round.
+            </p>
+          )}
           {account.userId && previewError && (
             <p role="status">
-              Access preview unavailable. Selecting a pack will check again.
+              Access preview unavailable. Selecting a pack will check again.{' '}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
+              >
+                Retry access check
+              </button>
             </p>
           )}
           {error && <p role="alert">{error}</p>}

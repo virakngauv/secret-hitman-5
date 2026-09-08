@@ -8,7 +8,8 @@ export const accessUnavailable = (): CommandResult => ({
 })
 const denied = (): CommandResult => ({
   status: 'forbidden',
-  message: 'Sign in with an account whose subscription includes this pack.',
+  message:
+    'Sign in with an account whose subscription includes this pack, or choose Base.',
 })
 
 type Subscription = {
@@ -59,6 +60,7 @@ export function createPackAuthorizer(
   const secretKey = env.CLERK_SECRET_KEY?.trim()
   const publishableKey = env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
   const issuer = env.CLERK_ISSUER?.trim()
+  const audience = env.CLERK_AUDIENCE?.trim() || undefined
   const authorizedParties = env.CLERK_AUTHORIZED_PARTIES?.split(',')
     .map((part) => part.trim())
     .filter(Boolean)
@@ -74,11 +76,28 @@ export function createPackAuthorizer(
         verifyToken(token, {
           secretKey,
           authorizedParties,
-          audience: env.CLERK_AUDIENCE || undefined,
-          clockSkewInMs: 0,
-        }).catch(() => null),
+          audience,
+          clockSkewInMs: 5000,
+        }),
       )
-    } catch {
+    } catch (error) {
+      const reason =
+        error && typeof error === 'object' && 'reason' in error
+          ? error.reason
+          : undefined
+      if (
+        typeof reason === 'string' &&
+        [
+          'token-expired',
+          'token-invalid',
+          'token-invalid-algorithm',
+          'token-invalid-authorized-parties',
+          'token-invalid-signature',
+          'token-not-active-yet',
+          'token-iat-in-the-future',
+        ].includes(reason)
+      )
+        return denied()
       return accessUnavailable()
     }
     if (!claims) return denied()
@@ -90,12 +109,18 @@ export function createPackAuthorizer(
       !claims.sid?.startsWith('sess_') ||
       !claims.azp ||
       !authorizedParties.includes(claims.azp) ||
+      // Default Clerk session tokens omit aud. Custom audiences require an explicit match.
+      (audience
+        ? !(Array.isArray(claims.aud)
+            ? claims.aud.includes(audience)
+            : claims.aud === audience)
+        : claims.aud !== undefined) ||
       !Number.isFinite(claims.exp) ||
       claims.exp * 1000 <= now ||
       !Number.isFinite(claims.iat) ||
-      claims.iat * 1000 > now ||
+      claims.iat * 1000 > now + 5000 ||
       !Number.isFinite(claims.nbf) ||
-      claims.nbf * 1000 > now
+      claims.nbf * 1000 > now + 5000
     )
       return denied()
     try {

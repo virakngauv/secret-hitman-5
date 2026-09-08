@@ -304,8 +304,9 @@ export function createGameSocketServer(
             durationMs: Date.now() - accessStartedAt,
           }),
         )
+        if (result.status === 'success')
+          await broadcastSnapshots(parsed.roomCode)
         acknowledge(result)
-        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })
     })
 
@@ -331,8 +332,9 @@ export function createGameSocketServer(
             durationMs: Date.now() - accessStartedAt,
           }),
         )
+        if (result.status === 'success')
+          await broadcastSnapshots(parsed.roomCode)
         acknowledge(result)
-        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })
     })
 
@@ -478,7 +480,7 @@ export function createGameSocketServer(
   }
 
   function broadcastSnapshots(roomCode: string) {
-    void emitSnapshots(roomCode).catch((error: unknown) => {
+    return emitSnapshots(roomCode).catch((error: unknown) => {
       logFailure('snapshot_broadcast_failed', error)
     })
   }

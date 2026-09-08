@@ -393,7 +393,14 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       premium: boolean,
     ): Promise<CommandResult> => {
       try {
-        if (premium && !secureAccountTransport.current) return unavailable()
+        if (!socketRef.current?.connected || !synchronizedRef.current)
+          return unavailable()
+        if (premium && !secureAccountTransport.current)
+          return {
+            status: 'server_unavailable',
+            message:
+              'Premium packs require HTTPS or localhost. Use a secure connection or choose Base.',
+          }
         const accountToken = premium
           ? ((await freshAccountToken(account.getToken)) ?? undefined)
           : undefined
@@ -407,7 +414,10 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
             }),
         )
       } catch {
-        return unavailable()
+        return {
+          status: 'server_unavailable',
+          message: 'Account access is unavailable. Try again or choose Base.',
+        }
       }
     },
     [account],
@@ -419,7 +429,14 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       premium = false,
     ): Promise<CommandResult> => {
       try {
-        if (premium && !secureAccountTransport.current) return unavailable()
+        if (!socketRef.current?.connected || !synchronizedRef.current)
+          return unavailable()
+        if (premium && !secureAccountTransport.current)
+          return {
+            status: 'server_unavailable',
+            message:
+              'Premium packs require HTTPS or localhost. Use a secure connection or choose Base.',
+          }
         const accountToken = premium
           ? ((await freshAccountToken(account.getToken)) ?? undefined)
           : undefined
@@ -435,7 +452,10 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
             }),
         )
       } catch {
-        return unavailable()
+        return {
+          status: 'server_unavailable',
+          message: 'Account access is unavailable. Try again or choose Base.',
+        }
       }
     },
     [account],
