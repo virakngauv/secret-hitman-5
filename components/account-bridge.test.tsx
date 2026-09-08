@@ -67,6 +67,26 @@ it('offers signup and login, then account controls after authentication', () => 
   ).toHaveAttribute('href', '/account')
   expect(screen.getByText('Profile')).toBeVisible()
 })
+it('keeps both lobby authentication entry points in a separate tab', () => {
+  mocks.auth.userId = undefined
+  render(
+    <AccountBridge>
+      <AccountControl preserveRoom />
+    </AccountBridge>,
+  )
+  for (const [name, href] of [
+    ['Log in (new tab)', '/sign-in'],
+    ['Sign up (new tab)', '/sign-up'],
+  ]) {
+    const link = screen.getByRole('link', { name })
+    expect(link).toHaveAttribute('href', href)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  }
+  expect(
+    screen.queryByRole('button', { name: 'Log in' }),
+  ).not.toBeInTheDocument()
+})
 it('does not return a token retrieved for an account that changed mid-request', async () => {
   let complete!: (token: string) => void
   mocks.auth.getToken.mockReturnValue(

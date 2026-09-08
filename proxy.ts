@@ -12,20 +12,24 @@ const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(',')
   .filter(Boolean)
 const isAccountRoute = createRouteMatcher(['/account(.*)'])
 const clerkProxy =
-  publishableKey && secretKey
+  publishableKey && secretKey && authorizedParties?.length
     ? clerkMiddleware(
         async (auth, request) => {
           if (isAccountRoute(request)) await auth.protect()
         },
         {
-          authorizedParties: authorizedParties?.length
-            ? authorizedParties
-            : undefined,
+          authorizedParties,
         },
       )
     : null
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (publishableKey && secretKey && !authorizedParties?.length) {
+    return NextResponse.json(
+      { error: 'Account configuration unavailable.' },
+      { status: 503 },
+    )
+  }
   return clerkProxy ? clerkProxy(request, event) : NextResponse.next()
 }
 

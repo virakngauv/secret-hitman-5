@@ -90,6 +90,7 @@ describe('deployment environment check', () => {
       NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'test-publishable-key',
       CLERK_SECRET_KEY: 'test-secret-key',
+      CLERK_AUTHORIZED_PARTIES: 'https://game.example.com',
     })
 
     expect(result.status).toBe(0)
@@ -97,4 +98,20 @@ describe('deployment environment check', () => {
     expect(result.stdout).not.toContain('test-publishable-key')
     expect(result.stdout).not.toContain('test-secret-key')
   })
+  it.each([undefined, '', ' , , '])(
+    'requires allowed origins whenever Clerk is configured (%s)',
+    (origins) => {
+      const result = checkEnvironment({
+        NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'test-publishable-key',
+        CLERK_SECRET_KEY: 'test-secret-key',
+        CLERK_AUTHORIZED_PARTIES: origins,
+        ENABLE_PREMIUM_PACKS: 'false',
+      })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(
+        'Clerk authentication requires CLERK_AUTHORIZED_PARTIES',
+      )
+    },
+  )
 })

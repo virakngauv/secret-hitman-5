@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RoomSnapshot } from '@/lib/game-protocol'
 
@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   view: null as RoomSnapshot | null,
   connectionStatus: 'connected' as 'connecting' | 'connected' | 'disconnected',
   startGame: vi.fn(),
+  selectPack: vi.fn(),
+  catalog: vi.fn(),
+  userId: null as string | null,
   claimCard: vi.fn(),
   finishGuessing: vi.fn(),
   advanceTurn: vi.fn(),
@@ -21,9 +24,17 @@ const mocks = vi.hoisted(() => ({
   routerPush: vi.fn(),
 }))
 
+vi.mock('./account-bridge', () => ({
+  useAccount: () => ({ loaded: true, userId: mocks.userId }),
+  AccountControl: () => null,
+}))
+afterEach(() => vi.unstubAllGlobals())
+
 vi.mock('@/components/game-socket-provider', () => ({
   useGameSocket: () => ({
     startGame: mocks.startGame,
+    selectPack: mocks.selectPack,
+    catalog: mocks.catalog,
     claimCard: mocks.claimCard,
     finishGuessing: mocks.finishGuessing,
     advanceTurn: mocks.advanceTurn,
@@ -148,8 +159,14 @@ describe('RoomLobby invite prompt', () => {
   beforeEach(() => {
     window.localStorage.clear()
     mocks.view = lobbyView()
+    mocks.userId = null
     mocks.connectionStatus = 'connected'
     mocks.startGame.mockReset().mockResolvedValue({ status: 'success' })
+    mocks.selectPack.mockReset()
+    mocks.catalog.mockReset().mockResolvedValue({
+      status: 'success',
+      packs: [{ id: 'base', name: 'Base', premium: false }],
+    })
     mocks.claimCard
       .mockReset()
       .mockResolvedValue({ status: 'success', kind: 'target' })
@@ -158,6 +175,62 @@ describe('RoomLobby invite prompt', () => {
     mocks.leaveRoom.mockReset().mockResolvedValue({ status: 'success' })
     mocks.routerPush.mockReset()
   })
+
+  it.each(['success', 'server_unavailable', 'rejected'] as const)(
+    'blocks Start for the entire pack selection and recovers after %s',
+    async (outcome) => {
+      const user = userEvent.setup()
+      mocks.view = readyLobby()
+      mocks.userId = 'user_host'
+      mocks.catalog.mockResolvedValue({
+        status: 'success',
+        packs: [
+          { id: 'base', name: 'Base', premium: false },
+          { id: 'movies-v1', name: 'Movies', premium: true },
+        ],
+      })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            userId: 'user_host',
+            packIds: ['base', 'movies-v1'],
+          }),
+        }),
+      )
+      let finish!: (value: unknown) => void
+      let fail!: (error: Error) => void
+      mocks.selectPack.mockReturnValue(
+        new Promise((resolve, reject) => {
+          finish = resolve
+          fail = reject
+        }),
+      )
+      render(<RoomLobby roomCode="bcdf2" />)
+      await screen.findByRole('option', { name: 'Movies · Available' })
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: 'Word pack' }),
+        'movies-v1',
+      )
+      expect(mocks.selectPack).toHaveBeenCalledWith(
+        expect.objectContaining({ packId: 'movies-v1' }),
+        true,
+      )
+      const start = screen.getByRole('button', { name: 'Start game' })
+      expect(start).toBeDisabled()
+      await user.click(start)
+      expect(mocks.startGame).not.toHaveBeenCalled()
+      await act(async () => {
+        if (outcome === 'rejected') fail(new Error('offline'))
+        else finish({ status: outcome, message: 'Access unavailable' })
+      })
+      expect(start).toBeEnabled()
+      if (outcome !== 'success') expect(screen.getByRole('alert')).toBeVisible()
+      await user.click(start)
+      expect(mocks.startGame).toHaveBeenCalledOnce()
+    },
+  )
 
   it('lets a host leave immediately when they are alone in the room', async () => {
     const user = userEvent.setup()

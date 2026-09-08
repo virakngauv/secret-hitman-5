@@ -34,6 +34,17 @@ for (const name of optionalVercelVariables) {
 const clerkVariables = ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY']
 const configuredClerkVariables = clerkVariables.filter(isConfigured)
 if (
+  configuredClerkVariables.length === clerkVariables.length &&
+  !process.env.CLERK_AUTHORIZED_PARTIES?.split(',').some((origin) =>
+    origin.trim(),
+  )
+) {
+  console.error(
+    'Clerk authentication requires CLERK_AUTHORIZED_PARTIES with exact frontend origins.',
+  )
+  process.exitCode = 1
+}
+if (
   configuredClerkVariables.length > 0 &&
   configuredClerkVariables.length < clerkVariables.length
 ) {

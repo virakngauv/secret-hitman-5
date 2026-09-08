@@ -9,9 +9,11 @@ import type { PackSummary, RoomSnapshot } from '@/lib/game-protocol'
 export function PackSelector({
   view,
   disabled,
+  onPendingChange,
 }: {
   view: Extract<RoomSnapshot, { status: 'lobby' }>
   disabled: boolean
+  onPendingChange?: (pending: boolean) => void
 }) {
   const game = useGameSocket()
   const { catalog, connectionStatus } = game
@@ -100,18 +102,25 @@ export function PackSelector({
               const premium =
                 choices.find((pack) => pack.id === packId)?.premium ?? false
               setBusy(true)
+              onPendingChange?.(true)
               setError(null)
-              const result = await game.selectPack(
-                {
-                  roomCode: view.roomCode,
-                  configurationRevision: view.configurationRevision,
-                  packId,
-                  requestId: generateRequestId(),
-                },
-                premium,
-              )
-              setBusy(false)
-              if (result.status !== 'success') setError(result.message)
+              try {
+                const result = await game.selectPack(
+                  {
+                    roomCode: view.roomCode,
+                    configurationRevision: view.configurationRevision,
+                    packId,
+                    requestId: generateRequestId(),
+                  },
+                  premium,
+                )
+                if (result.status !== 'success') setError(result.message)
+              } catch {
+                setError('Could not select the pack. Please try again.')
+              } finally {
+                setBusy(false)
+                onPendingChange?.(false)
+              }
             }}
           >
             {choices.map((pack) => (

@@ -301,6 +301,7 @@ function LobbyScreen({
     (member) => member.role !== 'host',
   )
   const canStart = view.members.length >= view.minimumPlayers
+  const [isSelectingPack, setIsSelectingPack] = useState(false)
   const missingPlayers = view.minimumPlayers - view.members.length
   const [removalTarget, setRemovalTarget] = useState<{
     playerId: string
@@ -370,7 +371,11 @@ function LobbyScreen({
             ))}
           </ul>
 
-          <PackSelector view={view} disabled={isActing} />
+          <PackSelector
+            view={view}
+            disabled={isActing}
+            onPendingChange={setIsSelectingPack}
+          />
           {isHost ? (
             <>
               {!canStart ? (
@@ -386,7 +391,7 @@ function LobbyScreen({
               ) : null}
               <Button
                 className="mt-4 h-12 w-full"
-                disabled={!canStart || isActing}
+                disabled={!canStart || isActing || isSelectingPack}
                 onClick={() => void onStart()}
               >
                 {isActing ? 'Starting…' : 'Start game'}

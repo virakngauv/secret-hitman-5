@@ -91,6 +91,13 @@ these variables in the process environment or configure the deployment environme
 Use exact frontend origins and optionally `CLERK_AUDIENCE` if your tokens include a
 configured audience. Partial configuration disables protected use. Never expose
 `CLERK_SECRET_KEY` under a `NEXT_PUBLIC_` name.
+Whenever both Clerk keys are configured, Next.js requires a non-empty
+`CLERK_AUTHORIZED_PARTIES` list, including when premium hosting is disabled.
+An absent or blank list returns HTTP 503 without initializing Clerk authentication;
+the deployment environment check rejects this configuration too.
+Lobby login and signup open separate tabs so OAuth redirects and account transfers
+cannot unload the game tab or remove its player. Return to the original game tab
+after completing or canceling authentication.
 
 - `ENABLE_PREMIUM_PACKS=true` makes the sample packs available for authenticated
   selection and hosting. It defaults to false.

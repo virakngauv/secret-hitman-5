@@ -76,6 +76,25 @@ export function AccountControl({
       </Link>
       {preserveRoom ? <RoomUserButton /> : <UserButton />}
     </div>
+  ) : preserveRoom ? (
+    <div className="flex items-center gap-3">
+      <Link
+        href="/sign-in"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline"
+      >
+        Log in (new tab)
+      </Link>
+      <Link
+        href="/sign-up"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline"
+      >
+        Sign up (new tab)
+      </Link>
+    </div>
   ) : (
     <div className="flex items-center gap-3">
       <SignInButton mode="modal">
