@@ -50,7 +50,12 @@ if (
 function isExactOrigin(value) {
   try {
     const url = new URL(value)
-    return ['http:', 'https:'].includes(url.protocol) && value === url.origin
+    return (
+      (url.protocol === 'https:' ||
+        (url.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) &&
+      value === url.origin
+    )
   } catch {
     return false
   }

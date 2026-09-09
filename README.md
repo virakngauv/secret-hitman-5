@@ -132,9 +132,13 @@ and paid subscription period boundaries remain strict. Keep server clocks synchr
   local storage, guesses, logs, or analytics. A 4.5-second operation deadline and
   room revision checks prevent late authorization from committing a stale start.
   Premium tokens require HTTPS, except for loopback HTTP in local development;
-  HTTP LAN play supports only Base. The pinned Clerk SDK cannot cancel an in-flight
-  request: a process-wide limit of 32 operations and per-room/per-preview guards
-  retain capacity until underlying requests settle. Timeouts permit Base recovery
+  HTTP LAN play supports only Base. A pnpm patch to the pinned Clerk backend SDK
+  aborts each outbound fetch after five seconds, including response-body reads.
+  This applies to JWKS, session, and billing calls in both module formats; SDK
+  retries remain bounded by their existing retry count. A process-wide limit of
+  32 operations and per-room/per-preview guards retain capacity until the
+  underlying request actually settles. Keep the patch and transport regression
+  tests when upgrading Clerk; remove it only after verifying equivalent SDK support. Timeouts permit Base recovery
   but cannot spawn overlapping protected work for the same room/account.
   Browser token minting also has a 4.5-second deadline: controls recover on timeout,
   Base remains usable, and a late token cannot emit the expired command.
@@ -188,7 +192,9 @@ checkout cancel/failure/success and access refresh, cancellation through exact
 expiry, renewal, past-due/recovery, revoked sessions, and provider outage with a
 real development instance. Automated adapter tests do not replace these provider
 flows. Deploy frontend and game server together for protocol version 14; old
-clients receive a reload message. Rollback requires coordinated versions and loses
+clients are rejected with a reload instruction in the handshake error. Older
+client UIs may show only a reconnect banner, so instruct existing players to
+reload after the coordinated deployment. Rollback requires coordinated versions and loses
 active rooms. Verify no premium pools or credentials appear in browser bundles,
 public responses, or logs before enabling a paid catalog.
 

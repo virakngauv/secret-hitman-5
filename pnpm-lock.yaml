@@ -4,13 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@clerk/backend@3.17.1': 403c732c7242db3482e88173a2efebe6995362aa596bf7d7cb915f68f1bf477c
+
 importers:
 
   .:
     dependencies:
       '@clerk/backend':
         specifier: 3.17.1
-        version: 3.17.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 3.17.1(patch_hash=403c732c7242db3482e88173a2efebe6995362aa596bf7d7cb915f68f1bf477c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@clerk/nextjs':
         specifier: 7.9.1
         version: 7.9.1(next@16.2.10(@babel/core@7.29.7)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -4770,7 +4773,7 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@clerk/backend@3.17.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@clerk/backend@3.17.1(patch_hash=403c732c7242db3482e88173a2efebe6995362aa596bf7d7cb915f68f1bf477c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@clerk/shared': 4.31.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       standardwebhooks: 1.0.0
@@ -4788,7 +4791,7 @@ snapshots:
 
   '@clerk/nextjs@7.9.1(next@16.2.10(@babel/core@7.29.7)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
-      '@clerk/backend': 3.17.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@clerk/backend': 3.17.1(patch_hash=403c732c7242db3482e88173a2efebe6995362aa596bf7d7cb915f68f1bf477c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@clerk/react': 6.15.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@clerk/shared': 4.31.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       next: 16.2.10(@babel/core@7.29.7)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

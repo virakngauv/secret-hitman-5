@@ -1,5 +1,5 @@
-// The pinned Clerk SDK has no per-request AbortSignal. Retain capacity until
-// its underlying work settles, even when a caller stops waiting for a result.
+// The patched SDK aborts stalled fetches. Retain capacity until that work
+// settles, even when a caller stops waiting before the transport deadline.
 const inFlight = new Set<string | symbol>()
 const MAX_CLERK_OPERATIONS = 32
 

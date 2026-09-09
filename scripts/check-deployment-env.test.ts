@@ -111,6 +111,8 @@ describe('deployment environment check', () => {
     'https://game.example.com,broken',
     'https://game.example.com,',
     'ftp://game.example.com',
+    'http://game.example.com',
+    'http://192.168.1.5:3140',
   ])(
     'requires allowed origins whenever Clerk is configured (%s)',
     (origins) => {
@@ -133,7 +135,7 @@ describe('deployment environment check', () => {
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'key',
       CLERK_SECRET_KEY: 'secret',
       CLERK_AUTHORIZED_PARTIES:
-        ' https://game.example.com, http://localhost:3140, http://127.0.0.1:3000 ',
+        ' https://game.example.com, http://localhost:3140, http://127.0.0.1:3000, http://[::1]:3140 ',
     })
     expect(result.status).toBe(0)
   })

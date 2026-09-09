@@ -1,5 +1,7 @@
 import { UserProfile } from '@clerk/nextjs'
-import { auth } from '@clerk/nextjs/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
+import { hasPackFeature } from '@/server/pack-access'
+import { withClerkCapacity } from '@/server/clerk-capacity'
 import Link from 'next/link'
 import { PACKS } from '@/server/packs'
 
@@ -17,7 +19,8 @@ export default async function AccountPage() {
       </main>
     )
   await auth.protect()
-  const { has } = await auth()
+  const { userId } = await auth()
+  const preview = userId ? await loadSubscription(userId) : null
   return (
     <main className="game-page">
       <section className="game-panel mx-auto max-w-4xl space-y-5">
@@ -33,9 +36,17 @@ export default async function AccountPage() {
           {PACKS.filter((pack) => pack.enabled).map((pack) => (
             <li key={pack.id}>
               {pack.name}:{' '}
-              {!pack.feature || has({ feature: pack.feature })
+              {!pack.feature
                 ? 'Available'
-                : 'Plan required'}
+                : !preview
+                  ? 'Access unavailable — try again'
+                  : hasPackFeature(
+                        preview.subscription,
+                        pack.feature,
+                        preview.checkedAt,
+                      )
+                    ? 'Available'
+                    : 'Plan required'}
             </li>
           ))}
         </ul>
@@ -43,4 +54,12 @@ export default async function AccountPage() {
       </section>
     </main>
   )
+}
+
+async function loadSubscription(userId: string) {
+  return withClerkCapacity(async () => {
+    const client = await clerkClient()
+    const subscription = await client.billing.getUserBillingSubscription(userId)
+    return { subscription, checkedAt: Date.now() }
+  }, `preview:${userId}`).catch(() => null)
 }

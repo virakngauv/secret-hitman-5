@@ -156,7 +156,7 @@ export class GameServer {
     const guard = this.packOperations.get(room)
     if (
       (pack.feature && this.pendingAuthorizations.has(room)) ||
-      guard?.pending ||
+      (guard?.pending && (start || pack.feature)) ||
       (pack.feature &&
         guard &&
         Date.now() < (start ? guard.nextStartAt : guard.nextSelectAt))

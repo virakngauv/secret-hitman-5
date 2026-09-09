@@ -261,6 +261,35 @@ describe('guarded pack transitions', () => {
     ).toMatchObject({ status: 'success' })
   })
 
+  it('allows Base selection while premium authorization is still pending', async () => {
+    let resolve!: (result: CommandResult) => void
+    const { server, roomCode } = setup(
+      vi.fn(
+        () =>
+          new Promise<CommandResult>((done) => {
+            resolve = done
+          }),
+      ),
+    )
+    const pending = server.packCommand(
+      'host',
+      { ...request, roomCode, packId: premium.id },
+      false,
+    )
+    expect(
+      (
+        await server.packCommand(
+          'host',
+          { ...request, roomCode, packId: 'base' },
+          false,
+        )
+      ).status,
+    ).toBe('success')
+    resolve({ status: 'success' })
+    expect((await pending).status).toBe('stale')
+    expect(server.rooms.get(roomCode)?.selectedPack.id).toBe('base')
+  })
+
   it('times out without a late start and allows deliberate base recovery', async () => {
     vi.useFakeTimers()
     let resolve!: (result: CommandResult) => void
