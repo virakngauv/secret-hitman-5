@@ -1,8 +1,8 @@
 diff --git a/dist/chunk-QOX5XVDR.mjs b/dist/chunk-QOX5XVDR.mjs
-index c938577fde140952731d78ee8e8bcaa97276970c..4b1a0398a540469b2b4203ec5ba2782fe126ac31 100644
+index c938577fde140952731d78ee8e8bcaa97276970c..a26d89d7b70df5b7ab624eaf438a51647d9c5b48 100644
 --- a/dist/chunk-QOX5XVDR.mjs
 +++ b/dist/chunk-QOX5XVDR.mjs
-@@ -10,7 +10,25 @@ var globalFetch = fetch.bind(globalThis);
+@@ -10,7 +10,57 @@ var globalFetch = fetch.bind(globalThis);
  var runtime = {
    crypto,
    get fetch() {
@@ -16,7 +16,39 @@ index c938577fde140952731d78ee8e8bcaa97276970c..4b1a0398a540469b2b4203ec5ba2782f
 +      const signal = inherited ? AbortSignal.any([inherited, controller.signal]) : controller.signal;
 +      try {
 +        const response = await fetcher(input, { ...init, signal });
-+        const body = await response.arrayBuffer();
++        const maxBytes = 2 * 1024 * 1024;
++        const declaredLength = Number(response.headers.get("content-length"));
++        if (declaredLength > maxBytes) {
++          controller.abort();
++          await response.body?.cancel();
++          throw new Error("Clerk response exceeds byte limit");
++        }
++        const reader = response.body?.getReader();
++        const chunks = [];
++        let byteLength = 0;
++        if (reader) {
++          try {
++            while (true) {
++              const { done, value } = await reader.read();
++              if (done) break;
++              byteLength += value.byteLength;
++              if (byteLength > maxBytes) {
++                controller.abort();
++                await reader.cancel();
++                throw new Error("Clerk response exceeds byte limit");
++              }
++              chunks.push(value);
++            }
++          } finally {
++            reader.releaseLock();
++          }
++        }
++        const body = new Uint8Array(byteLength);
++        let offset = 0;
++        for (const chunk of chunks) {
++          body.set(chunk, offset);
++          offset += chunk.byteLength;
++        }
 +        return new Response([204, 205, 304].includes(response.status) ? null : body, {
 +          status: response.status,
 +          statusText: response.statusText,
@@ -30,10 +62,10 @@ index c938577fde140952731d78ee8e8bcaa97276970c..4b1a0398a540469b2b4203ec5ba2782f
    AbortController: globalThis.AbortController,
    Blob: globalThis.Blob,
 diff --git a/dist/index.js b/dist/index.js
-index bb2c464da905fdb476ec610cb4b0606e66950fa7..2aefa85732baf57ccd72e43906e47335e9c07fb9 100644
+index bb2c464da905fdb476ec610cb4b0606e66950fa7..8a00626bf8b65135dd5a2f8f8b68d757a27e9642 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -1243,7 +1243,25 @@ var globalFetch = fetch.bind(globalThis);
+@@ -1243,7 +1243,57 @@ var globalFetch = fetch.bind(globalThis);
  var runtime = {
    crypto: import_crypto.webcrypto,
    get fetch() {
@@ -47,7 +79,39 @@ index bb2c464da905fdb476ec610cb4b0606e66950fa7..2aefa85732baf57ccd72e43906e47335
 +      const signal = inherited ? AbortSignal.any([inherited, controller.signal]) : controller.signal;
 +      try {
 +        const response = await fetcher(input, { ...init, signal });
-+        const body = await response.arrayBuffer();
++        const maxBytes = 2 * 1024 * 1024;
++        const declaredLength = Number(response.headers.get("content-length"));
++        if (declaredLength > maxBytes) {
++          controller.abort();
++          await response.body?.cancel();
++          throw new Error("Clerk response exceeds byte limit");
++        }
++        const reader = response.body?.getReader();
++        const chunks = [];
++        let byteLength = 0;
++        if (reader) {
++          try {
++            while (true) {
++              const { done, value } = await reader.read();
++              if (done) break;
++              byteLength += value.byteLength;
++              if (byteLength > maxBytes) {
++                controller.abort();
++                await reader.cancel();
++                throw new Error("Clerk response exceeds byte limit");
++              }
++              chunks.push(value);
++            }
++          } finally {
++            reader.releaseLock();
++          }
++        }
++        const body = new Uint8Array(byteLength);
++        let offset = 0;
++        for (const chunk of chunks) {
++          body.set(chunk, offset);
++          offset += chunk.byteLength;
++        }
 +        return new Response([204, 205, 304].includes(response.status) ? null : body, {
 +          status: response.status,
 +          statusText: response.statusText,
@@ -61,10 +125,10 @@ index bb2c464da905fdb476ec610cb4b0606e66950fa7..2aefa85732baf57ccd72e43906e47335
    AbortController: globalThis.AbortController,
    Blob: globalThis.Blob,
 diff --git a/dist/internal.js b/dist/internal.js
-index ca7f0d9dd161ce92a100887e76cc8561ccb9308c..f176128cd9f9e82177ff485e748e24c3350ad3d8 100644
+index ca7f0d9dd161ce92a100887e76cc8561ccb9308c..6f3a94dd1e8cbe8eb77ddb047d13f4d4fc22aab7 100644
 --- a/dist/internal.js
 +++ b/dist/internal.js
-@@ -594,7 +594,25 @@ var globalFetch = fetch.bind(globalThis);
+@@ -594,7 +594,57 @@ var globalFetch = fetch.bind(globalThis);
  var runtime = {
    crypto: import_crypto.webcrypto,
    get fetch() {
@@ -78,7 +142,39 @@ index ca7f0d9dd161ce92a100887e76cc8561ccb9308c..f176128cd9f9e82177ff485e748e24c3
 +      const signal = inherited ? AbortSignal.any([inherited, controller.signal]) : controller.signal;
 +      try {
 +        const response = await fetcher(input, { ...init, signal });
-+        const body = await response.arrayBuffer();
++        const maxBytes = 2 * 1024 * 1024;
++        const declaredLength = Number(response.headers.get("content-length"));
++        if (declaredLength > maxBytes) {
++          controller.abort();
++          await response.body?.cancel();
++          throw new Error("Clerk response exceeds byte limit");
++        }
++        const reader = response.body?.getReader();
++        const chunks = [];
++        let byteLength = 0;
++        if (reader) {
++          try {
++            while (true) {
++              const { done, value } = await reader.read();
++              if (done) break;
++              byteLength += value.byteLength;
++              if (byteLength > maxBytes) {
++                controller.abort();
++                await reader.cancel();
++                throw new Error("Clerk response exceeds byte limit");
++              }
++              chunks.push(value);
++            }
++          } finally {
++            reader.releaseLock();
++          }
++        }
++        const body = new Uint8Array(byteLength);
++        let offset = 0;
++        for (const chunk of chunks) {
++          body.set(chunk, offset);
++          offset += chunk.byteLength;
++        }
 +        return new Response([204, 205, 304].includes(response.status) ? null : body, {
 +          status: response.status,
 +          statusText: response.statusText,
@@ -92,10 +188,10 @@ index ca7f0d9dd161ce92a100887e76cc8561ccb9308c..f176128cd9f9e82177ff485e748e24c3
    AbortController: globalThis.AbortController,
    Blob: globalThis.Blob,
 diff --git a/dist/jwt/index.js b/dist/jwt/index.js
-index a7f399592a83f8bbd389e31741b6b6536af7ab5c..f69503c74eda1e126446ae947269d87efbe275da 100644
+index a7f399592a83f8bbd389e31741b6b6536af7ab5c..9c3b3ac00ae63eca64f78d7102e89c40838ddb0f 100644
 --- a/dist/jwt/index.js
 +++ b/dist/jwt/index.js
-@@ -121,7 +121,25 @@ var globalFetch = fetch.bind(globalThis);
+@@ -121,7 +121,57 @@ var globalFetch = fetch.bind(globalThis);
  var runtime = {
    crypto: import_crypto.webcrypto,
    get fetch() {
@@ -109,7 +205,39 @@ index a7f399592a83f8bbd389e31741b6b6536af7ab5c..f69503c74eda1e126446ae947269d87e
 +      const signal = inherited ? AbortSignal.any([inherited, controller.signal]) : controller.signal;
 +      try {
 +        const response = await fetcher(input, { ...init, signal });
-+        const body = await response.arrayBuffer();
++        const maxBytes = 2 * 1024 * 1024;
++        const declaredLength = Number(response.headers.get("content-length"));
++        if (declaredLength > maxBytes) {
++          controller.abort();
++          await response.body?.cancel();
++          throw new Error("Clerk response exceeds byte limit");
++        }
++        const reader = response.body?.getReader();
++        const chunks = [];
++        let byteLength = 0;
++        if (reader) {
++          try {
++            while (true) {
++              const { done, value } = await reader.read();
++              if (done) break;
++              byteLength += value.byteLength;
++              if (byteLength > maxBytes) {
++                controller.abort();
++                await reader.cancel();
++                throw new Error("Clerk response exceeds byte limit");
++              }
++              chunks.push(value);
++            }
++          } finally {
++            reader.releaseLock();
++          }
++        }
++        const body = new Uint8Array(byteLength);
++        let offset = 0;
++        for (const chunk of chunks) {
++          body.set(chunk, offset);
++          offset += chunk.byteLength;
++        }
 +        return new Response([204, 205, 304].includes(response.status) ? null : body, {
 +          status: response.status,
 +          statusText: response.statusText,

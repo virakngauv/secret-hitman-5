@@ -134,6 +134,8 @@ and paid subscription period boundaries remain strict. Keep server clocks synchr
   Premium tokens require HTTPS, except for loopback HTTP in local development;
   HTTP LAN play supports only Base. A pnpm patch to the pinned Clerk backend SDK
   aborts each outbound fetch after five seconds, including response-body reads.
+  Responses are limited to 2 MiB: oversized declared lengths are rejected and
+  streamed bytes are counted independently, including decompressed bodies.
   This applies to JWKS, session, and billing calls in both module formats; SDK
   retries remain bounded by their existing retry count. A process-wide limit of
   32 operations and per-room/per-preview guards retain capacity until the
