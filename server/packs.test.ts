@@ -56,7 +56,12 @@ describe('pack content', () => {
         packId: 'movies-v1',
         isPaid: true,
       }),
-    ).not.toHaveProperty('isPaid')
+    ).toStrictEqual({
+      roomCode: 'bcdf2',
+      configurationRevision: 0,
+      requestId: 'request-001',
+      packId: 'movies-v1',
+    })
   })
 })
 describe('guarded pack transitions', () => {
