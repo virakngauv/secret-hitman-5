@@ -578,3 +578,101 @@ it('starts directly from the supplied pool and rejects malformed start selection
     snapshot.board?.every((card) => premium.words.includes(card.word)),
   ).toBe(true)
 })
+
+it('preserves confirmed packs through a complete round and rechecks access before reuse', async () => {
+  vi.useFakeTimers()
+  const travel = { ...PACKS[2]!, enabled: true }
+  const authorize = vi.fn().mockResolvedValue({ status: 'success' })
+  const server = new GameServer(undefined, undefined, undefined, authorize, [
+    BASE_PACK,
+    premium,
+    travel,
+  ])
+  const created = server.createRoom('host', 'Host')
+  if (created.status !== 'success') throw new Error('creation failed')
+  const roomCode = created.roomCode
+  server.joinRoom('guest', roomCode, 'Guest')
+  const packIds = [premium.id, travel.id]
+  expect(
+    await server.packCommand(
+      'host',
+      { ...request, roomCode, packIds, accountToken: 'fresh' },
+      true,
+    ),
+  ).toMatchObject({ status: 'success' })
+  expect(server.rooms.get(roomCode)!.selectedPack.sourceIds).toEqual(packIds)
+  for (const token of ['host', 'guest']) {
+    const view = server.snapshot(token, roomCode)
+    if (view.status !== 'hinting') throw new Error('expected hinting')
+    expect(
+      server.submitHint(token, {
+        roomCode,
+        gameId: view.gameId,
+        hint: 'Clue',
+        targetCardIds: view
+          .board!.filter((card) => card.kind === 'neutral')
+          .slice(0, 2)
+          .map((card) => card.id),
+      }),
+    ).toMatchObject({ status: 'success' })
+  }
+  const hinting = server.snapshot('host', roomCode)
+  if (hinting.status !== 'hinting') throw new Error('expected hinting')
+  expect(
+    server.startGuessing('host', { roomCode, gameId: hinting.gameId }),
+  ).toMatchObject({ status: 'success' })
+  for (let turn = 0; turn < 2; turn++) {
+    for (const token of ['host', 'guest']) {
+      const view = server.snapshot(token, roomCode)
+      if (view.status !== 'guessing') throw new Error('expected guessing')
+      if (view.canMarkDone)
+        expect(
+          server.finishGuessing(token, {
+            roomCode,
+            gameId: view.gameId,
+            turnId: view.turnId,
+          }),
+        ).toMatchObject({ status: 'success' })
+    }
+    const view = server.snapshot('host', roomCode)
+    if (view.status !== 'guessing') throw new Error('expected guessing')
+    const command = { roomCode, gameId: view.gameId, turnId: view.turnId }
+    expect(
+      view.isFinalTurn
+        ? server.showScoreboard('host', command)
+        : server.advanceTurn('host', command),
+    ).toMatchObject({ status: 'success' })
+  }
+  const lobby = server.snapshot('host', roomCode)
+  if (lobby.status !== 'lobby') throw new Error('expected lobby')
+  expect(lobby.selectedPackIds).toEqual(packIds)
+  expect(server.rooms.get(roomCode)!.selectedPack).toEqual(
+    combinePacks([premium, travel]),
+  )
+  vi.advanceTimersByTime(2000)
+  authorize
+    .mockClear()
+    .mockResolvedValue({ status: 'forbidden', message: 'Access expired' })
+  expect(
+    await server.packCommand(
+      'host',
+      {
+        ...request,
+        roomCode,
+        configurationRevision: lobby.configurationRevision,
+        accountToken: 'fresh',
+      },
+      true,
+    ),
+  ).toMatchObject({ status: 'forbidden' })
+  expect(authorize).toHaveBeenCalledOnce()
+  expect(server.snapshot('host', roomCode)).toMatchObject({
+    status: 'lobby',
+    selectedPackIds: packIds,
+  })
+  server.leaveRoom('host', roomCode)
+  expect(server.snapshot('guest', roomCode)).toMatchObject({
+    status: 'lobby',
+    selectedPackIds: ['base'],
+  })
+})

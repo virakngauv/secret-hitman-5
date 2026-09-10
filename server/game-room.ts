@@ -284,7 +284,6 @@ export class GameRoom {
 
   private resetRoundToLobby(lobbyNotice?: Member['lobbyNotice']) {
     this.phase = 'lobby'
-    this.selectedPack = BASE_PACK
     this.configurationRevision += 1
     this.game = null
     for (const member of this.members) {
@@ -327,7 +326,7 @@ export class GameRoom {
   start(
     token: string,
     now = Date.now(),
-    pack: Pack = BASE_PACK,
+    pack: Pack = this.selectedPack,
   ): CommandResult {
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
@@ -385,6 +384,7 @@ export class GameRoom {
       turnCompleted: false,
       latestActivity: null,
     }
+    this.selectedPack = pack
     this.phase = 'hinting'
     this.commandResults.clear()
     this.touch(now)
