@@ -156,8 +156,9 @@ and paid subscription period boundaries remain strict. Keep server clocks synchr
   Base remains usable, and a late token cannot emit the expired command.
 - All boards in an authorized round use the same fixed content version, including
   replacement boards and late hinting joins. Provider outages and subscription
-  changes do not interrupt that round. Returning to the lobby or host succession
-  clears the selection to Base; each new premium round requires current host access.
+  changes do not interrupt that round. Returning to the lobby preserves the
+  confirmed selection; host succession resets it to Base. Each new premium round
+  requires current host access.
 - Rooms remain ephemeral and expire after two idle hours. Restarts discard rooms;
   later access checks read Clerk directly without a database, ledger, or webhooks.
 
