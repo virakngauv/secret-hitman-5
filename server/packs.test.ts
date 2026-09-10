@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GameServer } from './game-server'
 import { GameRoom } from './game-room'
-import { BASE_PACK, PACKS, publicCatalog, validateWords } from './packs'
+import {
+  BASE_PACK,
+  PACKS,
+  combinePacks,
+  publicCatalog,
+  validateWords,
+} from './packs'
 import { parsePackCommand, parseSelectPack } from './validation'
 import type { CommandResult } from '../lib/game-protocol'
 const premium = Object.freeze({ ...PACKS[1]!, enabled: true })
@@ -22,6 +28,12 @@ function setup(
   return { server, roomCode: created.roomCode, authorize }
 }
 describe('pack content', () => {
+  it('rejects an empty combined pool and preserves a single pack', () => {
+    expect(() => combinePacks([])).toThrow(
+      'At least one word pack is required.',
+    )
+    expect(combinePacks([BASE_PACK])).toBe(BASE_PACK)
+  })
   it('validates distinct normalized entries and excludes full pools and features from the catalog', () => {
     expect(validateWords(BASE_PACK.words).length).toBeGreaterThanOrEqual(12)
     expect(() => validateWords(Array(12).fill('same'))).toThrow()

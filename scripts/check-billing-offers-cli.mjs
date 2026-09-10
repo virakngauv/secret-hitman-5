@@ -10,14 +10,18 @@ if (process.env.ENABLE_WORD_PACKS === 'true') {
     process.exit(1)
   }, 15_000)
   try {
+    const { PACKS } = await import('../server/packs/index.ts')
     await checkBillingOffers(
       createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }),
       true,
+      PACKS.filter((pack) => pack.enabled && pack.feature).map(
+        (pack) => pack.feature,
+      ),
     )
     console.log('- Clerk user offers: verified for word-pack launch')
   } catch {
     console.error(
-      'Cannot verify Clerk user offers. Check Clerk credentials and provider availability before launching word packs.',
+      'Cannot verify Clerk user offers. Check provider availability and credentials, and ensure public non-default user Plans cover every enabled pack Feature before launching word packs.',
     )
     process.exitCode = 1
   } finally {

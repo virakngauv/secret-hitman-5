@@ -171,7 +171,11 @@ For a pre-launch deployment, leave `ENABLE_WORD_PACKS=false` in both processes.
 Keep test/non-launch Clerk Plans non-public while testing. Plan visibility is a
 separate provider-side safeguard, not another application flag. Review every
 public Plan before enabling the release flag. `pnpm deploy:check-env` validates
-launch configuration and reads user Plans when the feature is enabled; disabled
+launch configuration and reads all pages of user Plans when the feature is enabled.
+It requires a public non-default offer set covering every enabled premium pack's
+Feature slug from the deployed catalog; default/private Plans cannot satisfy this
+check. This verifies availability, not approval of prices or terms. Review the
+individual Plan descriptions and included packs before approving offers. Disabled
 deployments do not contact Clerk.
 
 After launch, **do not use the release flag merely to pause sales**: switching it
@@ -183,6 +187,11 @@ the shop, `/account`, avatar billing, and any hosted account UI with both a free
 user and an existing paid subscriber. Provider Plan visibility is not a guarantee
 that already-open checkouts are revoked; verify that procedure separately.
 Do not add direct checkout links for private Plan IDs.
+The launch check deliberately fails while all offers are private; do not make
+Plans public just to pass it during a sales pause. Existing deployments can keep
+serving subscribers with private Plans. A deployment during that pause requires
+separate review of the deployment procedure, rather than treating the launch
+check as successful.
 
 Development release verification must exercise Clerk sign-in/account switching,
 checkout cancel/failure/success and access refresh, cancellation through exact

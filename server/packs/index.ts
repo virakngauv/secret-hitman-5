@@ -136,6 +136,7 @@ export function publicCatalog(packs: readonly Pack[] = PACKS) {
 
 // Round pools remain server-owned and fixed for the lifetime of the round.
 export function combinePacks(packs: readonly Pack[]): Pack {
+  if (packs.length === 0) throw new Error('At least one word pack is required.')
   if (packs.length === 1) return packs[0]!
   const unique = new Map<string, string>()
   for (const pack of packs)

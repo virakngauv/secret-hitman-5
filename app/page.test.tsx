@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import HomePage from './page'
+
+beforeEach(() => vi.stubEnv('ENABLE_WORD_PACKS', 'false'))
 
 describe('HomePage', () => {
   it('shows the combined call to action with both room flows', () => {

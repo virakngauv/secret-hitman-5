@@ -38,11 +38,19 @@ describe('deployment billing offers', () => {
 
   it('allows public offers when checkout is enabled', async () => {
     const getPlanList = vi.fn().mockResolvedValue({
-      data: [{ isDefault: false, publiclyVisible: true }],
+      data: [
+        {
+          isDefault: false,
+          publiclyVisible: true,
+          features: [{ slug: 'pack_movies_v1' }],
+        },
+      ],
       totalCount: 1,
     })
     await expect(
-      checkBillingOffers({ billing: { getPlanList } }, true),
+      checkBillingOffers({ billing: { getPlanList } }, true, [
+        'pack_movies_v1',
+      ]),
     ).resolves.toBeUndefined()
   })
 
@@ -51,5 +59,92 @@ describe('deployment billing offers', () => {
     await expect(
       checkBillingOffers({ billing: { getPlanList } }, false),
     ).rejects.toThrow()
+  })
+
+  it.each(
+    [
+      [],
+      [
+        {
+          isDefault: true,
+          publiclyVisible: true,
+          features: [{ slug: 'pack_movies_v1' }],
+        },
+      ],
+      [
+        {
+          isDefault: false,
+          publiclyVisible: false,
+          features: [{ slug: 'pack_movies_v1' }],
+        },
+      ],
+      [{ isDefault: false, publiclyVisible: true, features: [] }],
+      [
+        {
+          isDefault: false,
+          publiclyVisible: true,
+          features: [{ slug: 'wrong_feature' }],
+        },
+      ],
+    ].map((plans) => [plans]),
+  )(
+    'rejects missing public offers or required mappings (%j)',
+    async (plans) => {
+      const getPlanList = vi
+        .fn()
+        .mockResolvedValue({ data: plans, totalCount: plans.length })
+      await expect(
+        checkBillingOffers({ billing: { getPlanList } }, true, [
+          'pack_movies_v1',
+        ]),
+      ).rejects.toThrow()
+    },
+  )
+
+  it('collects feature coverage across all pages and rejects partial coverage', async () => {
+    const getPlanList = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [
+          {
+            isDefault: false,
+            publiclyVisible: true,
+            features: [{ slug: 'pack_movies_v1' }],
+          },
+        ],
+        totalCount: 2,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            isDefault: false,
+            publiclyVisible: true,
+            features: [{ slug: 'pack_travel_v1' }],
+          },
+        ],
+        totalCount: 2,
+      })
+    await expect(
+      checkBillingOffers({ billing: { getPlanList } }, true, [
+        'pack_movies_v1',
+        'pack_travel_v1',
+      ]),
+    ).resolves.toBeUndefined()
+    getPlanList.mockResolvedValue({
+      data: [
+        {
+          isDefault: false,
+          publiclyVisible: true,
+          features: [{ slug: 'pack_movies_v1' }],
+        },
+      ],
+      totalCount: 1,
+    })
+    await expect(
+      checkBillingOffers({ billing: { getPlanList } }, true, [
+        'pack_movies_v1',
+        'pack_travel_v1',
+      ]),
+    ).rejects.toThrow('pack_travel_v1')
   })
 })

@@ -133,6 +133,8 @@ describe('deployment environment check', () => {
   )
   it('accepts exact HTTPS and loopback HTTP origins', () => {
     const result = checkEnvironment({
+      ENABLE_WORD_PACKS: 'true',
+      CLERK_ISSUER: 'https://clerk.example.com',
       NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'key',
       CLERK_SECRET_KEY: 'secret',
