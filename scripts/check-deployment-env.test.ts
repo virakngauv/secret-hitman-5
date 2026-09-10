@@ -78,6 +78,7 @@ describe('deployment environment check', () => {
       const result = checkEnvironment({
         NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
         [name]: 'test-key',
+        ENABLE_WORD_PACKS: 'true',
       })
 
       expect(result.status).toBe(1)
@@ -121,7 +122,8 @@ describe('deployment environment check', () => {
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'test-publishable-key',
         CLERK_SECRET_KEY: 'test-secret-key',
         CLERK_AUTHORIZED_PARTIES: origins,
-        ENABLE_PREMIUM_PACKS: 'false',
+        ENABLE_WORD_PACKS: 'true',
+        CLERK_ISSUER: 'https://clerk.example.com',
       })
       expect(result.status).toBe(1)
       expect(result.stderr).toContain(
@@ -139,4 +141,21 @@ describe('deployment environment check', () => {
     })
     expect(result.status).toBe(0)
   })
+})
+it('allows a dark deployment with unused incomplete Clerk configuration', () => {
+  const result = checkEnvironment({
+    NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+    ENABLE_WORD_PACKS: 'false',
+    CLERK_SECRET_KEY: 'secret',
+  })
+  expect(result.status).toBe(0)
+  expect(result.stderr).toBe('')
+})
+it('requires both processes to have complete launch configuration', () => {
+  const result = checkEnvironment({
+    NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+    ENABLE_WORD_PACKS: 'true',
+  })
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain('in both web and game processes')
 })

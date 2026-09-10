@@ -52,6 +52,8 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm test:e2e
+# Also verify enabled pack UI (managed test server, no Clerk credentials):
+PW_WORD_PACKS=1 pnpm exec playwright test e2e/word-packs.spec.ts
 ```
 
 The automated multiplayer tests use isolated browser contexts so each player receives a different local identity. The managed e2e stack uses ports 3125 and 3225 to avoid colliding with normal development.
@@ -91,19 +93,20 @@ these variables in the process environment or configure the deployment environme
 Use exact frontend origins and optionally `CLERK_AUDIENCE` if your tokens include a
 configured audience. Partial configuration disables protected use. Never expose
 `CLERK_SECRET_KEY` under a `NEXT_PUBLIC_` name.
-Whenever both Clerk keys are configured, Next.js requires a non-empty
-`CLERK_AUTHORIZED_PARTIES` list, including when premium hosting is disabled.
-An absent or blank list returns HTTP 503 without initializing Clerk authentication;
-the deployment environment check rejects this configuration too.
-Lobby login and signup open separate tabs so OAuth redirects and account transfers
-cannot unload the game tab or remove its player. Return to the original game tab
-after completing or canceling authentication.
+When `ENABLE_WORD_PACKS=true`, Next.js requires a non-empty
+`CLERK_AUTHORIZED_PARTIES` list. An absent or blank list fails closed with HTTP 503;
+the deployment environment check rejects incomplete launch configuration. The
+production game process also refuses to start with missing Clerk configuration.
+When the flag is off, Clerk configuration is unused and cannot block Base play.
+Lobby login and signup open separate tabs so OAuth cannot unload the game tab.
 
-Clerk configuration is required at **build time and runtime**. Static pages embed
-the account-enabled flag during `next build`; adding only the secret to a running
-image does not enable those pages. Run the deployment environment check with both
-keys and the origin allowlist before building, and rebuild when enabling or
-disabling Clerk. The secret remains server-side and is not serialized to the browser.
+The root layout is dynamic: the server reads `ENABLE_WORD_PACKS` and the secret
+key availability at request time, rather than baking these gates into static HTML.
+The public Clerk publishable key and public game-server URL still need their
+intended values at Next.js build time. The secret stays server-side. Set the same
+release flag in **both** Next.js and the standalone game-server deployment, and
+restart/redeploy both processes together when changing it. Do not set a public
+browser environment variable as an independent release switch.
 
 The example allowlist covers localhost development only. If opening the app at
 a LAN address, custom hostname, or different port, add that exact frontend origin
@@ -118,16 +121,22 @@ same expected value; audience-bearing tokens are denied without that setting.
 Token issue/not-before times permit five seconds of clock skew, while token expiry
 and paid subscription period boundaries remain strict. Keep server clocks synchronized.
 
-- `ENABLE_PREMIUM_PACKS=true` makes the sample packs available for authenticated
-  selection and hosting. It defaults to false.
-- `ENABLE_CLERK_CHECKOUT=true` enables Clerk's user PricingTable on `/pricing`.
-  It defaults to false and is independent of hosting access. Prices come from
-  Clerk; this repository defines no prices or offers. This flag controls only
-  `/pricing`; it is not a provider checkout kill switch. Clerk also exposes
-  public Plans through `/account`, the avatar's UserProfile, and hosted account UI.
+- `ENABLE_WORD_PACKS` is the single application release flag and defaults to false.
+  Off is a dark deployment: no pack selector, Buy buttons, Clerk account controls,
+  or shop is rendered; pricing/account/sign-in/sign-up routes and the access API
+  return 404. Clerk middleware is bypassed. The game server advertises only Base
+  and rejects premium selection/start requests regardless of client behavior.
+- `ENABLE_WORD_PACKS=true` launches the complete feature: account integration,
+  catalog, host selection, authorization, and Clerk purchase UI. Prices and offers
+  come from Clerk. Configure and approve the target instance before enabling it.
 - `/account` provides Clerk's account/subscription UI plus an access preview.
-  It is protected when Clerk is configured. Pricing opens separately from the lobby
-  so checkout cancellation or failure leaves the browser's game identity intact.
+  It is protected when Clerk is configured. The lobby's Buy links open the shop
+  in a modal, preserving the browser's game identity.
+- Pack checkboxes are client-side state only, with a page-load access preview.
+  Start game sends the complete selection; the server validates every pack and
+  authorizes all paid access before starting. Any failure keeps everyone in the
+  lobby and reports the failed pack and reason to the host. Selections are not
+  persisted: reloading the page resets them to Base.
 - Each protected command gets a fresh session token in memory. Tokens do not enter
   local storage, guesses, logs, or analytics. A 4.5-second operation deadline and
   room revision checks prevent late authorization from committing a stale start.
@@ -158,42 +167,28 @@ Clerk's current currency, geographic, tax/VAT, 3DS, and refund limitations. A ga
 refund must not be assumed to end Clerk subscription access. Do not add direct
 Stripe Checkout, an app payment ledger, or billing webhooks as a workaround.
 
-To pause new offers or keep an instance unlaunched, first turn **Publicly
-available off for every non-default user Plan** in that Clerk instance, then set
-`ENABLE_CLERK_CHECKOUT=false` and redeploy. Keep Billing enabled, keep existing
-subscriptions and Feature attachments, and retain the account/profile UI so users
-can manage payment methods and cancel. Do not turn off `ENABLE_PREMIUM_PACKS` merely
-to stop purchases: it independently controls hosting. Clerk documents this
-[Plan visibility control](https://clerk.com/docs/react/guides/billing/for-b2c).
-Private Plans remove offers from Clerk components; this is not a claim that
-already-open checkouts or direct provider API calls are revoked. A hard stop on
-in-flight purchases needs a separately verified provider procedure before launch.
-The app must not add direct checkout links for private Plan IDs.
+For a pre-launch deployment, leave `ENABLE_WORD_PACKS=false` in both processes.
+Keep test/non-launch Clerk Plans non-public while testing. Plan visibility is a
+separate provider-side safeguard, not another application flag. Review every
+public Plan before enabling the release flag. `pnpm deploy:check-env` validates
+launch configuration and reads user Plans when the feature is enabled; disabled
+deployments do not contact Clerk.
 
-`pnpm deploy:check-env` reads all user Plans and rejects non-default public Plans
-when checkout is off; a provider error also fails this check. Run it with the
-target instance's normal environment (never copy credentials into commands or
-logs). It checks deployment-time configuration, not later Dashboard changes.
-Before reopening offers, approve the launch terms and verify premium hosting in
-both processes; publish only the approved Plans as the final launch step.
-
-Configured-Clerk regression scenario (required for every offer shutdown): with
-both keys set, Billing enabled, the pricing flag false, and paid Plans non-public,
-sign in as a free user and inspect `/pricing`, `/account` > Billing, and the avatar
-menu > Manage account > Billing. No paid purchase should be able to proceed.
-Clerk may retain a Resubscribe action for a canceled subscription; opening it
-must reject the non-public Plan before payment (do not submit a payment).
-Repeat with an existing paid subscriber: current subscription details, payment
-management and cancellation must remain available, and a new premium round must
-still authorize during the paid period. Check hosted account UI too if enabled.
-Re-run after a full reload to avoid stale provider configuration. This scenario
-requires real Clerk UI; the no-Clerk automated browser suite cannot establish it.
+After launch, **do not use the release flag merely to pause sales**: switching it
+off also hides account management and denies new paid rounds for existing users.
+To pause new offers while retaining paid hosting and subscription management,
+leave the release flag on and make non-default user Plans non-public in Clerk.
+Keep Billing, subscriptions, and Feature attachments intact. Verify `/pricing`,
+the shop, `/account`, avatar billing, and any hosted account UI with both a free
+user and an existing paid subscriber. Provider Plan visibility is not a guarantee
+that already-open checkouts are revoked; verify that procedure separately.
+Do not add direct checkout links for private Plan IDs.
 
 Development release verification must exercise Clerk sign-in/account switching,
 checkout cancel/failure/success and access refresh, cancellation through exact
 expiry, renewal, past-due/recovery, revoked sessions, and provider outage with a
 real development instance. Automated adapter tests do not replace these provider
-flows. Deploy frontend and game server together for protocol version 14; old
+flows. Deploy frontend and game server together for protocol version 16; old
 clients are rejected with a reload instruction in the handshake error. Older
 client UIs may show only a reconnect banner, so instruct existing players to
 reload after the coordinated deployment. Rollback requires coordinated versions and loses

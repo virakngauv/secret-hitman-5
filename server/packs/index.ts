@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { SECRET_HITMAN_WORDS } from '../../lib/words'
 
 export type Pack = Readonly<{
+  sourceIds?: readonly string[]
   id: string
   name: string
   description: string
@@ -41,7 +42,7 @@ function pack(
     feature,
     words,
     version: createHash('sha256').update(JSON.stringify(words)).digest('hex'),
-    enabled: feature === null || process.env.ENABLE_PREMIUM_PACKS === 'true',
+    enabled: feature === null || process.env.ENABLE_WORD_PACKS === 'true',
   })
 }
 
@@ -123,11 +124,32 @@ export const BASE_PACK = PACKS[0]!
 export function publicCatalog(packs: readonly Pack[] = PACKS) {
   return packs
     .filter((pack) => pack.enabled)
-    .map(({ id, name, description, version, feature }) => ({
+    .map(({ id, name, description, version, feature, words }) => ({
       id,
       name,
       description,
       version,
       premium: feature !== null,
+      wordCount: words.length,
     }))
+}
+
+// Round pools remain server-owned and fixed for the lifetime of the round.
+export function combinePacks(packs: readonly Pack[]): Pack {
+  if (packs.length === 1) return packs[0]!
+  const unique = new Map<string, string>()
+  for (const pack of packs)
+    for (const word of pack.words)
+      unique.set(word.normalize('NFKC').toLocaleLowerCase('en-US'), word)
+  const words = Object.freeze([...unique.values()])
+  return Object.freeze({
+    id: packs.map((pack) => pack.id).join('+'),
+    sourceIds: Object.freeze(packs.map((pack) => pack.id)),
+    name: packs.map((pack) => pack.name).join(' + '),
+    description: 'Combined word packs.',
+    version: createHash('sha256').update(JSON.stringify(words)).digest('hex'),
+    enabled: packs.every((pack) => pack.enabled),
+    feature: packs.find((pack) => pack.feature)?.feature ?? null,
+    words,
+  })
 }

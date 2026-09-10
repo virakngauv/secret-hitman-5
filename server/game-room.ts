@@ -789,6 +789,9 @@ export class GameRoom {
       return {
         status: 'lobby',
         selectedPackId: this.selectedPack.id,
+        selectedPackIds: [
+          ...(this.selectedPack.sourceIds ?? [this.selectedPack.id]),
+        ],
         configurationRevision: this.configurationRevision,
         minimumPlayers: MIN_STARTING_PLAYERS,
         ...(member.lobbyNotice ? { lobbyNotice: member.lobbyNotice } : {}),

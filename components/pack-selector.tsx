@@ -1,20 +1,22 @@
 'use client'
-import Link from 'next/link'
-import { generateRequestId } from '@/lib/player-session'
+import { useWordPackShop } from './word-pack-shop'
 import { useEffect, useState } from 'react'
-import { useAccount, AccountControl } from './account-bridge'
+import { useAccount } from './account-bridge'
 import { useGameSocket } from './game-socket-provider'
 import type { PackSummary, RoomSnapshot } from '@/lib/game-protocol'
 
 export function PackSelector({
   view,
   disabled,
-  onPendingChange,
+  selectedIds = ['base'],
+  onSelectionChange,
 }: {
   view: Extract<RoomSnapshot, { status: 'lobby' }>
   disabled: boolean
-  onPendingChange?: (pending: boolean) => void
+  selectedIds?: string[]
+  onSelectionChange?: (ids: string[]) => void
 }) {
+  const openShop = useWordPackShop()
   const game = useGameSocket()
   const { catalog, connectionStatus } = game
   const account = useAccount()
@@ -22,8 +24,6 @@ export function PackSelector({
   const [catalogError, setCatalogError] = useState(false)
   const [catalogAttempt, setCatalogAttempt] = useState(0)
   const [previewAttempt, setPreviewAttempt] = useState(0)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [access, setAccess] = useState<{
     userId: string
     packIds: string[]
@@ -66,10 +66,12 @@ export function PackSelector({
       void refresh()
     }
     window.addEventListener('focus', onFocus)
+    window.addEventListener('pack-access-refresh', onFocus)
     return () => {
       active = false
       controller?.abort()
       window.removeEventListener('focus', onFocus)
+      window.removeEventListener('pack-access-refresh', onFocus)
     }
   }, [account.userId, view.player.role, previewAttempt])
   useEffect(() => {
@@ -91,19 +93,85 @@ export function PackSelector({
       active = false
     }
   }, [catalog, connectionStatus, catalogAttempt])
-  const selectedId = view.selectedPackId ?? 'base'
-  const choices: Array<Pick<PackSummary, 'id' | 'name' | 'premium'>> =
-    packs.length ? [...packs] : [{ id: 'base', name: 'Base', premium: false }]
-  if (!choices.some((pack) => pack.id === selectedId)) {
-    choices.push({
-      id: selectedId,
-      name: `Selected pack (${selectedId})`,
-      premium: selectedId !== 'base',
-    })
+  const choices = [...packs]
+  for (const id of selectedIds) {
+    if (!choices.some((pack) => pack.id === id))
+      choices.push({
+        id,
+        name: id === 'base' ? 'Base' : `Selected pack (${id})`,
+        premium: id !== 'base',
+        wordCount: 0,
+        description: '',
+        version: '',
+      })
+  }
+  const changeSelection = (packId: string) => {
+    const nextIds = selectedIds.includes(packId)
+      ? selectedIds.filter((id) => id !== packId)
+      : [...selectedIds, packId]
+    onSelectionChange?.(nextIds.length ? nextIds : ['base'])
   }
   return (
-    <div className="mt-4 space-y-2 rounded-xl border p-3">
-      <p className="font-semibold">Word pack</p>
+    <fieldset className="min-w-0">
+      <legend className="mb-2 font-semibold">Word packs</legend>
+      <div className="grid gap-2">
+        {choices.map((pack) => {
+          const selected = selectedIds.includes(pack.id)
+          const owned =
+            !pack.premium ||
+            (access?.userId === account.userId &&
+              access.packIds.includes(pack.id))
+          const loading =
+            pack.premium &&
+            (!account.loaded ||
+              (!!account.userId &&
+                (checking ||
+                  (access?.userId !== account.userId && !previewError))))
+          return (
+            <div
+              key={pack.id}
+              className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${selected ? 'border-accent bg-accent/5' : 'bg-background'}`}
+            >
+              <label className="flex flex-1 items-center gap-3">
+                <input
+                  type="checkbox"
+                  className="accent-accent size-4"
+                  checked={selected}
+                  disabled={
+                    disabled ||
+                    !account.loaded ||
+                    (selected &&
+                      selectedIds.length === 1 &&
+                      pack.id === 'base') ||
+                    (!selected && (!owned || loading))
+                  }
+                  onChange={() => void changeSelection(pack.id)}
+                />
+                <span className="font-semibold">
+                  {pack.name}
+                  {pack.wordCount > 0 ? ` (${pack.wordCount})` : ''}
+                </span>
+              </label>
+              {loading ? (
+                <span className="text-muted-foreground text-xs">Checking…</span>
+              ) : pack.premium && account.userId && previewError ? (
+                <span className="text-muted-foreground text-xs">
+                  Access unavailable
+                </span>
+              ) : !owned ? (
+                <button
+                  type="button"
+                  className="text-accent text-sm font-semibold underline underline-offset-4"
+                  aria-label={`Buy ${pack.name}`}
+                  onClick={(event) => openShop(pack.name, event.currentTarget)}
+                >
+                  Buy
+                </button>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
       {catalogError && (
         <p role="status">
           Pack list unavailable.{' '}
@@ -116,106 +184,18 @@ export function PackSelector({
           </button>
         </p>
       )}
-      {view.player.role !== 'host' ? (
-        <p>
-          {choices.find((pack) => pack.id === selectedId)?.name ?? selectedId} ·
-          Chosen by the host. Guests play free.
-        </p>
-      ) : (
-        <>
-          <select
-            aria-label="Word pack"
-            className="bg-background w-full rounded border p-2"
-            value={selectedId}
-            disabled={disabled || busy || !account.loaded}
-            onChange={async (event) => {
-              const packId = event.target.value
-              const premium =
-                choices.find((pack) => pack.id === packId)?.premium ?? false
-              setBusy(true)
-              onPendingChange?.(true)
-              setError(null)
-              try {
-                const result = await game.selectPack(
-                  {
-                    roomCode: view.roomCode,
-                    configurationRevision: view.configurationRevision,
-                    packId,
-                    requestId: generateRequestId(),
-                  },
-                  premium,
-                )
-                if (result.status !== 'success') setError(result.message)
-              } catch {
-                setError('Could not select the pack. Please try again.')
-              } finally {
-                setBusy(false)
-                onPendingChange?.(false)
-              }
-            }}
+      {account.userId && previewError && (
+        <p role="status">
+          Could not check pack access.{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
           >
-            {choices.map((pack) => (
-              <option
-                key={pack.id}
-                value={pack.id}
-                disabled={pack.premium && !account.userId}
-              >
-                {pack.name}
-                {pack.premium
-                  ? !account.userId
-                    ? ' · Sign in required'
-                    : checking
-                      ? ' · Checking access…'
-                      : access?.userId === account.userId &&
-                          access.packIds.includes(pack.id)
-                        ? ' · Available'
-                        : previewError
-                          ? ' · Access unavailable'
-                          : ' · Subscription required'
-                  : ' · Free'}
-              </option>
-            ))}
-          </select>
-          {choices.some((pack) => pack.premium) && (
-            <>
-              <p className="text-sm">
-                {account.userId
-                  ? 'Access is checked when selecting a pack and again before starting.'
-                  : 'The host must sign in to select premium packs.'}{' '}
-                Guests always play free.
-              </p>
-              <AccountControl preserveRoom />
-              <Link
-                href="/pricing"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block underline"
-              >
-                View plans in a new tab
-              </Link>
-            </>
-          )}
-          {busy && <p role="status">Checking access…</p>}
-          {!account.userId && selectedId !== 'base' && (
-            <p role="status">
-              Sign in again or choose Base to start a new round.
-            </p>
-          )}
-          {account.userId && previewError && (
-            <p role="status">
-              Access preview unavailable. Selecting a pack will check again.{' '}
-              <button
-                type="button"
-                className="underline"
-                onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
-              >
-                Retry access check
-              </button>
-            </p>
-          )}
-          {error && <p role="alert">{error}</p>}
-        </>
+            Retry access check
+          </button>
+        </p>
       )}
-    </div>
+    </fieldset>
   )
 }

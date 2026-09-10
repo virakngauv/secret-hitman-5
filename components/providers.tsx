@@ -1,5 +1,8 @@
 'use client'
 
+import { WordPacksFeatureContext } from './word-packs-feature'
+import { WordPackShopProvider } from './word-pack-shop'
+import type { PackSummary } from '@/lib/game-protocol'
 import { AccountBridge } from './account-bridge'
 import { ui } from '@clerk/ui'
 import { shadcn } from '@clerk/ui/themes'
@@ -14,9 +17,13 @@ import { PlayerSessionProvider } from '@/components/player-session-provider'
 export function Providers({
   children,
   clerkEnabled = false,
+  packs = [],
+  wordPacksEnabled = false,
 }: {
   children: ReactNode
   clerkEnabled?: boolean
+  packs?: PackSummary[]
+  wordPacksEnabled?: boolean
 }) {
   const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
   const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim()
@@ -35,7 +42,17 @@ export function Providers({
 
   let content = (
     <PlayerSessionProvider>
-      <GameSocketProvider>{children}</GameSocketProvider>
+      <GameSocketProvider>
+        <WordPacksFeatureContext.Provider value={wordPacksEnabled}>
+          {wordPacksEnabled ? (
+            <WordPackShopProvider packs={packs} checkoutEnabled={true}>
+              {children}
+            </WordPackShopProvider>
+          ) : (
+            children
+          )}
+        </WordPacksFeatureContext.Provider>
+      </GameSocketProvider>
     </PlayerSessionProvider>
   )
 
@@ -43,7 +60,7 @@ export function Providers({
     content = <PostHogProvider client={posthog}>{content}</PostHogProvider>
   }
 
-  if (clerkKey && clerkEnabled) {
+  if (wordPacksEnabled && clerkKey && clerkEnabled) {
     content = (
       <ClerkProvider
         publishableKey={clerkKey}

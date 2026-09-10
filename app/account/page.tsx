@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation'
+import { wordPacksEnabled } from '@/lib/word-packs'
 import { UserProfile } from '@clerk/nextjs'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { hasPackFeature } from '@/server/pack-access'
@@ -8,6 +10,7 @@ import { PACKS } from '@/server/packs'
 export const dynamic = 'force-dynamic'
 
 export default async function AccountPage() {
+  if (!wordPacksEnabled()) notFound()
   if (
     !process.env.CLERK_SECRET_KEY?.trim() ||
     !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()

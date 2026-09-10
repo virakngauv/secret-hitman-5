@@ -1,4 +1,4 @@
-export const GAME_PROTOCOL_VERSION = 14 as const
+export const GAME_PROTOCOL_VERSION = 16 as const
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -89,6 +89,7 @@ export type RoomSnapshot =
   | ({
       status: 'lobby'
       selectedPackId: string
+      selectedPackIds?: string[]
       configurationRevision: number
       minimumPlayers: number
       lobbyNotice?: 'player_left'
@@ -172,13 +173,18 @@ export type PackSummary = {
   description: string
   version: string
   premium: boolean
+  wordCount: number
 }
 export type PackCommandPayload = RoomCommandPayload & {
   configurationRevision: number
+  packIds?: string[]
   requestId: string
   accountToken?: string
 }
-export type SelectPackPayload = PackCommandPayload & { packId: string }
+export type SelectPackPayload = PackCommandPayload & {
+  packId: string
+  packIds?: string[]
+}
 export type GameCommandPayload = RoomCommandPayload & { gameId: string }
 export type FinishGuessingPayload = GameCommandPayload & { turnId: string }
 export type AdvanceTurnPayload = GameCommandPayload & { turnId: string }

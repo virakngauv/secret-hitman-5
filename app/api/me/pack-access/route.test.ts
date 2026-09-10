@@ -16,6 +16,7 @@ vi.mock('@/server/packs', () => ({
   ],
 }))
 beforeEach(() => {
+  vi.stubEnv('ENABLE_WORD_PACKS', 'true')
   vi.stubEnv('CLERK_SECRET_KEY', 'test-key')
   vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'test-key')
   mocks.auth.mockResolvedValue({ userId: 'user_test' })
@@ -98,4 +99,10 @@ it('shares outstanding previews across retries, then refreshes after settlement'
   mocks.subscription.mockResolvedValue({ subscriptionItems: [] })
   expect((await GET()).status).toBe(200)
   expect(mocks.subscription).toHaveBeenCalledTimes(2)
+})
+it('returns 404 without touching Clerk when word packs are disabled', async () => {
+  vi.stubEnv('ENABLE_WORD_PACKS', 'false')
+  expect((await GET()).status).toBe(404)
+  expect(mocks.auth).not.toHaveBeenCalled()
+  expect(mocks.subscription).not.toHaveBeenCalled()
 })

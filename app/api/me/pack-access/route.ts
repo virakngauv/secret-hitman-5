@@ -1,3 +1,4 @@
+import { wordPacksEnabled } from '@/lib/word-packs'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { PACKS } from '@/server/packs'
 import { hasPackFeature } from '@/server/pack-access'
@@ -33,6 +34,8 @@ function subscriptionFor(userId: string) {
 // UI preview only. Socket commands independently verify the host's current access.
 export async function GET() {
   const headers = { 'Cache-Control': 'no-store' }
+  if (!wordPacksEnabled())
+    return Response.json({ message: 'Not found.' }, { status: 404, headers })
   if (
     !process.env.CLERK_SECRET_KEY?.trim() ||
     !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()

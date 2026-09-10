@@ -1,3 +1,4 @@
+import { wordPacksEnabled } from '../lib/word-packs'
 import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -17,6 +18,18 @@ export function startGameServer(
     trustDigitalOceanProxy?: boolean
   } = {},
 ) {
+  if (wordPacksEnabled() && process.env.NODE_ENV === 'production') {
+    const missing = [
+      'CLERK_SECRET_KEY',
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      'CLERK_ISSUER',
+      'CLERK_AUTHORIZED_PARTIES',
+    ].filter((name) => !process.env[name]?.trim())
+    if (missing.length)
+      throw new Error(
+        `Word packs require ${missing.join(', ')} in the game process.`,
+      )
+  }
   const port = validatePort(options.port ?? parseEnvPort(process.env.PORT))
   const host = options.host ?? process.env.HOST ?? '127.0.0.1'
   const allowedOrigins =

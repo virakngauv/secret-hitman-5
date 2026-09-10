@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation'
+import { wordPacksEnabled } from '@/lib/word-packs'
 import { PricingTable } from '@clerk/nextjs'
 import Link from 'next/link'
 import { AccountControl } from '@/components/account-bridge'
@@ -6,12 +8,12 @@ import { publicCatalog } from '@/server/packs'
 export const dynamic = 'force-dynamic'
 
 export default function PricingPage() {
+  if (!wordPacksEnabled()) notFound()
   const configured = Boolean(
     process.env.CLERK_SECRET_KEY?.trim() &&
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(),
   )
-  const checkoutEnabled =
-    configured && process.env.ENABLE_CLERK_CHECKOUT === 'true'
+  const checkoutEnabled = configured && process.env.ENABLE_WORD_PACKS === 'true'
   return (
     <main className="game-page">
       <section className="game-panel mx-auto max-w-3xl space-y-5">

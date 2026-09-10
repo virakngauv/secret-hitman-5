@@ -60,6 +60,7 @@ type GameSocketContextValue = {
     roomCode: string,
     configurationRevision?: number,
     premium?: boolean,
+    packIds?: string[],
   ) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
   unlockHint: (payload: GameCommandPayload) => Promise<CommandResult>
@@ -427,6 +428,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       roomCode: string,
       configurationRevision = 0,
       premium = false,
+      packIds?: string[],
     ): Promise<CommandResult> => {
       try {
         if (!socketRef.current?.connected || !synchronizedRef.current)
@@ -447,6 +449,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
             socket.emitWithAck('game:start', {
               roomCode,
               configurationRevision,
+              ...(packIds ? { packIds } : {}),
               requestId: generateRequestId(),
               accountToken,
             }),

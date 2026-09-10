@@ -1,3 +1,4 @@
+const wordPacksEnabled = process.env.ENABLE_WORD_PACKS === 'true'
 const requiredVercelVariables = ['NEXT_PUBLIC_GAME_SERVER_URL']
 const optionalVercelVariables = [
   'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
@@ -38,6 +39,7 @@ const clerkOrigins =
     origin.trim(),
   ) ?? []
 if (
+  wordPacksEnabled &&
   configuredClerkVariables.length === clerkVariables.length &&
   (!clerkOrigins.length || !clerkOrigins.every(isExactOrigin))
 ) {
@@ -61,6 +63,7 @@ function isExactOrigin(value) {
   }
 }
 if (
+  wordPacksEnabled &&
   configuredClerkVariables.length > 0 &&
   configuredClerkVariables.length < clerkVariables.length
 ) {
@@ -89,7 +92,7 @@ function isHttpsUrl(value) {
   }
 }
 
-if (process.env.ENABLE_PREMIUM_PACKS === 'true') {
+if (process.env.ENABLE_WORD_PACKS === 'true') {
   for (const name of [
     ...clerkVariables,
     'CLERK_ISSUER',
@@ -102,11 +105,4 @@ if (process.env.ENABLE_PREMIUM_PACKS === 'true') {
       process.exitCode = 1
     }
   }
-}
-if (
-  process.env.ENABLE_CLERK_CHECKOUT === 'true' &&
-  configuredClerkVariables.length !== 2
-) {
-  console.error('Clerk checkout requires both Clerk keys.')
-  process.exitCode = 1
 }

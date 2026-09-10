@@ -358,3 +358,211 @@ describe('guarded pack transitions', () => {
     ).toBe('stale')
   })
 })
+
+describe('multiple packs', () => {
+  const travel = { ...PACKS[2]!, enabled: true }
+  it('checks every paid pack at selection and start and fixes a deduplicated round pool', async () => {
+    const authorize = vi.fn(async (): Promise<CommandResult> => ({
+      status: 'success',
+    }))
+    const server = new GameServer(undefined, undefined, undefined, authorize, [
+      BASE_PACK,
+      premium,
+      travel,
+    ])
+    const created = server.createRoom('host', 'Host')
+    if (created.status !== 'success') throw new Error('creation failed')
+    const roomCode = created.roomCode
+    server.joinRoom('guest', roomCode, 'Guest')
+    const payload = {
+      ...request,
+      roomCode,
+      packId: premium.id,
+      packIds: [premium.id, travel.id],
+      accountToken: 'fresh',
+    }
+    expect((await server.packCommand('host', payload, false)).status).toBe(
+      'success',
+    )
+    expect(server.snapshot('host', roomCode)).toMatchObject({
+      selectedPackIds: [premium.id, travel.id],
+    })
+    expect(
+      (
+        await server.packCommand(
+          'host',
+          { ...payload, configurationRevision: 1 },
+          true,
+        )
+      ).status,
+    ).toBe('success')
+    expect(authorize.mock.calls.map((args) => (args as unknown[])[1])).toEqual([
+      premium.feature,
+      travel.feature,
+      premium.feature,
+      travel.feature,
+    ])
+    const pool = server.rooms.get(roomCode)!.selectedPack.words
+    expect(new Set(pool.map((word) => word.toLowerCase())).size).toBe(
+      pool.length,
+    )
+    expect(pool).toEqual(
+      expect.arrayContaining([...premium.words, ...travel.words]),
+    )
+    for (const token of ['host', 'guest']) {
+      const snapshot = server.snapshot(token, roomCode)
+      if (snapshot.status !== 'hinting' || !snapshot.board)
+        throw new Error('missing board')
+      expect(snapshot.board.every((card) => pool.includes(card.word))).toBe(
+        true,
+      )
+    }
+  })
+  it('allows removing paid packs after sign-out without bypassing start authorization', async () => {
+    const authorize = vi.fn().mockResolvedValue({ status: 'success' })
+    const server = new GameServer(undefined, undefined, undefined, authorize, [
+      BASE_PACK,
+      premium,
+      travel,
+    ])
+    const created = server.createRoom('host', 'Host')
+    if (created.status !== 'success') throw new Error('creation failed')
+    const roomCode = created.roomCode
+    const selection = {
+      ...request,
+      roomCode,
+      packId: premium.id,
+      packIds: [premium.id, travel.id],
+    }
+    expect((await server.packCommand('host', selection, false)).status).toBe(
+      'success',
+    )
+    authorize
+      .mockReset()
+      .mockResolvedValue({ status: 'forbidden', message: 'Sign in' })
+    expect(
+      (
+        await server.packCommand(
+          'host',
+          { ...selection, configurationRevision: 1, packIds: [premium.id] },
+          false,
+        )
+      ).status,
+    ).toBe('success')
+    expect(authorize).not.toHaveBeenCalled()
+    expect(
+      (
+        await server.packCommand(
+          'host',
+          { ...request, roomCode, configurationRevision: 2 },
+          true,
+        )
+      ).status,
+    ).toBe('forbidden')
+    expect(authorize).toHaveBeenCalledOnce()
+  })
+  it('does not commit any selection when one paid pack is denied', async () => {
+    const authorize = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'success' })
+      .mockResolvedValueOnce({ status: 'forbidden', message: 'Missing access' })
+    const server = new GameServer(undefined, undefined, undefined, authorize, [
+      BASE_PACK,
+      premium,
+      travel,
+    ])
+    const created = server.createRoom('host', 'Host')
+    if (created.status !== 'success') throw new Error('creation failed')
+    expect(
+      (
+        await server.packCommand(
+          'host',
+          {
+            ...request,
+            roomCode: created.roomCode,
+            packId: premium.id,
+            packIds: [premium.id, travel.id],
+          },
+          false,
+        )
+      ).status,
+    ).toBe('forbidden')
+    expect(server.rooms.get(created.roomCode)!.selectedPack.id).toBe('base')
+  })
+  it.each(
+    [[], ['base', 'base'], ['base', 'invalid id'], Array(33).fill('base')].map(
+      (packIds) => [packIds],
+    ),
+  )('rejects malformed pack selections %j', (packIds) => {
+    expect(
+      parseSelectPack({
+        ...request,
+        roomCode: 'bcdf2',
+        packId: 'base',
+        packIds,
+      }),
+    ).toBeNull()
+  })
+})
+
+it('validates requested packs atomically at start without a prior selection command', async () => {
+  const travel = { ...PACKS[2]!, enabled: true }
+  const authorize = vi
+    .fn()
+    .mockResolvedValueOnce({ status: 'success' })
+    .mockResolvedValueOnce({
+      status: 'forbidden',
+      message: 'Subscription expired.',
+    })
+  const server = new GameServer(undefined, undefined, undefined, authorize, [
+    BASE_PACK,
+    premium,
+    travel,
+  ])
+  const created = server.createRoom('host', 'Host')
+  if (created.status !== 'success') throw new Error('creation failed')
+  const roomCode = created.roomCode
+  server.joinRoom('guest', roomCode, 'Guest')
+  const payload = {
+    ...request,
+    roomCode,
+    packIds: [premium.id, travel.id],
+    accountToken: 'fresh',
+  }
+  expect(await server.packCommand('host', payload, true)).toEqual({
+    status: 'forbidden',
+    message: 'Travel: Subscription expired.',
+  })
+  expect(server.snapshot('host', roomCode).status).toBe('lobby')
+  expect(server.snapshot('guest', roomCode).status).toBe('lobby')
+  expect(
+    (await server.packCommand('host', { ...payload, packIds: ['base'] }, true))
+      .status,
+  ).toBe('success')
+})
+it('starts directly from the supplied pool and rejects malformed start selections', async () => {
+  const { server, roomCode, authorize } = setup()
+  const payload = {
+    ...request,
+    roomCode,
+    packIds: [premium.id],
+    accountToken: 'fresh',
+  }
+  expect(parsePackCommand(payload)).toMatchObject({ packIds: [premium.id] })
+  for (const packIds of [
+    [],
+    ['base', 'base'],
+    ['invalid id'],
+    Array(33).fill('base'),
+  ])
+    expect(parsePackCommand({ ...payload, packIds })).toBeNull()
+  expect((await server.packCommand('host', payload, true)).status).toBe(
+    'success',
+  )
+  expect(authorize).toHaveBeenCalledOnce()
+  const snapshot = server.snapshot('host', roomCode)
+  if (snapshot.status !== 'hinting') throw new Error('did not start')
+  expect(
+    snapshot.board?.every((card) => premium.words.includes(card.word)),
+  ).toBe(true)
+})

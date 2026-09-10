@@ -1,3 +1,4 @@
+import { wordPacksEnabled } from './lib/word-packs'
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import {
   NextResponse,
@@ -12,7 +13,7 @@ const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(',')
   .filter(Boolean)
 const isAccountRoute = createRouteMatcher(['/account(.*)'])
 const clerkProxy =
-  publishableKey && secretKey && authorizedParties?.length
+  wordPacksEnabled() && publishableKey && secretKey && authorizedParties?.length
     ? clerkMiddleware(
         async (auth, request) => {
           if (isAccountRoute(request)) await auth.protect()
@@ -24,6 +25,11 @@ const clerkProxy =
     : null
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (!wordPacksEnabled()) {
+    if (request.nextUrl?.pathname.startsWith('/__clerk'))
+      return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+    return NextResponse.next()
+  }
   if (publishableKey && secretKey && !authorizedParties?.length) {
     return NextResponse.json(
       { error: 'Account configuration unavailable.' },

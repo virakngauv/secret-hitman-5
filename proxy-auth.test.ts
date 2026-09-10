@@ -24,6 +24,7 @@ it.each([
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
       `pk_test_${Buffer.from('test.clerk.accounts.dev$').toString('base64')}`,
     )
+    vi.stubEnv('ENABLE_WORD_PACKS', 'true')
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_local_verification')
     vi.stubEnv(
       'CLERK_JWT_KEY',

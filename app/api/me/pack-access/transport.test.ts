@@ -19,6 +19,7 @@ it.each(['headers', 'body'])(
   'aborts stalled Clerk %s and permits a fresh preview',
   async (stage) => {
     vi.useFakeTimers()
+    vi.stubEnv('ENABLE_WORD_PACKS', 'true')
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_transport')
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_transport')
     let aborted = false
@@ -75,6 +76,7 @@ it.each(['headers', 'body'])(
 it.each(['declared', 'missing', 'misleading'])(
   'rejects oversized Clerk bodies with %s length and releases preview capacity',
   async (length) => {
+    vi.stubEnv('ENABLE_WORD_PACKS', 'true')
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_transport')
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_transport')
     let canceled = false
@@ -116,6 +118,7 @@ it.each(['declared', 'missing', 'misleading'])(
 )
 
 it('accepts a valid response exactly at the byte limit', async () => {
+  vi.stubEnv('ENABLE_WORD_PACKS', 'true')
   vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_transport')
   vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_transport')
   const body = JSON.stringify({

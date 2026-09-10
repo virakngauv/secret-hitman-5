@@ -1,6 +1,8 @@
+import { wordPacksEnabled } from '@/lib/word-packs'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { BuyWordPacksButton } from '@/components/word-pack-shop'
 import { AccountControl } from '@/components/account-bridge'
 import { Button } from '@/components/ui/button'
 
@@ -21,10 +23,11 @@ export default function HomePage() {
       </div>
 
       <div className="relative z-10 w-full max-w-5xl">
-        <nav className="mb-4 flex items-center justify-end gap-4 text-sm">
-          <Link href="/pricing">Word packs</Link>
-          <AccountControl />
-        </nav>
+        {wordPacksEnabled() && (
+          <nav className="mb-4 flex items-center justify-end gap-4 text-sm">
+            <AccountControl />
+          </nav>
+        )}
         <p className="page-eyebrow">A social word game</p>
         <section className="home-card">
           <div>
@@ -56,6 +59,7 @@ export default function HomePage() {
               >
                 <Link href="/rules">Rules</Link>
               </Button>
+              {wordPacksEnabled() && <BuyWordPacksButton />}
             </div>
           </div>
         </section>

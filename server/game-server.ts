@@ -1,3 +1,4 @@
+import { wordPacksEnabled } from '../lib/word-packs'
 import { randomBytes, randomInt } from 'node:crypto'
 
 import type {
@@ -10,7 +11,7 @@ import type {
   RejectHintPayload,
   SubmitHintPayload,
 } from '../lib/game-protocol'
-import { PACKS, type Pack } from './packs'
+import { PACKS, combinePacks, type Pack } from './packs'
 import {
   createPackAuthorizer,
   accessUnavailable,
@@ -53,7 +54,9 @@ export class GameServer {
     expiration: RoomExpirationPolicy = DEFAULT_ROOM_EXPIRATION,
     private readonly random: () => number = () => randomInt(2 ** 30) / 2 ** 30,
     private readonly maxRooms = MAX_ACTIVE_ROOMS,
-    private readonly authorizePack: AuthorizePack = createPackAuthorizer(),
+    private readonly authorizePack: AuthorizePack = wordPacksEnabled()
+      ? createPackAuthorizer()
+      : async () => accessUnavailable(),
     readonly packs: readonly Pack[] = PACKS,
   ) {
     this.expiration = {
@@ -143,21 +146,39 @@ export class GameServer {
     if (!room) return { status: 'room_not_found', message: 'Room not found.' }
     const check = room.checkPackCommand(token, payload.configurationRevision)
     if (check.status !== 'success') return check
-    const packId = start
-      ? room.selectedPack.id
+    const ids = start
+      ? (payload.packIds ??
+        room.selectedPack.sourceIds ?? [room.selectedPack.id])
       : 'packId' in payload
-        ? payload.packId
-        : ''
-    const pack = this.packs.find(
-      (entry) => entry.id === packId && entry.enabled,
+        ? (payload.packIds ?? [payload.packId])
+        : []
+    const selected = ids.map((id) =>
+      this.packs.find((pack) => pack.id === id && pack.enabled),
     )
-    if (!pack)
-      return { status: 'invalid', message: 'That pack is unavailable.' }
+    if (
+      !ids.length ||
+      ids.length > 32 ||
+      new Set(ids).size !== ids.length ||
+      selected.some((pack) => !pack)
+    )
+      return {
+        status: 'invalid',
+        message: `Cannot start with unavailable word packs: ${ids.filter((_, index) => !selected[index]).join(', ') || 'invalid selection'}.`,
+      }
+    const packs = selected as Pack[]
+    const pack = combinePacks(packs)
+    const previousIds = room.selectedPack.sourceIds ?? [room.selectedPack.id]
+    // Removing packs (or returning to Base) never grants additional paid access.
+    const onlyRemoving =
+      !start &&
+      previousIds.some((id) => !ids.includes(id)) &&
+      ids.every((id) => id === 'base' || previousIds.includes(id))
+    const needsAuthorization = Boolean(pack.feature) && !onlyRemoving
     const guard = this.packOperations.get(room)
     if (
-      (pack.feature && this.pendingAuthorizations.has(room)) ||
-      (guard?.pending && (start || pack.feature)) ||
-      (pack.feature &&
+      (needsAuthorization && this.pendingAuthorizations.has(room)) ||
+      (guard?.pending && (start || needsAuthorization)) ||
+      (needsAuthorization &&
         guard &&
         Date.now() < (start ? guard.nextStartAt : guard.nextSelectAt))
     )
@@ -168,24 +189,38 @@ export class GameServer {
     const operation = {
       pending: true,
       nextSelectAt:
-        !start && pack.feature ? Date.now() + 2000 : (guard?.nextSelectAt ?? 0),
+        !start && needsAuthorization
+          ? Date.now() + 2000
+          : (guard?.nextSelectAt ?? 0),
       nextStartAt:
-        start && pack.feature ? Date.now() + 2000 : (guard?.nextStartAt ?? 0),
+        start && needsAuthorization
+          ? Date.now() + 2000
+          : (guard?.nextStartAt ?? 0),
     }
     this.packOperations.set(room, operation)
     const deadline = Date.now() + 4500
     let timer: ReturnType<typeof setTimeout> | undefined
     const controller = new AbortController()
     try {
-      if (pack.feature) {
+      if (needsAuthorization) {
         this.pendingAuthorizations.add(room)
         const authorization = (async () => {
           try {
-            return await this.authorizePack(
-              payload.accountToken,
-              pack.feature!,
-              controller.signal,
-            )
+            for (const entry of packs) {
+              if (controller.signal.aborted) return accessUnavailable()
+              if (!entry.feature) continue
+              const result = await this.authorizePack(
+                payload.accountToken,
+                entry.feature,
+                controller.signal,
+              )
+              if (result.status !== 'success')
+                return {
+                  ...result,
+                  message: `${entry.name}: ${result.message}`,
+                }
+            }
+            return { status: 'success' } as CommandResult
           } catch {
             return accessUnavailable()
           } finally {

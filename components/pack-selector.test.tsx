@@ -2,18 +2,21 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RoomSnapshot } from '@/lib/game-protocol'
 import { PackSelector } from './pack-selector'
-
 const mocks = vi.hoisted(() => ({
   userId: 'user_one' as string | null,
   catalog: vi.fn(),
+  selectPack: vi.fn(),
+  onSelectionChange: vi.fn(),
+  openShop: vi.fn(),
 }))
+vi.mock('./word-pack-shop', () => ({ useWordPackShop: () => mocks.openShop }))
 vi.mock('./account-bridge', () => ({
   useAccount: () => ({ loaded: true, userId: mocks.userId }),
-  AccountControl: () => null,
 }))
 vi.mock('./game-socket-provider', () => ({
   useGameSocket: () => ({
     catalog: mocks.catalog,
+    selectPack: mocks.selectPack,
     connectionStatus: 'connected',
   }),
 }))
@@ -33,81 +36,115 @@ const view: Extract<RoomSnapshot, { status: 'lobby' }> = {
   minimumPlayers: 2,
 }
 const packs = [
-  { id: 'base', name: 'Base', premium: false },
-  { id: 'movies-v1', name: 'Movies', premium: true },
+  { id: 'base', name: 'Base', premium: false, wordCount: 100 },
+  { id: 'movies-v1', name: 'Movies', premium: true, wordCount: 24 },
 ]
-it('preserves the actual selected pack when the catalog fails and permits retry', async () => {
-  mocks.userId = null
-  mocks.catalog
-    .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValue({ status: 'success', packs })
-  render(
-    <PackSelector
-      view={{ ...view, selectedPackId: 'movies-v1' }}
-      disabled={false}
-    />,
-  )
-  const retry = await screen.findByRole('button', { name: 'Retry pack list' })
-  expect(screen.getByRole('combobox')).toHaveValue('movies-v1')
-  expect(
-    screen.getByRole('option', { name: /Selected pack \(movies-v1\)/ }),
-  ).toBeInTheDocument()
-  expect(
-    screen.getByText('Sign in again or choose Base to start a new round.'),
-  ).toBeVisible()
-  fireEvent.click(retry)
-  await screen.findByRole('option', { name: 'Movies · Sign in required' })
-  expect(screen.getByRole('combobox')).toHaveValue('movies-v1')
-  expect(
-    screen.queryByRole('button', { name: 'Retry pack list' }),
-  ).not.toBeInTheDocument()
-})
-it('lets a host retry an unavailable preview without changing focus', async () => {
-  mocks.catalog.mockResolvedValue({ status: 'success', packs })
-  const fetcher = vi
-    .fn()
-    .mockRejectedValueOnce(new Error('busy'))
-    .mockResolvedValue({
-      ok: true,
-      json: async () => ({ userId: 'user_one', packIds: ['movies-v1'] }),
-    })
-  vi.stubGlobal('fetch', fetcher)
-  render(<PackSelector view={view} disabled={false} />)
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Retry access check' }),
-  )
-  await screen.findByRole('option', { name: 'Movies · Available' })
-  expect(fetcher).toHaveBeenCalledTimes(2)
+const response = (userId: string, packIds: string[]) => ({
+  ok: true,
+  json: async () => ({ userId, packIds }),
 })
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.resetAllMocks()
   mocks.userId = 'user_one'
 })
-it('refreshes access when returning from checkout without changing the game seat', async () => {
-  mocks.catalog.mockResolvedValue({ status: 'success', packs })
-  const fetcher = vi
-    .fn()
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ userId: 'user_one', packIds: ['base'] }),
-    })
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        userId: 'user_one',
-        packIds: ['base', 'movies-v1'],
-      }),
-    })
-  vi.stubGlobal('fetch', fetcher)
-  render(<PackSelector view={view} disabled={false} />)
-  await screen.findByRole('option', { name: 'Movies · Subscription required' })
-  fireEvent.focus(window)
-  await screen.findByRole('option', { name: 'Movies · Available' })
-  expect(screen.getByRole('combobox')).toHaveValue('base')
-  expect(fetcher).toHaveBeenCalledTimes(2)
+it('preserves selected packs during catalog failure and supports retry', async () => {
+  mocks.userId = null
+  mocks.catalog
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue({ status: 'success', packs })
+  render(
+    <PackSelector view={view} selectedIds={['movies-v1']} disabled={false} />,
+  )
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Retry pack list' }),
+  )
+  expect(
+    await screen.findByRole('checkbox', { name: 'Movies (24)' }),
+  ).toBeChecked()
+  expect(screen.getByRole('button', { name: 'Buy Movies' })).toBeVisible()
 })
-it('ignores access responses belonging to the previous account', async () => {
+it('checks access on mount, shows counts without owned labels, and selects multiple packs', async () => {
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  mocks.selectPack.mockResolvedValue({ status: 'success' })
+  const fetcher = vi.fn().mockResolvedValue(response('user_one', ['movies-v1']))
+  vi.stubGlobal('fetch', fetcher)
+  render(
+    <PackSelector
+      view={view}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeEnabled(),
+  )
+  expect(fetcher).toHaveBeenCalledOnce()
+  expect(screen.queryByText('Available')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Buy Movies' }),
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('checkbox', { name: 'Base (100)' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Movies (24)' }))
+  await waitFor(() =>
+    expect(mocks.onSelectionChange).toHaveBeenCalledWith(['base', 'movies-v1']),
+  )
+})
+it('opens the shop for an unowned pack and refreshes when the shop closes', async () => {
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(response('user_one', []))
+      .mockResolvedValue(response('user_one', ['movies-v1'])),
+  )
+  render(
+    <PackSelector
+      view={view}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Buy Movies' }))
+  expect(mocks.openShop).toHaveBeenCalledWith(
+    'Movies',
+    screen.getByRole('button', { name: 'Buy Movies' }),
+  )
+  fireEvent(window, new Event('pack-access-refresh'))
+  await waitFor(() =>
+    expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeEnabled(),
+  )
+  expect(screen.getByRole('checkbox', { name: 'Base (100)' })).toBeChecked()
+})
+it('retries unavailable access instead of mislabeling it as unowned', async () => {
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockRejectedValueOnce(new Error('busy'))
+      .mockResolvedValue(response('user_one', ['movies-v1'])),
+  )
+  render(
+    <PackSelector
+      view={view}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  const retry = await screen.findByRole('button', {
+    name: 'Retry access check',
+  })
+  expect(
+    screen.queryByRole('button', { name: 'Buy Movies' }),
+  ).not.toBeInTheDocument()
+  fireEvent.click(retry)
+  await waitFor(() =>
+    expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeEnabled(),
+  )
+})
+it('ignores the previous account response', async () => {
   mocks.catalog.mockResolvedValue({ status: 'success', packs })
   let finish!: (value: unknown) => void
   const fetcher = vi
@@ -118,23 +155,42 @@ it('ignores access responses belonging to the previous account', async () => {
           finish = resolve
         }),
     )
-    .mockResolvedValue({
-      ok: true,
-      json: async () => ({ userId: 'user_two', packIds: ['base'] }),
-    })
+    .mockResolvedValue(response('user_two', []))
   vi.stubGlobal('fetch', fetcher)
-  const { rerender } = render(<PackSelector view={view} disabled={false} />)
-  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+  const { rerender } = render(
+    <PackSelector
+      view={view}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
   mocks.userId = 'user_two'
-  rerender(<PackSelector view={view} disabled={false} />)
-  await screen.findByRole('option', { name: 'Movies · Subscription required' })
-  await act(async () => {
-    finish({
-      ok: true,
-      json: async () => ({ userId: 'user_one', packIds: ['movies-v1'] }),
-    })
-  })
-  expect(
-    screen.queryByRole('option', { name: 'Movies · Available' }),
-  ).not.toBeInTheDocument()
+  rerender(
+    <PackSelector
+      view={view}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  await screen.findByRole('button', { name: 'Buy Movies' })
+  await act(async () => finish(response('user_one', ['movies-v1'])))
+  expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeDisabled()
+})
+it('returns to Base when the last paid pack is unchecked after sign-out', async () => {
+  mocks.userId = null
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  mocks.selectPack.mockResolvedValue({ status: 'success' })
+  render(
+    <PackSelector
+      view={view}
+      selectedIds={['movies-v1']}
+      onSelectionChange={mocks.onSelectionChange}
+      disabled={false}
+    />,
+  )
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Movies (24)' }))
+  await waitFor(() =>
+    expect(mocks.onSelectionChange).toHaveBeenCalledWith(['base']),
+  )
 })

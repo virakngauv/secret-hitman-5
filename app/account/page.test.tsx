@@ -25,6 +25,7 @@ afterEach(() => {
 it.each(['canceled', 'past_due', 'unavailable'])(
   'shows live %s access instead of session claims',
   async (status) => {
+    vi.stubEnv('ENABLE_WORD_PACKS', 'true')
     vi.stubEnv('CLERK_SECRET_KEY', 'secret')
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
     if (status === 'unavailable')

@@ -1,8 +1,10 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RoomSnapshot } from '@/lib/game-protocol'
+
+vi.mock('./word-packs-feature', () => ({ useWordPacksEnabled: () => true }))
 
 import { RoomLobby } from './room-lobby'
 
@@ -176,61 +178,61 @@ describe('RoomLobby invite prompt', () => {
     mocks.routerPush.mockReset()
   })
 
-  it.each(['success', 'server_unavailable', 'rejected'] as const)(
-    'blocks Start for the entire pack selection and recovers after %s',
-    async (outcome) => {
-      const user = userEvent.setup()
-      mocks.view = readyLobby()
-      mocks.userId = 'user_host'
-      mocks.catalog.mockResolvedValue({
-        status: 'success',
-        packs: [
-          { id: 'base', name: 'Base', premium: false },
-          { id: 'movies-v1', name: 'Movies', premium: true },
-        ],
-      })
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: true,
-          json: async () => ({
-            userId: 'user_host',
-            packIds: ['base', 'movies-v1'],
-          }),
+  it('keeps checkbox changes local and sends the complete selection only at start', async () => {
+    const user = userEvent.setup()
+    mocks.view = readyLobby()
+    mocks.userId = 'user_host'
+    mocks.catalog.mockResolvedValue({
+      status: 'success',
+      packs: [
+        { id: 'base', name: 'Base', premium: false },
+        { id: 'movies-v1', name: 'Movies', premium: true },
+      ],
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          userId: 'user_host',
+          packIds: ['base', 'movies-v1'],
         }),
-      )
-      let finish!: (value: unknown) => void
-      let fail!: (error: Error) => void
-      mocks.selectPack.mockReturnValue(
-        new Promise((resolve, reject) => {
-          finish = resolve
-          fail = reject
-        }),
-      )
-      render(<RoomLobby roomCode="bcdf2" />)
-      await screen.findByRole('option', { name: 'Movies · Available' })
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: 'Word pack' }),
-        'movies-v1',
-      )
-      expect(mocks.selectPack).toHaveBeenCalledWith(
-        expect.objectContaining({ packId: 'movies-v1' }),
-        true,
-      )
-      const start = screen.getByRole('button', { name: 'Start game' })
-      expect(start).toBeDisabled()
-      await user.click(start)
-      expect(mocks.startGame).not.toHaveBeenCalled()
-      await act(async () => {
-        if (outcome === 'rejected') fail(new Error('offline'))
-        else finish({ status: outcome, message: 'Access unavailable' })
-      })
-      expect(start).toBeEnabled()
-      if (outcome !== 'success') expect(screen.getByRole('alert')).toBeVisible()
-      await user.click(start)
-      expect(mocks.startGame).toHaveBeenCalledOnce()
-    },
-  )
+      }),
+    )
+    let finish!: (value: unknown) => void
+    mocks.startGame.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    const { unmount } = render(<RoomLobby roomCode="bcdf2" />)
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('checkbox', { name: 'Movies' }))
+    expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeChecked()
+    expect(mocks.selectPack).not.toHaveBeenCalled()
+    expect(mocks.startGame).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
+    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2', 0, true, [
+      'base',
+      'movies-v1',
+    ])
+    expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeDisabled()
+    await act(async () =>
+      finish({ status: 'forbidden', message: 'Movies: Access expired.' }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Movies: Access expired.',
+    )
+    expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Start game' })).toBeEnabled()
+    unmount()
+    render(<RoomLobby roomCode="bcdf2" />)
+    expect(
+      await screen.findByRole('checkbox', { name: 'Movies' }),
+    ).not.toBeChecked()
+  })
 
   it('lets a host leave immediately when they are alone in the room', async () => {
     const user = userEvent.setup()
@@ -490,7 +492,7 @@ describe('RoomLobby invite prompt', () => {
 
     await user.click(screen.getByRole('button', { name: 'Start game' }))
 
-    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2', 0, false)
+    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2', 0, false, ['base'])
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Too many commands.',
     )
