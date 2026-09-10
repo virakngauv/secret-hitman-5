@@ -19,8 +19,37 @@ vi.mock('@/server/packs', () => ({
   ],
 }))
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   vi.resetAllMocks()
+})
+it('renders the unavailable preview at its deadline while retaining provider capacity', async () => {
+  vi.useFakeTimers()
+  vi.stubEnv('ENABLE_WORD_PACKS', 'true')
+  vi.stubEnv('CLERK_SECRET_KEY', 'secret')
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
+  let settle!: (value: { subscriptionItems: never[] }) => void
+  mocks.subscription.mockReturnValue(
+    new Promise((resolve) => {
+      settle = resolve
+    }),
+  )
+  const page = AccountPage()
+  await vi.advanceTimersByTimeAsync(4500)
+  render(await page)
+  expect(
+    screen.getByText('Movies: Access unavailable — try again'),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('heading', { name: 'Account & Billing' }),
+  ).toBeInTheDocument()
+  await AccountPage()
+  expect(mocks.subscription).toHaveBeenCalledTimes(1)
+  settle({ subscriptionItems: [] })
+  await vi.advanceTimersByTimeAsync(0)
+  mocks.subscription.mockResolvedValue({ subscriptionItems: [] })
+  await AccountPage()
+  expect(mocks.subscription).toHaveBeenCalledTimes(2)
 })
 it.each(['canceled', 'past_due', 'unavailable'])(
   'shows live %s access instead of session claims',

@@ -60,9 +60,22 @@ export default async function AccountPage() {
 }
 
 async function loadSubscription(userId: string) {
-  return withClerkCapacity(async () => {
-    const client = await clerkClient()
-    const subscription = await client.billing.getUserBillingSubscription(userId)
-    return { subscription, checkedAt: Date.now() }
-  }, `preview:${userId}`).catch(() => null)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      withClerkCapacity(async () => {
+        const client = await clerkClient()
+        const subscription =
+          await client.billing.getUserBillingSubscription(userId)
+        return { subscription, checkedAt: Date.now() }
+      }, `preview:${userId}`),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), 4500)
+      }),
+    ])
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
 }
