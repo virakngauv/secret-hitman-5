@@ -280,7 +280,12 @@ export function createGameSocketServer(
     socket.on('packs:catalog', (_payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
-      acknowledge({ status: 'success', packs: publicCatalog(gameServer.packs) })
+      safely('packs:catalog', acknowledge, () => {
+        acknowledge({
+          status: 'success',
+          packs: publicCatalog(gameServer.packs),
+        })
+      })
     })
     socket.on('room:select-pack', (payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)

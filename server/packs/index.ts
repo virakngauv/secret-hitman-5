@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { SECRET_HITMAN_WORDS } from '../../lib/words'
+import { wordPacksEnabled } from '../../lib/word-packs'
 
 export type Pack = Readonly<{
   sourceIds?: readonly string[]
@@ -42,7 +43,7 @@ function pack(
     feature,
     words,
     version: createHash('sha256').update(JSON.stringify(words)).digest('hex'),
-    enabled: feature === null || process.env.ENABLE_WORD_PACKS === 'true',
+    enabled: feature === null || wordPacksEnabled(),
   })
 }
 

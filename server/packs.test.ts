@@ -676,3 +676,38 @@ it('preserves confirmed packs through a complete round and rechecks access befor
     selectedPackIds: ['base'],
   })
 })
+
+it('rejects direct premium starts without bypassing fresh authorization', async () => {
+  const { server, roomCode, authorize } = setup()
+  expect(
+    await server.packCommand(
+      'host',
+      { ...request, roomCode, packId: premium.id, accountToken: 'fresh' },
+      false,
+    ),
+  ).toMatchObject({ status: 'success' })
+  const before = server.snapshot('host', roomCode)
+  authorize.mockClear()
+  expect(server.startGame('host', roomCode)).toMatchObject({
+    status: 'forbidden',
+  })
+  expect(authorize).not.toHaveBeenCalled()
+  expect(server.snapshot('host', roomCode)).toEqual(before)
+})
+
+it.each([false, true])(
+  'describes unavailable packs for the requested operation (start=%s)',
+  async (start) => {
+    const { server, roomCode } = setup()
+    expect(
+      await server.packCommand(
+        'host',
+        { ...request, roomCode, packId: 'unknown', packIds: ['unknown'] },
+        start,
+      ),
+    ).toEqual({
+      status: 'invalid',
+      message: `${start ? 'Cannot start with' : 'Cannot select'} unavailable word packs: unknown.`,
+    })
+  },
+)

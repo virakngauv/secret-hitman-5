@@ -163,7 +163,7 @@ export class GameServer {
     )
       return {
         status: 'invalid',
-        message: `Cannot start with unavailable word packs: ${ids.filter((_, index) => !selected[index]).join(', ') || 'invalid selection'}.`,
+        message: `${start ? 'Cannot start with' : 'Cannot select'} unavailable word packs: ${ids.filter((_, index) => !selected[index]).join(', ') || 'invalid selection'}.`,
       }
     const packs = selected as Pack[]
     const pack = combinePacks(packs)

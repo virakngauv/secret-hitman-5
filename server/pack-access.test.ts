@@ -55,6 +55,7 @@ describe('Clerk subscription item access', () => {
     { isFreeTrial: true },
     { plan: null },
     { plan: { ...item.plan, isDefault: true } },
+    { plan: { ...item.plan, forPayerType: 'org' } },
     { plan: { ...item.plan, features: [] } },
   ])('denies ineffective item %j', (patch) => expect(has(patch)).toBe(false))
   it('uses fresh renewal periods and does not grant from a default parent', () => {
