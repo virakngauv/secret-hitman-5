@@ -1,7 +1,43 @@
 import { describe, expect, it, vi } from 'vitest'
-import { checkBillingOffers } from './check-billing-offers.mjs'
+import {
+  billingOfferFailureMessage,
+  checkBillingOffers,
+} from './check-billing-offers.mjs'
 
 describe('deployment billing offers', () => {
+  it('reports known missing-feature validation details but hides provider errors', async () => {
+    const getPlanList = vi.fn().mockResolvedValue({
+      data: [{ isDefault: false, publiclyVisible: true, features: [] }],
+      totalCount: 1,
+    })
+    const validation = await checkBillingOffers(
+      { billing: { getPlanList } },
+      true,
+      ['pack_movies_v1'],
+    ).catch((error) => error)
+    expect(billingOfferFailureMessage(validation)).toBe(
+      'Public Clerk user Plans are missing required pack Features: pack_movies_v1.',
+    )
+    const providerError = new Error('provider-secret-value')
+    getPlanList.mockRejectedValue(providerError)
+    const failure = await checkBillingOffers(
+      { billing: { getPlanList } },
+      true,
+      ['pack_movies_v1'],
+    ).catch((error) => error)
+    expect(billingOfferFailureMessage(failure)).toContain(
+      'Cannot verify Clerk user offers.',
+    )
+    expect(billingOfferFailureMessage(failure)).not.toContain(
+      'provider-secret-value',
+    )
+    expect(
+      billingOfferFailureMessage({
+        message: 'provider-secret-value',
+        name: 'BillingOfferValidationError',
+      }),
+    ).not.toContain('provider-secret-value')
+  })
   it('rejects public non-default offers on later pages when checkout is off', async () => {
     const getPlanList = vi
       .fn()

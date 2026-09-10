@@ -1,5 +1,13 @@
 // Clerk plan visibility controls offers in UserProfile and UserButton too.
 // This read-only deployment check must not cancel subscriptions or disable Billing.
+export class BillingOfferValidationError extends Error {}
+
+export function billingOfferFailureMessage(error) {
+  return error instanceof BillingOfferValidationError
+    ? error.message
+    : 'Cannot verify Clerk user offers. Check provider availability and credentials, and ensure public non-default user Plans cover every enabled pack Feature before launching word packs.'
+}
+
 export async function checkBillingOffers(
   client,
   checkoutEnabled,
@@ -18,7 +26,7 @@ export async function checkBillingOffers(
       !checkoutEnabled &&
       data.some((plan) => !plan.isDefault && plan.publiclyVisible)
     ) {
-      throw new Error(
+      throw new BillingOfferValidationError(
         'Checkout is disabled but Clerk still exposes a user Plan. Turn off Publicly available for every non-default user Plan in the target Clerk instance, then verify /account and the avatar profile flow. Hiding /pricing alone does not stop purchases.',
       )
     }
@@ -34,18 +42,18 @@ export async function checkBillingOffers(
   }
   if (checkoutEnabled) {
     if (!publicOfferCount)
-      throw new Error(
+      throw new BillingOfferValidationError(
         'No public non-default Clerk user Plans are available for launch.',
       )
     if (!requiredFeatures.length)
-      throw new Error(
+      throw new BillingOfferValidationError(
         'No premium pack Features were supplied for launch verification.',
       )
     const missing = requiredFeatures.filter(
       (feature) => !offeredFeatures.has(feature),
     )
     if (missing.length)
-      throw new Error(
+      throw new BillingOfferValidationError(
         `Public Clerk user Plans are missing required pack Features: ${missing.join(', ')}.`,
       )
   }

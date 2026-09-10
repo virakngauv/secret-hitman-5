@@ -1,5 +1,8 @@
 import { createClerkClient } from '@clerk/backend'
-import { checkBillingOffers } from './check-billing-offers.mjs'
+import {
+  billingOfferFailureMessage,
+  checkBillingOffers,
+} from './check-billing-offers.mjs'
 
 // Plan visibility remains a provider-side operational safeguard. It is not a
 // second application release flag, nor a prerequisite for a dark deployment.
@@ -19,10 +22,8 @@ if (process.env.ENABLE_WORD_PACKS === 'true') {
       ),
     )
     console.log('- Clerk user offers: verified for word-pack launch')
-  } catch {
-    console.error(
-      'Cannot verify Clerk user offers. Check provider availability and credentials, and ensure public non-default user Plans cover every enabled pack Feature before launching word packs.',
-    )
+  } catch (error) {
+    console.error(billingOfferFailureMessage(error))
     process.exitCode = 1
   } finally {
     clearTimeout(deadline)
