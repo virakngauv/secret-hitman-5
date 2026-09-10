@@ -135,8 +135,9 @@ and paid subscription period boundaries remain strict. Keep server clocks synchr
 - Pack checkboxes are client-side state only, with a page-load access preview.
   Start game sends the complete selection; the server validates every pack and
   authorizes all paid access before starting. Any failure keeps everyone in the
-  lobby and reports the failed pack and reason to the host. Selections are not
-  persisted: reloading the page resets them to Base.
+  lobby and reports the failed pack and reason to the host. Reloading or returning
+  to the lobby restores the room's last confirmed pack selection. Checkbox edits
+  that have not been submitted with Start remain local to the mounted lobby.
 - Each protected command gets a fresh session token in memory. Tokens do not enter
   local storage, guesses, logs, or analytics. A 4.5-second operation deadline and
   room revision checks prevent late authorization from committing a stale start.

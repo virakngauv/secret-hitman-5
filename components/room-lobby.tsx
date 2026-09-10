@@ -305,7 +305,9 @@ function LobbyScreen({
     (member) => member.role !== 'host',
   )
   const canStart = view.members.length >= view.minimumPlayers
-  const [selectedPackIds, setSelectedPackIds] = useState<string[]>(['base'])
+  const [selectedPackIds, setSelectedPackIds] = useState<string[]>(() => [
+    ...(view.selectedPackIds ?? [view.selectedPackId]),
+  ])
   const missingPlayers = view.minimumPlayers - view.members.length
   const [removalTarget, setRemovalTarget] = useState<{
     playerId: string

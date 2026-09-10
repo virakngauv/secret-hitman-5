@@ -178,6 +178,46 @@ describe('RoomLobby invite prompt', () => {
     mocks.routerPush.mockReset()
   })
 
+  it.each([undefined, ['movies-v1', 'travel-v1']].map((ids) => [ids]))(
+    'restores the room selection on mount and remount (%j)',
+    async (selectedPackIds) => {
+      const user = userEvent.setup()
+      mocks.view = {
+        ...readyLobby(),
+        selectedPackId: 'movies-v1',
+        selectedPackIds,
+      }
+      mocks.catalog.mockResolvedValue({
+        status: 'success',
+        packs: [
+          { id: 'base', name: 'Base', premium: false },
+          { id: 'movies-v1', name: 'Movies', premium: true },
+          { id: 'travel-v1', name: 'Travel', premium: true },
+        ],
+      })
+      const { unmount } = render(<RoomLobby roomCode="bcdf2" />)
+      expect(
+        await screen.findByRole('checkbox', { name: 'Movies' }),
+      ).toBeChecked()
+      unmount()
+      render(<RoomLobby roomCode="bcdf2" />)
+      expect(
+        await screen.findByRole('checkbox', { name: 'Movies' }),
+      ).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Base' })).not.toBeChecked()
+      if (selectedPackIds)
+        expect(screen.getByRole('checkbox', { name: 'Travel' })).toBeChecked()
+      await user.click(screen.getByRole('button', { name: 'Start game' }))
+      expect(mocks.startGame).toHaveBeenCalledWith(
+        'bcdf2',
+        0,
+        true,
+        selectedPackIds ?? ['movies-v1'],
+      )
+      expect(mocks.selectPack).not.toHaveBeenCalled()
+    },
+  )
+
   it('keeps checkbox changes local and sends the complete selection only at start', async () => {
     const user = userEvent.setup()
     mocks.view = readyLobby()
