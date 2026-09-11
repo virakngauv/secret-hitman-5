@@ -19,6 +19,8 @@ const clerkProxy =
           if (isAccountRoute(request)) await auth.protect()
         },
         {
+          publishableKey,
+          secretKey,
           authorizedParties,
         },
       )

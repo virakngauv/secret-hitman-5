@@ -65,6 +65,9 @@ describe('Clerk subscription item access', () => {
       hasPackFeature({ subscriptionItems: [] }, 'pack_movies_v1', now),
     ).toBe(false)
   })
+  it.each([null, undefined])('denies a missing subscription (%s)', (missing) =>
+    expect(hasPackFeature(missing, 'pack_movies_v1', now)).toBe(false),
+  )
 })
 const env = {
   CLERK_SECRET_KEY: 'test',

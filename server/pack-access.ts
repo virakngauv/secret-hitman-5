@@ -28,12 +28,13 @@ type Subscription = {
 }
 
 // Item dates are milliseconds. Parent status alone is never an access grant.
+// The Billing BAPI is beta; a missing subscription counts as no access.
 export function hasPackFeature(
-  subscription: Subscription,
+  subscription: Subscription | null | undefined,
   feature: string,
   now: number,
 ): boolean {
-  return subscription.subscriptionItems.some(
+  return (subscription?.subscriptionItems ?? []).some(
     (item) =>
       (item.status === 'active' || item.status === 'canceled') &&
       item.isFreeTrial !== true &&

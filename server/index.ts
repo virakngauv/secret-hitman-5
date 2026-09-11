@@ -25,6 +25,14 @@ export function startGameServer(
       'CLERK_ISSUER',
       'CLERK_AUTHORIZED_PARTIES',
     ].filter((name) => !process.env[name]?.trim())
+    // A value like ',,' passes the trim check but authorizes no party.
+    if (
+      !missing.includes('CLERK_AUTHORIZED_PARTIES') &&
+      !process.env.CLERK_AUTHORIZED_PARTIES?.split(',')
+        .map((party) => party.trim())
+        .filter(Boolean).length
+    )
+      missing.push('CLERK_AUTHORIZED_PARTIES')
     if (missing.length)
       throw new Error(
         `Word packs require ${missing.join(', ')} in the game process.`,

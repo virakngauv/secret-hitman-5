@@ -862,7 +862,7 @@ describe('GameSocketProvider', () => {
 
     await user.click(screen.getByRole('button', { name: 'Remove' }))
 
-    expect(mocks.socket.timeout).toHaveBeenCalledWith(6_000)
+    expect(mocks.socket.timeout).toHaveBeenCalledWith(10_000)
     expect(mocks.emitWithAck).toHaveBeenCalledWith('room:remove-player', {
       roomCode: 'bcdf2',
       playerId: 'player-2',
@@ -1098,7 +1098,7 @@ describe('GameSocketProvider', () => {
 
     await user.click(screen.getByRole('button', { name: 'create' }))
 
-    expect(mocks.socket.timeout).toHaveBeenCalledWith(6_000)
+    expect(mocks.socket.timeout).toHaveBeenCalledWith(10_000)
     expect(screen.getByTestId('command-status')).toHaveTextContent('success')
   })
 
@@ -1114,7 +1114,7 @@ describe('GameSocketProvider', () => {
 
     await user.click(screen.getByRole('button', { name: 'create' }))
 
-    expect(mocks.socket.timeout).toHaveBeenCalledWith(6_000)
+    expect(mocks.socket.timeout).toHaveBeenCalledWith(10_000)
     expect(screen.getByTestId('command-status')).toHaveTextContent(
       'server_unavailable',
     )

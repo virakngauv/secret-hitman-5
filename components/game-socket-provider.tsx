@@ -75,7 +75,10 @@ type GameSocketContextValue = {
 }
 
 const GameSocketContext = createContext<GameSocketContextValue | null>(null)
-const COMMAND_TIMEOUT_MS = 6_000
+// Must cover the 4500 ms account-token race plus the game server's 4500 ms
+// pack-authorization deadline, so a slow premium start is not reported as a
+// dead server while it is still in flight.
+const COMMAND_TIMEOUT_MS = 10_000
 const RESUME_RETRY_DELAY_MS = 1_000
 const MAX_RESUME_RETRIES = 3
 const DEFAULT_GAME_SERVER_PORT = 3200

@@ -58,3 +58,15 @@ it('rejects an enabled production game process missing Clerk configuration', asy
   const { startGameServer } = await import('./index')
   expect(() => startGameServer()).toThrow('Word packs require CLERK_SECRET_KEY')
 })
+it('rejects an authorized-party value that parses to no parties', async () => {
+  vi.stubEnv('ENABLE_WORD_PACKS', 'true')
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('CLERK_SECRET_KEY', 'test')
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'test')
+  vi.stubEnv('CLERK_ISSUER', 'https://clerk.example')
+  vi.stubEnv('CLERK_AUTHORIZED_PARTIES', ' , , ')
+  const { startGameServer } = await import('./index')
+  expect(() => startGameServer()).toThrow(
+    'Word packs require CLERK_AUTHORIZED_PARTIES',
+  )
+})

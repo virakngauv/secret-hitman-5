@@ -88,6 +88,8 @@ describe('optional Clerk proxy', () => {
     const event = {} as NextFetchEvent
     proxy(request, event)
     expect(mocks.middleware).toHaveBeenCalledWith(expect.any(Function), {
+      publishableKey: 'key',
+      secretKey: 'secret',
       authorizedParties: ['https://game.example.com'],
     })
     expect(mocks.handle).toHaveBeenCalledWith(request, event)
@@ -125,6 +127,8 @@ describe('optional Clerk proxy', () => {
     )
     await import('./proxy')
     expect(mocks.middleware).toHaveBeenLastCalledWith(expect.any(Function), {
+      publishableKey: 'key',
+      secretKey: 'secret',
       authorizedParties: ['https://game.example.com', 'http://localhost:3140'],
     })
   })
