@@ -134,6 +134,7 @@ function RoomUserButton() {
         appearance={{
           elements: {
             userButtonPopoverActionButton__signOut: { display: 'none' },
+            userButtonPopoverActionButton__signOutAll: { display: 'none' },
           },
         }}
       >

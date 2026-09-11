@@ -24,7 +24,7 @@ There are no gameplay timers. New identities join as participants while clue cre
 
 ## Local development
 
-Requirements: Node.js 22+ and pnpm 11.
+Requirements: Node.js 22.9.0+ and pnpm 11.
 
 ```bash
 pnpm install
