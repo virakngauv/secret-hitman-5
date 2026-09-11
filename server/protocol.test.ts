@@ -688,11 +688,13 @@ describe('Socket.IO Secret Hitman protocol', () => {
         message: 'unexpected room failure',
       })
       expect(
-        await client.emitWithAck('room:select-pack', {
+        await client.emitWithAck(event, {
           ...payload,
           requestId: 'retry-pack-request',
         }),
-      ).toMatchObject({ status: 'success' })
+      ).toMatchObject({
+        status: event === 'game:start' ? 'invalid' : 'success',
+      })
     },
   )
 
