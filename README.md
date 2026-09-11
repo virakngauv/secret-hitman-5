@@ -88,8 +88,10 @@ until period end; past-due items cannot start new premium rounds. This conservat
 development policy needs approval before launch.
 
 Set both Clerk keys, `CLERK_ISSUER`, and `CLERK_AUTHORIZED_PARTIES` in **both** Next.js
-and the standalone Node process. `tsx` does not load Next's `.env.local`; export
-these variables in the process environment or configure the deployment environment.
+and the standalone Node process. `pnpm dev` loads `.env.local` for both processes
+and defaults the web hostname to `localhost`. Shell variables take precedence,
+and a missing `.env.local` does not prevent startup. Standalone `pnpm dev:server`
+and production commands still require exported variables or deployment configuration.
 Use exact frontend origins and optionally `CLERK_AUDIENCE` if your tokens include a
 configured audience. Partial configuration disables protected use. Never expose
 `CLERK_SECRET_KEY` under a `NEXT_PUBLIC_` name.
