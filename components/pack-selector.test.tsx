@@ -144,7 +144,7 @@ it('retries unavailable access instead of mislabeling it as unowned', async () =
     expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeEnabled(),
   )
 })
-it('ignores the previous account response', async () => {
+it('ignores the aborted previous-account response', async () => {
   mocks.catalog.mockResolvedValue({ status: 'success', packs })
   let finish!: (value: unknown) => void
   const fetcher = vi
@@ -176,6 +176,26 @@ it('ignores the previous account response', async () => {
   await screen.findByRole('button', { name: 'Buy Movies' })
   await act(async () => finish(response('user_one', ['movies-v1'])))
   expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeDisabled()
+})
+it('treats a response for another account as a failed check', async () => {
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  const fetcher = vi.fn().mockResolvedValue(response('user_two', ['movies-v1']))
+  vi.stubGlobal('fetch', fetcher)
+  render(
+    <PackSelector
+      view={view}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  await waitFor(() =>
+    expect(
+      screen.getByRole('checkbox', { name: 'Movies (24)' }),
+    ).toBeDisabled(),
+  )
+  expect(
+    screen.getByRole('button', { name: 'Retry access check' }),
+  ).toBeInTheDocument()
 })
 it('returns to Base when the last paid pack is unchecked after sign-out', async () => {
   mocks.userId = null

@@ -19,8 +19,8 @@ index c938577fde140952731d78ee8e8bcaa97276970c..a26d89d7b70df5b7ab624eaf438a5164
 +        const maxBytes = 2 * 1024 * 1024;
 +        const declaredLength = Number(response.headers.get("content-length"));
 +        if (declaredLength > maxBytes) {
++await response.body?.cancel().catch(() => {});
 +          controller.abort();
-+          await response.body?.cancel();
 +          throw new Error("Clerk response exceeds byte limit");
 +        }
 +        const reader = response.body?.getReader();
@@ -33,8 +33,8 @@ index c938577fde140952731d78ee8e8bcaa97276970c..a26d89d7b70df5b7ab624eaf438a5164
 +              if (done) break;
 +              byteLength += value.byteLength;
 +              if (byteLength > maxBytes) {
++await reader.cancel().catch(() => {});
 +                controller.abort();
-+                await reader.cancel();
 +                throw new Error("Clerk response exceeds byte limit");
 +              }
 +              chunks.push(value);
@@ -82,8 +82,8 @@ index bb2c464da905fdb476ec610cb4b0606e66950fa7..8a00626bf8b65135dd5a2f8f8b68d757
 +        const maxBytes = 2 * 1024 * 1024;
 +        const declaredLength = Number(response.headers.get("content-length"));
 +        if (declaredLength > maxBytes) {
++await response.body?.cancel().catch(() => {});
 +          controller.abort();
-+          await response.body?.cancel();
 +          throw new Error("Clerk response exceeds byte limit");
 +        }
 +        const reader = response.body?.getReader();
@@ -96,8 +96,8 @@ index bb2c464da905fdb476ec610cb4b0606e66950fa7..8a00626bf8b65135dd5a2f8f8b68d757
 +              if (done) break;
 +              byteLength += value.byteLength;
 +              if (byteLength > maxBytes) {
++await reader.cancel().catch(() => {});
 +                controller.abort();
-+                await reader.cancel();
 +                throw new Error("Clerk response exceeds byte limit");
 +              }
 +              chunks.push(value);
@@ -145,8 +145,8 @@ index ca7f0d9dd161ce92a100887e76cc8561ccb9308c..6f3a94dd1e8cbe8eb77ddb047d13f4d4
 +        const maxBytes = 2 * 1024 * 1024;
 +        const declaredLength = Number(response.headers.get("content-length"));
 +        if (declaredLength > maxBytes) {
++await response.body?.cancel().catch(() => {});
 +          controller.abort();
-+          await response.body?.cancel();
 +          throw new Error("Clerk response exceeds byte limit");
 +        }
 +        const reader = response.body?.getReader();
@@ -159,8 +159,8 @@ index ca7f0d9dd161ce92a100887e76cc8561ccb9308c..6f3a94dd1e8cbe8eb77ddb047d13f4d4
 +              if (done) break;
 +              byteLength += value.byteLength;
 +              if (byteLength > maxBytes) {
++await reader.cancel().catch(() => {});
 +                controller.abort();
-+                await reader.cancel();
 +                throw new Error("Clerk response exceeds byte limit");
 +              }
 +              chunks.push(value);
@@ -208,8 +208,8 @@ index a7f399592a83f8bbd389e31741b6b6536af7ab5c..9c3b3ac00ae63eca64f78d7102e89c40
 +        const maxBytes = 2 * 1024 * 1024;
 +        const declaredLength = Number(response.headers.get("content-length"));
 +        if (declaredLength > maxBytes) {
++await response.body?.cancel().catch(() => {});
 +          controller.abort();
-+          await response.body?.cancel();
 +          throw new Error("Clerk response exceeds byte limit");
 +        }
 +        const reader = response.body?.getReader();
@@ -222,8 +222,8 @@ index a7f399592a83f8bbd389e31741b6b6536af7ab5c..9c3b3ac00ae63eca64f78d7102e89c40
 +              if (done) break;
 +              byteLength += value.byteLength;
 +              if (byteLength > maxBytes) {
++await reader.cancel().catch(() => {});
 +                controller.abort();
-+                await reader.cancel();
 +                throw new Error("Clerk response exceeds byte limit");
 +              }
 +              chunks.push(value);

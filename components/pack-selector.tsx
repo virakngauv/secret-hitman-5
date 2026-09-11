@@ -50,8 +50,14 @@ export function PackSelector({
           userId: string
           packIds: string[]
         }
-        if (active && !signal.aborted && result.userId === account.userId)
-          setAccess(result)
+        if (active && !signal.aborted) {
+          if (result.userId === account.userId) setAccess(result)
+          else {
+            // A stale response for a different account is no access answer.
+            setAccess(null)
+            setPreviewError(true)
+          }
+        }
       } catch {
         if (active && !signal.aborted) {
           setAccess(null)

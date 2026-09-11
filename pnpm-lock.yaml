@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@clerk/backend@3.17.1': 7689b47b332e21dc016a1baa5900944108a78e029a3b4ebef778d50fb5b565ec
+  '@clerk/backend@3.17.1': 505d4f8afac538b591d573e14776f9042ad180ada2f4a7e5c6838e5bc56814ad
 
 importers:
 
@@ -13,7 +13,7 @@ importers:
     dependencies:
       '@clerk/backend':
         specifier: 3.17.1
-        version: 3.17.1(patch_hash=7689b47b332e21dc016a1baa5900944108a78e029a3b4ebef778d50fb5b565ec)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 3.17.1(patch_hash=505d4f8afac538b591d573e14776f9042ad180ada2f4a7e5c6838e5bc56814ad)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@clerk/nextjs':
         specifier: 7.9.1
         version: 7.9.1(next@16.2.10(@babel/core@7.29.7)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -4773,7 +4773,7 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@clerk/backend@3.17.1(patch_hash=7689b47b332e21dc016a1baa5900944108a78e029a3b4ebef778d50fb5b565ec)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@clerk/backend@3.17.1(patch_hash=505d4f8afac538b591d573e14776f9042ad180ada2f4a7e5c6838e5bc56814ad)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@clerk/shared': 4.31.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       standardwebhooks: 1.0.0
@@ -4791,7 +4791,7 @@ snapshots:
 
   '@clerk/nextjs@7.9.1(next@16.2.10(@babel/core@7.29.7)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
-      '@clerk/backend': 3.17.1(patch_hash=7689b47b332e21dc016a1baa5900944108a78e029a3b4ebef778d50fb5b565ec)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@clerk/backend': 3.17.1(patch_hash=505d4f8afac538b591d573e14776f9042ad180ada2f4a7e5c6838e5bc56814ad)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@clerk/react': 6.15.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@clerk/shared': 4.31.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       next: 16.2.10(@babel/core@7.29.7)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

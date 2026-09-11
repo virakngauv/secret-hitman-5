@@ -16,6 +16,8 @@ export function createPlayerBoard(
   position: number,
   pool: readonly string[] = SECRET_HITMAN_WORDS,
 ): GameCard[] {
+  if (pool.length < BOARD_CARD_COUNT)
+    throw new Error('Word pool is too small for a board')
   const words = shuffle(pool, `${seed}:words:${position}`).slice(
     0,
     BOARD_CARD_COUNT,

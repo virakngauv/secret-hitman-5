@@ -65,10 +65,8 @@ describe('optional Clerk proxy', () => {
     [undefined, undefined],
     ['', ''],
     ['  ', '\t'],
-    [' key ', '  '],
-    [' ', ' secret '],
   ])(
-    'does not activate for missing keys (%s, %s)',
+    'does not activate without any Clerk keys (%s, %s)',
     async (publishable, secret) => {
       vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', publishable)
       vi.stubEnv('CLERK_SECRET_KEY', secret)
@@ -76,6 +74,25 @@ describe('optional Clerk proxy', () => {
       proxy({} as NextRequest, {} as NextFetchEvent)
       expect(mocks.middleware).not.toHaveBeenCalled()
       expect(mocks.next).toHaveBeenCalledOnce()
+    },
+  )
+
+  it.each([
+    [' key ', undefined],
+    [undefined, ' secret '],
+  ])(
+    'fails closed with exactly one Clerk key (%s, %s)',
+    async (publishable, secret) => {
+      vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', publishable)
+      vi.stubEnv('CLERK_SECRET_KEY', secret)
+      const { default: proxy } = await import('./proxy')
+      proxy({} as NextRequest, {} as NextFetchEvent)
+      expect(mocks.middleware).not.toHaveBeenCalled()
+      expect(mocks.next).not.toHaveBeenCalled()
+      expect(mocks.json).toHaveBeenCalledWith(
+        { error: 'Account configuration unavailable.' },
+        { status: 503 },
+      )
     },
   )
 

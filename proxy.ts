@@ -32,7 +32,12 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
       return NextResponse.json({ error: 'Not found.' }, { status: 404 })
     return NextResponse.next()
   }
-  if (publishableKey && secretKey && !authorizedParties?.length) {
+  // Refuse a half-configured Clerk: exactly one key (or keys without an
+  // authorized-party list) would serve /account without Clerk middleware.
+  if (
+    Boolean(publishableKey) !== Boolean(secretKey) ||
+    Boolean(publishableKey && secretKey && !authorizedParties?.length)
+  ) {
     return NextResponse.json(
       { error: 'Account configuration unavailable.' },
       { status: 503 },
