@@ -47,7 +47,7 @@ describe('deployment billing offers', () => {
       ['pack_movies_v1'],
     ).catch((error) => error)
     expect(billingOfferFailureMessage(validation)).toBe(
-      'Public Clerk user Plans are missing required pack Features: pack_movies_v1.',
+      'Every public non-default Clerk user Plan must include every required pack Feature because checkout displays all public Plans. Missing per-Plan coverage includes: pack_movies_v1.',
     )
     const providerError = new Error('provider-secret-value')
     getPlanList.mockRejectedValue(providerError)
@@ -121,6 +121,25 @@ describe('deployment billing offers', () => {
     ).resolves.toBeUndefined()
   })
 
+  it('rejects trial-enabled public offers', async () => {
+    const getPlanList = vi.fn().mockResolvedValue({
+      data: [
+        {
+          isDefault: false,
+          publiclyVisible: true,
+          freeTrialEnabled: true,
+          features: [{ slug: 'pack_movies_v1' }],
+        },
+      ],
+      totalCount: 1,
+    })
+    await expect(
+      checkBillingOffers({ billing: { getPlanList } }, true, [
+        'pack_movies_v1',
+      ]),
+    ).rejects.toThrow('must have free trials disabled')
+  })
+
   it('fails closed when Clerk cannot list plans', async () => {
     const getPlanList = vi.fn().mockRejectedValue(new Error('Unavailable'))
     await expect(
@@ -168,7 +187,7 @@ describe('deployment billing offers', () => {
     },
   )
 
-  it('collects feature coverage across all pages and rejects partial coverage', async () => {
+  it('requires every public offer to cover every required feature', async () => {
     const getPlanList = vi
       .fn()
       .mockResolvedValueOnce({
@@ -196,13 +215,15 @@ describe('deployment billing offers', () => {
         'pack_movies_v1',
         'pack_travel_v1',
       ]),
-    ).resolves.toBeUndefined()
+    ).rejects.toThrow(
+      'Every public non-default Clerk user Plan must include every required pack Feature',
+    )
     getPlanList.mockResolvedValue({
       data: [
         {
           isDefault: false,
           publiclyVisible: true,
-          features: [{ slug: 'pack_movies_v1' }],
+          features: [{ slug: 'pack_movies_v1' }, { slug: 'pack_travel_v1' }],
         },
       ],
       totalCount: 1,
@@ -212,6 +233,6 @@ describe('deployment billing offers', () => {
         'pack_movies_v1',
         'pack_travel_v1',
       ]),
-    ).rejects.toThrow('pack_travel_v1')
+    ).resolves.toBeUndefined()
   })
 })

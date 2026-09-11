@@ -176,11 +176,12 @@ Keep test/non-launch Clerk Plans non-public while testing. Plan visibility is a
 separate provider-side safeguard, not another application flag. Review every
 public Plan before enabling the release flag. `pnpm deploy:check-env` validates
 launch configuration and reads all pages of user Plans when the feature is enabled.
-It requires a public non-default offer set covering every enabled premium pack's
-Feature slug from the deployed catalog; default/private Plans cannot satisfy this
-check. This verifies availability, not approval of prices or terms. Review the
-individual Plan descriptions and included packs before approving offers. Disabled
-deployments do not contact Clerk.
+It requires every public non-default user Plan to cover every enabled premium
+pack's Feature slug from the deployed catalog and rejects Plans with free trials;
+default/private Plans cannot satisfy this check. This matches the unfiltered
+pricing table, where a buyer can choose any public Plan. This verifies availability,
+not approval of prices or terms. Review the individual Plan descriptions and
+included packs before approving offers. Disabled deployments do not contact Clerk.
 
 After launch, **do not use the release flag merely to pause sales**: switching it
 off also hides account management and denies new paid rounds for existing users.

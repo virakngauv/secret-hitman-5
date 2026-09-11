@@ -5,7 +5,7 @@ export class BillingOfferValidationError extends Error {}
 export function billingOfferFailureMessage(error) {
   return error instanceof BillingOfferValidationError
     ? error.message
-    : 'Cannot verify Clerk user offers. Check provider availability and credentials, and ensure public non-default user Plans cover every enabled pack Feature before launching word packs.'
+    : 'Cannot verify Clerk user offers. Check provider availability and credentials, and ensure every public non-default user Plan covers every enabled pack Feature with free trials disabled before launching word packs.'
 }
 
 export async function checkBillingOffers(
@@ -13,8 +13,7 @@ export async function checkBillingOffers(
   checkoutEnabled,
   requiredFeatures = [],
 ) {
-  const offeredFeatures = new Set()
-  let publicOfferCount = 0
+  const publicOffers = []
   let offset = 0
   for (;;) {
     const { data, totalCount } = await client.billing.getPlanList({
@@ -32,16 +31,14 @@ export async function checkBillingOffers(
     }
     for (const plan of data) {
       if (plan.isDefault || !plan.publiclyVisible) continue
-      publicOfferCount += 1
-      for (const feature of plan.features ?? [])
-        offeredFeatures.add(feature.slug)
+      publicOffers.push(plan)
     }
     offset += data.length
     if (offset >= totalCount) break
     if (data.length === 0) throw new Error('Incomplete Clerk plan listing.')
   }
   if (checkoutEnabled) {
-    if (!publicOfferCount)
+    if (!publicOffers.length)
       throw new BillingOfferValidationError(
         'No public non-default Clerk user Plans are available for launch.',
       )
@@ -49,12 +46,21 @@ export async function checkBillingOffers(
       throw new BillingOfferValidationError(
         'No premium pack Features were supplied for launch verification.',
       )
-    const missing = requiredFeatures.filter(
-      (feature) => !offeredFeatures.has(feature),
-    )
-    if (missing.length)
+    if (publicOffers.some((plan) => plan.freeTrialEnabled))
       throw new BillingOfferValidationError(
-        `Public Clerk user Plans are missing required pack Features: ${missing.join(', ')}.`,
+        'Public non-default Clerk user Plans must have free trials disabled for launch.',
+      )
+    const missing = new Set()
+    for (const plan of publicOffers) {
+      const planFeatures = new Set(
+        (plan.features ?? []).map((feature) => feature.slug),
+      )
+      for (const feature of requiredFeatures)
+        if (!planFeatures.has(feature)) missing.add(feature)
+    }
+    if (missing.size)
+      throw new BillingOfferValidationError(
+        `Every public non-default Clerk user Plan must include every required pack Feature because checkout displays all public Plans. Missing per-Plan coverage includes: ${[...missing].join(', ')}.`,
       )
   }
 }
