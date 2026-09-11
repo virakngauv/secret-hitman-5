@@ -62,7 +62,9 @@ test('enabled release exposes the complete pack UI and retains optional local Cl
 }) => {
   test.skip(
     process.env.PW_WORD_PACKS !== '1' ||
-      Boolean(process.env.PLAYWRIGHT_BASE_URL || process.env.PW_REUSE_SERVER),
+      Boolean(
+        process.env.PLAYWRIGHT_BASE_URL || process.env.PW_REUSE_SERVER === '1',
+      ),
     'Requires the managed enabled-feature server.',
   )
   await page.goto('/')

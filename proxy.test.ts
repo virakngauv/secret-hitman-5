@@ -79,35 +79,33 @@ describe('optional Clerk proxy', () => {
       )
     },
   )
-})
 
-it('supplies the explicit origin allowlist to Clerk authentication', async () => {
-  vi.stubEnv('ENABLE_WORD_PACKS', 'true')
-  vi.resetModules()
-  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
-  vi.stubEnv('CLERK_SECRET_KEY', 'secret')
-  vi.stubEnv(
-    'CLERK_AUTHORIZED_PARTIES',
-    ' https://game.example.com, ,http://localhost:3140 ',
-  )
-  await import('./proxy')
-  expect(mocks.middleware).toHaveBeenLastCalledWith(expect.any(Function), {
-    authorizedParties: ['https://game.example.com', 'http://localhost:3140'],
+  it('supplies the explicit origin allowlist to Clerk authentication', async () => {
+    vi.stubEnv('ENABLE_WORD_PACKS', 'true')
+    vi.resetModules()
+    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
+    vi.stubEnv('CLERK_SECRET_KEY', 'secret')
+    vi.stubEnv(
+      'CLERK_AUTHORIZED_PARTIES',
+      ' https://game.example.com, ,http://localhost:3140 ',
+    )
+    await import('./proxy')
+    expect(mocks.middleware).toHaveBeenLastCalledWith(expect.any(Function), {
+      authorizedParties: ['https://game.example.com', 'http://localhost:3140'],
+    })
   })
-  vi.unstubAllEnvs()
-})
 
-it('ignores configured Clerk keys and origins when the release flag is off', async () => {
-  vi.resetModules()
-  vi.stubEnv('ENABLE_WORD_PACKS', 'false')
-  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
-  vi.stubEnv('CLERK_SECRET_KEY', 'secret')
-  vi.stubEnv('CLERK_AUTHORIZED_PARTIES', '')
-  mocks.middleware.mockClear()
-  mocks.next.mockClear()
-  const { default: proxy } = await import('./proxy')
-  proxy({} as NextRequest, {} as NextFetchEvent)
-  expect(mocks.middleware).not.toHaveBeenCalled()
-  expect(mocks.next).toHaveBeenCalledOnce()
-  vi.unstubAllEnvs()
+  it('ignores configured Clerk keys and origins when the release flag is off', async () => {
+    vi.resetModules()
+    vi.stubEnv('ENABLE_WORD_PACKS', 'false')
+    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
+    vi.stubEnv('CLERK_SECRET_KEY', 'secret')
+    vi.stubEnv('CLERK_AUTHORIZED_PARTIES', '')
+    mocks.middleware.mockClear()
+    mocks.next.mockClear()
+    const { default: proxy } = await import('./proxy')
+    proxy({} as NextRequest, {} as NextFetchEvent)
+    expect(mocks.middleware).not.toHaveBeenCalled()
+    expect(mocks.next).toHaveBeenCalledOnce()
+  })
 })
