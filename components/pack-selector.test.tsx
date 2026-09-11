@@ -253,6 +253,30 @@ it('shows unowned premium packs to signed-in players without checking', async ()
   expect(screen.queryByText('Checking…')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Buy Movies' })).toBeInTheDocument()
 })
+it('drops the host access answer when the mounted player is demoted', async () => {
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  const fetcher = vi.fn().mockResolvedValue(response('user_one', ['movies-v1']))
+  vi.stubGlobal('fetch', fetcher)
+  const { rerender } = render(
+    <PackSelector
+      view={view}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeEnabled(),
+  )
+  rerender(
+    <PackSelector
+      view={{ ...view, player: { ...player, role: 'player' as const } }}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  expect(screen.getByRole('checkbox', { name: 'Movies (24)' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Buy Movies' })).toBeInTheDocument()
+})
 it('returns to Base when the last paid pack is unchecked after sign-out', async () => {
   mocks.userId = null
   mocks.catalog.mockResolvedValue({ status: 'success', packs })

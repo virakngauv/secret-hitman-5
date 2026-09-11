@@ -107,6 +107,10 @@ export function PackSelector({
       active = false
     }
   }, [catalog, connectionStatus, catalogAttempt])
+  // Only hosts carry an access answer; a demoted mounted host renders as
+  // unowned instead of keeping the previous check.
+  const isHost = view.player.role === 'host'
+  const hostAccess = isHost ? access : null
   const choices = [...packs]
   for (const id of selectedIds) {
     if (!choices.some((pack) => pack.id === id))
@@ -133,15 +137,15 @@ export function PackSelector({
           const selected = selectedIds.includes(pack.id)
           const owned =
             !pack.premium ||
-            (access?.userId === account.userId &&
-              access.packIds.includes(pack.id))
+            (hostAccess?.userId === account.userId &&
+              hostAccess.packIds.includes(pack.id))
           const loading =
             pack.premium &&
-            view.player.role === 'host' &&
+            isHost &&
             (!account.loaded ||
               (!!account.userId &&
                 (checking ||
-                  (access?.userId !== account.userId && !previewError))))
+                  (hostAccess?.userId !== account.userId && !previewError))))
           return (
             <div
               key={pack.id}
@@ -169,7 +173,7 @@ export function PackSelector({
               </label>
               {loading ? (
                 <span className="text-muted-foreground text-xs">Checking…</span>
-              ) : pack.premium && account.userId && previewError ? (
+              ) : pack.premium && isHost && account.userId && previewError ? (
                 <span className="text-muted-foreground text-xs">
                   Access unavailable
                 </span>
@@ -199,7 +203,7 @@ export function PackSelector({
           </button>
         </p>
       )}
-      {account.userId && previewError && (
+      {isHost && account.userId && previewError && (
         <p role="status">
           Could not check pack access.{' '}
           <button
