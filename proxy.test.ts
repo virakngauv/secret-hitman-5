@@ -6,10 +6,11 @@ const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
   next: vi.fn(),
   json: vi.fn(),
+  isAccountRoute: vi.fn(),
 }))
 vi.mock('@clerk/nextjs/server', () => ({
   clerkMiddleware: mocks.middleware,
-  createRouteMatcher: () => () => false,
+  createRouteMatcher: () => mocks.isAccountRoute,
 }))
 vi.mock('next/server', () => ({
   NextResponse: { next: mocks.next, json: mocks.json },
@@ -23,9 +24,42 @@ describe('optional Clerk proxy', () => {
     mocks.handle.mockReset()
     mocks.next.mockReset()
     mocks.json.mockReset()
+    mocks.isAccountRoute.mockReset().mockReturnValue(false)
     vi.stubEnv('CLERK_AUTHORIZED_PARTIES', undefined)
   })
   afterEach(() => vi.unstubAllEnvs())
+
+  it('hides Clerk proxy endpoints when word packs are disabled', async () => {
+    vi.stubEnv('ENABLE_WORD_PACKS', 'false')
+    const { default: proxy } = await import('./proxy')
+    proxy(
+      { nextUrl: { pathname: '/__clerk/foo' } } as NextRequest,
+      {} as NextFetchEvent,
+    )
+    expect(mocks.json).toHaveBeenCalledWith(
+      { error: 'Not found.' },
+      { status: 404 },
+    )
+    expect(mocks.middleware).not.toHaveBeenCalled()
+    expect(mocks.next).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])(
+    'protects only account routes (matched: %s)',
+    async (matched) => {
+      vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
+      vi.stubEnv('CLERK_SECRET_KEY', 'secret')
+      vi.stubEnv('CLERK_AUTHORIZED_PARTIES', 'http://localhost:3000')
+      mocks.isAccountRoute.mockReturnValue(matched)
+      await import('./proxy')
+      const handler = mocks.middleware.mock.calls[0][0]
+      const protect = vi.fn().mockResolvedValue(undefined)
+      const request = {} as NextRequest
+      await handler({ protect }, request)
+      expect(mocks.isAccountRoute).toHaveBeenCalledWith(request)
+      expect(protect).toHaveBeenCalledTimes(matched ? 1 : 0)
+    },
+  )
 
   it.each([
     [undefined, undefined],

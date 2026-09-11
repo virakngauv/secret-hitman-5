@@ -339,8 +339,9 @@ describe('guarded pack transitions', () => {
       (await server.packCommand('host', { ...request, roomCode }, true)).status,
     ).toBe('success')
     resolve({ status: 'success' })
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
     expect(server.snapshot('host', roomCode).status).toBe('hinting')
+    expect(server.rooms.get(roomCode)?.selectedPack.id).toBe('base')
   })
   it('denies unknown packs, duplicate starts and stale revisions', async () => {
     const { server, roomCode } = setup()

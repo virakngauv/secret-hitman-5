@@ -5,6 +5,37 @@ import {
 } from './check-billing-offers.mjs'
 
 describe('deployment billing offers', () => {
+  it('rejects an incomplete listing when a later page is empty', async () => {
+    const getPlanList = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [{ isDefault: true, publiclyVisible: true }],
+        totalCount: 5,
+      })
+      .mockResolvedValue({ data: [], totalCount: 5 })
+    await expect(
+      checkBillingOffers({ billing: { getPlanList } }, false),
+    ).rejects.toThrow('Incomplete Clerk plan listing.')
+    expect(getPlanList).toHaveBeenCalledTimes(2)
+    expect(getPlanList).toHaveBeenLastCalledWith({
+      payerType: 'user',
+      limit: 100,
+      offset: 1,
+    })
+  })
+
+  it('rejects checkout verification without required pack features', async () => {
+    const getPlanList = vi.fn().mockResolvedValue({
+      data: [{ isDefault: false, publiclyVisible: true, features: [] }],
+      totalCount: 1,
+    })
+    await expect(
+      checkBillingOffers({ billing: { getPlanList } }, true, []),
+    ).rejects.toThrow(
+      'No premium pack Features were supplied for launch verification.',
+    )
+  })
+
   it('reports known missing-feature validation details but hides provider errors', async () => {
     const getPlanList = vi.fn().mockResolvedValue({
       data: [{ isDefault: false, publiclyVisible: true, features: [] }],
