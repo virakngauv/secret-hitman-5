@@ -197,6 +197,41 @@ it('treats a response for another account as a failed check', async () => {
     screen.getByRole('button', { name: 'Retry access check' }),
   ).toBeInTheDocument()
 })
+it('ends checking with a retry when the access request stalls', async () => {
+  vi.useFakeTimers()
+  try {
+    mocks.catalog.mockResolvedValue({ status: 'success', packs })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(
+        (_url: string, init?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new Error('aborted')),
+            )
+          }),
+      ),
+    )
+    render(
+      <PackSelector
+        view={view}
+        disabled={false}
+        onSelectionChange={mocks.onSelectionChange}
+      />,
+    )
+    await act(async () => {})
+    expect(screen.getByText('Checking…')).toBeInTheDocument()
+    await act(async () => {
+      vi.advanceTimersByTime(4500)
+    })
+    expect(
+      screen.getByRole('button', { name: 'Retry access check' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Checking…')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
 it('shows unowned premium packs to signed-in players without checking', async () => {
   mocks.catalog.mockResolvedValue({ status: 'success', packs })
   const fetcher = vi.fn().mockResolvedValue(response('user_one', ['movies-v1']))

@@ -38,6 +38,13 @@ export function PackSelector({
       controller?.abort()
       controller = new AbortController()
       const signal = controller.signal
+      // Bound the browser fetch like the server's provider deadline; cleanup
+      // aborts stay silent, the deadline surfaces the retry control.
+      let timedOut = false
+      const deadline = setTimeout(() => {
+        timedOut = true
+        controller?.abort()
+      }, 4500)
       setChecking(true)
       setPreviewError(false)
       try {
@@ -59,12 +66,13 @@ export function PackSelector({
           }
         }
       } catch {
-        if (active && !signal.aborted) {
+        if (active && (!signal.aborted || timedOut)) {
           setAccess(null)
           setPreviewError(true)
         }
       } finally {
-        if (active && !signal.aborted) setChecking(false)
+        clearTimeout(deadline)
+        if (active && (!signal.aborted || timedOut)) setChecking(false)
       }
     }
     void refresh()
