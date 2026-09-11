@@ -129,6 +129,7 @@ export function PackSelector({
               access.packIds.includes(pack.id))
           const loading =
             pack.premium &&
+            view.player.role === 'host' &&
             (!account.loaded ||
               (!!account.userId &&
                 (checking ||

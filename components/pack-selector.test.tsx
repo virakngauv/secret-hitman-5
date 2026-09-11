@@ -197,6 +197,27 @@ it('treats a response for another account as a failed check', async () => {
     screen.getByRole('button', { name: 'Retry access check' }),
   ).toBeInTheDocument()
 })
+it('shows unowned premium packs to signed-in players without checking', async () => {
+  mocks.catalog.mockResolvedValue({ status: 'success', packs })
+  const fetcher = vi.fn().mockResolvedValue(response('user_one', ['movies-v1']))
+  vi.stubGlobal('fetch', fetcher)
+  const guest = {
+    ...player,
+    playerId: 'guest',
+    name: 'Guest',
+    role: 'player' as const,
+  }
+  render(
+    <PackSelector
+      view={{ ...view, player: guest }}
+      disabled={false}
+      onSelectionChange={mocks.onSelectionChange}
+    />,
+  )
+  await screen.findByRole('checkbox', { name: 'Movies (24)' })
+  expect(screen.queryByText('Checking…')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Buy Movies' })).toBeInTheDocument()
+})
 it('returns to Base when the last paid pack is unchecked after sign-out', async () => {
   mocks.userId = null
   mocks.catalog.mockResolvedValue({ status: 'success', packs })
