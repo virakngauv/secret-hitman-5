@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,6 +13,7 @@ import type { RoomSnapshot } from '../lib/game-protocol'
 
 const mocks = vi.hoisted(() => ({
   clientToken: 'a'.repeat(32) as string | null,
+  getToken: vi.fn(),
   handlers: new Map<string, (...args: never[]) => void>(),
   resumeSnapshots: new Map<string, RoomSnapshot>(),
   delayResumes: false,
@@ -34,6 +35,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('socket.io-client', () => ({
   io: mocks.io,
+}))
+vi.mock('./account-bridge', () => ({
+  useAccount: () => ({ getToken: mocks.getToken }),
 }))
 
 vi.mock('@/components/player-session-provider', () => ({
@@ -132,8 +136,168 @@ function UnlockHintProbe({ roomCode }: { roomCode: string }) {
 }
 
 describe('GameSocketProvider', () => {
+  it.each([
+    ['select', 'resolve'],
+    ['start', 'resolve'],
+    ['select', 'reject'],
+    ['start', 'reject'],
+  ] as const)(
+    'recovers from a stalled %s token with late %s settlement',
+    async (command, settlement) => {
+      vi.useFakeTimers()
+      vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'https://game.example.com')
+      let complete!: (value: string) => void
+      let fail!: (error: Error) => void
+      mocks.getToken.mockReturnValue(
+        new Promise<string>((resolve, reject) => {
+          complete = resolve
+          fail = reject
+        }),
+      )
+      function Probe() {
+        const game = useGameSocket()
+        const [busy, setBusy] = useState(false)
+        const [status, setStatus] = useState('idle')
+        async function run(premium: boolean) {
+          setBusy(true)
+          const result =
+            command === 'start'
+              ? await game.startGame('bcdf2', 0, premium)
+              : await game.selectPack(
+                  {
+                    roomCode: 'bcdf2',
+                    configurationRevision: 0,
+                    requestId: 'request-001',
+                    packId: premium ? 'movies-v1' : 'base',
+                  },
+                  premium,
+                )
+          setStatus(result.status)
+          setBusy(false)
+        }
+        return (
+          <>
+            <button disabled={busy} onClick={() => void run(true)}>
+              Premium
+            </button>
+            <button disabled={busy} onClick={() => void run(false)}>
+              Base
+            </button>
+            <span>{status}</span>
+          </>
+        )
+      }
+      render(
+        <GameSocketProvider>
+          <Probe />
+        </GameSocketProvider>,
+      )
+      fireEvent.click(screen.getByText('Premium'))
+      expect(screen.getByText('Base')).toBeDisabled()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_500)
+      })
+      expect(screen.getByText('server_unavailable')).toBeVisible()
+      expect(screen.getByText('Base')).toBeEnabled()
+      await act(async () => {
+        fireEvent.click(screen.getByText('Base'))
+      })
+      expect(screen.getByText('success')).toBeVisible()
+      expect(mocks.emitWithAck).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        if (settlement === 'resolve') complete('expired-token')
+        else fail(new Error('Account changed. Please try again.'))
+      })
+      expect(mocks.emitWithAck).toHaveBeenCalledTimes(1)
+      expect(mocks.emitWithAck.mock.calls[0][1].accountToken).toBeUndefined()
+    },
+  )
+  it.each(['disconnected', 'synchronizing'] as const)(
+    'does not mint premium tokens while %s',
+    async (state) => {
+      vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'https://game.example.com')
+      mocks.socket.connected = state !== 'disconnected'
+      mocks.delayResumes = state === 'synchronizing'
+      const result = vi.fn()
+      function Probe() {
+        const game = useGameSocket()
+        useRoomSnapshot('bcdf2')
+        return (
+          <button
+            onClick={() => {
+              void game.startGame('bcdf2', 0, true).then(result)
+              void game
+                .selectPack(
+                  {
+                    roomCode: 'bcdf2',
+                    configurationRevision: 0,
+                    requestId: 'request-001',
+                    packId: 'movies-v1',
+                  },
+                  true,
+                )
+                .then(result)
+            }}
+          >
+            Try premium
+          </button>
+        )
+      }
+      render(
+        <GameSocketProvider>
+          <Probe />
+        </GameSocketProvider>,
+      )
+      if (state === 'synchronizing')
+        act(() => mocks.handlers.get('connect')?.())
+      await act(async () => fireEvent.click(screen.getByText('Try premium')))
+      expect(result).toHaveBeenCalledTimes(2)
+      expect(result).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'server_unavailable' }),
+      )
+      expect(mocks.getToken).not.toHaveBeenCalled()
+    },
+  )
+  it('does not retrieve Clerk tokens for HTTP LAN premium commands', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_GAME_SERVER_URL', 'http://192.168.1.8:3001')
+    function PremiumProbe() {
+      const game = useGameSocket()
+      return (
+        <button
+          onClick={() => {
+            void game.startGame('bcdf2', 0, true)
+            void game.selectPack(
+              {
+                roomCode: 'bcdf2',
+                configurationRevision: 0,
+                requestId: 'request-001',
+                packId: 'movies-v1',
+              },
+              true,
+            )
+          }}
+        >
+          Premium
+        </button>
+      )
+    }
+    render(
+      <GameSocketProvider>
+        <PremiumProbe />
+      </GameSocketProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Premium' }))
+    expect(mocks.getToken).not.toHaveBeenCalled()
+    expect(
+      mocks.emitWithAck.mock.calls.some(
+        ([event]) => event === 'game:start' || event === 'room:select-pack',
+      ),
+    ).toBe(false)
+  })
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'development')
+    mocks.getToken.mockReset()
     mocks.clientToken = 'a'.repeat(32)
     mocks.handlers.clear()
     mocks.resumeSnapshots.clear()
@@ -698,7 +862,7 @@ describe('GameSocketProvider', () => {
 
     await user.click(screen.getByRole('button', { name: 'Remove' }))
 
-    expect(mocks.socket.timeout).toHaveBeenCalledWith(6_000)
+    expect(mocks.socket.timeout).toHaveBeenCalledWith(10_000)
     expect(mocks.emitWithAck).toHaveBeenCalledWith('room:remove-player', {
       roomCode: 'bcdf2',
       playerId: 'player-2',
@@ -934,7 +1098,7 @@ describe('GameSocketProvider', () => {
 
     await user.click(screen.getByRole('button', { name: 'create' }))
 
-    expect(mocks.socket.timeout).toHaveBeenCalledWith(6_000)
+    expect(mocks.socket.timeout).toHaveBeenCalledWith(10_000)
     expect(screen.getByTestId('command-status')).toHaveTextContent('success')
   })
 
@@ -950,7 +1114,7 @@ describe('GameSocketProvider', () => {
 
     await user.click(screen.getByRole('button', { name: 'create' }))
 
-    expect(mocks.socket.timeout).toHaveBeenCalledWith(6_000)
+    expect(mocks.socket.timeout).toHaveBeenCalledWith(10_000)
     expect(screen.getByTestId('command-status')).toHaveTextContent(
       'server_unavailable',
     )
@@ -975,6 +1139,8 @@ describe('defaultGameServerUrl', () => {
 function lobbySnapshot(roomCode: string): RoomSnapshot {
   return {
     status: 'lobby',
+    selectedPackId: 'base',
+    configurationRevision: 0,
     roomCode,
     minimumPlayers: 2,
     members: [

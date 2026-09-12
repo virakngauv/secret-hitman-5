@@ -9,6 +9,7 @@ import {
   type CommandResult,
   type ServerToClientEvents,
 } from '../lib/game-protocol'
+import { publicCatalog } from './packs'
 import { GameServer } from './game-server'
 import { isPrivateNetworkOrigin } from './origins'
 import {
@@ -16,6 +17,8 @@ import {
   resolveDigitalOceanClientAddress,
 } from './proxy-trust'
 import {
+  parsePackCommand,
+  parseSelectPack,
   parseCreateRoom,
   parseClaimCard,
   parseFinishGuessing,
@@ -135,7 +138,10 @@ export function createGameSocketServer(
 
   io.use((socket, next) => {
     const auth = parseHandshakeAuth(socket.handshake.auth)
-    if (!auth) return next(new Error('Unsupported or invalid game session.'))
+    if (!auth)
+      return next(
+        new Error('Unsupported or invalid game session. Reload the page.'),
+      )
     socket.data.token = auth.token
     socket.data.address =
       options.trustDigitalOceanProxy === true
@@ -271,15 +277,69 @@ export function createGameSocketServer(
       })
     })
 
+    socket.on('packs:catalog', (_payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('packs:catalog', acknowledge, () => {
+        acknowledge({
+          status: 'success',
+          packs: publicCatalog(gameServer.packs),
+        })
+      })
+    })
+    socket.on('room:select-pack', (payload, callback) => {
+      const acknowledge = normalizeAcknowledgement(callback)
+      if (!canRun(socket, acknowledge)) return
+      safely('room:select-pack', acknowledge, async () => {
+        const parsed = parseSelectPack(payload)
+        if (!parsed) return acknowledge(invalid())
+        const accessStartedAt = Date.now()
+        const result = await gameServer.packCommand(
+          socket.data.token,
+          parsed,
+          false,
+        )
+        logger.info(
+          JSON.stringify({
+            event: 'pack_command',
+            operation: 'select',
+            roomCode: parsed.roomCode,
+            requestId: parsed.requestId,
+            status: result.status,
+            durationMs: Date.now() - accessStartedAt,
+          }),
+        )
+        if (result.status === 'success')
+          await broadcastSnapshots(parsed.roomCode)
+        acknowledge(result)
+      })
+    })
+
     socket.on('game:start', (payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
-      safely('game:start', acknowledge, () => {
-        const parsed = parseRoomCommand(payload)
+      safely('game:start', acknowledge, async () => {
+        const parsed = parsePackCommand(payload)
         if (!parsed) return acknowledge(invalid())
-        const result = gameServer.startGame(socket.data.token, parsed.roomCode)
+        const accessStartedAt = Date.now()
+        const result = await gameServer.packCommand(
+          socket.data.token,
+          parsed,
+          true,
+        )
+        logger.info(
+          JSON.stringify({
+            event: 'pack_command',
+            operation: 'start',
+            roomCode: parsed.roomCode,
+            requestId: parsed.requestId,
+            status: result.status,
+            durationMs: Date.now() - accessStartedAt,
+          }),
+        )
+        if (result.status === 'success')
+          await broadcastSnapshots(parsed.roomCode)
         acknowledge(result)
-        if (result.status === 'success') broadcastSnapshots(parsed.roomCode)
       })
     })
 
@@ -425,7 +485,7 @@ export function createGameSocketServer(
   }
 
   function broadcastSnapshots(roomCode: string) {
-    void emitSnapshots(roomCode).catch((error: unknown) => {
+    return emitSnapshots(roomCode).catch((error: unknown) => {
       logFailure('snapshot_broadcast_failed', error)
     })
   }

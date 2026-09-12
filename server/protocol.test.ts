@@ -29,9 +29,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
   let url: string
   const clients: TestClient[] = []
   const logError = vi.fn()
+  const logInfo = vi.fn()
 
   beforeEach(async () => {
     logError.mockClear()
+    logInfo.mockClear()
     httpServer = createServer()
     socketServer = createGameSocketServer(httpServer, {
       allowedOrigins: [allowedOrigin],
@@ -41,7 +43,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         perAddressPerMinute: 2,
         globalPerMinute: 2_000,
       },
-      logger: { info() {}, warn() {}, error: logError },
+      logger: { info: logInfo, warn() {}, error: logError },
     })
     await new Promise<void>((resolve) =>
       httpServer.listen(0, '127.0.0.1', resolve),
@@ -576,14 +578,20 @@ describe('Socket.IO Secret Hitman protocol', () => {
           },
         )
       else
-        vi.spyOn(socketServer.gameServer, 'startGame').mockImplementation(
+        vi.spyOn(socketServer.gameServer, 'packCommand').mockImplementation(
           () => {
             throw new Error('test failure')
           },
         )
       ;(client as ClientSocket).emit(
         event,
-        event === 'room:create' ? { name: 'Ada' } : { roomCode: 'bcdf2' },
+        event === 'room:create'
+          ? { name: 'Ada' }
+          : {
+              roomCode: 'bcdf2',
+              configurationRevision: 0,
+              requestId: 'start-request',
+            },
       )
 
       await vi.waitFor(() => expect(logError).toHaveBeenCalledOnce())
@@ -595,6 +603,98 @@ describe('Socket.IO Secret Hitman protocol', () => {
       await expect(
         client.timeout(2_000).emitWithAck('session:resume', {}),
       ).resolves.toEqual({ status: 'success' })
+    },
+  )
+
+  it('delivers the selected configuration before its acknowledgement', async () => {
+    const client = await connect(hostToken)
+    const created = await client.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('creation failed')
+    let latest: RoomSnapshot | undefined
+    client.on('room:snapshot', (snapshot) => {
+      latest = snapshot
+    })
+    expect(
+      await client.emitWithAck('room:select-pack', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        requestId: 'select-snapshot',
+        packId: 'base',
+      }),
+    ).toMatchObject({ status: 'success' })
+    expect(latest).toMatchObject({
+      status: 'lobby',
+      configurationRevision: 1,
+      selectedPackId: 'base',
+    })
+  })
+
+  it.each(['room:select-pack', 'game:start'] as const)(
+    'correlates %s results without logging account tokens',
+    async (event) => {
+      const client = await connect(hostToken)
+      const accountToken = 'sensitive-account-token'
+      const result = await client.emitWithAck(event, {
+        roomCode: 'bcdf2',
+        configurationRevision: 0,
+        requestId: 'correlated-request',
+        packId: 'base',
+        accountToken,
+      })
+      expect(result.status).toBe('room_not_found')
+      const records = logInfo.mock.calls.map(([entry]) => JSON.parse(entry))
+      expect(records.filter((entry) => entry.event === 'pack_command')).toEqual(
+        [
+          {
+            event: 'pack_command',
+            operation: event === 'game:start' ? 'start' : 'select',
+            roomCode: 'bcdf2',
+            requestId: 'correlated-request',
+            status: 'room_not_found',
+            durationMs: expect.any(Number),
+          },
+        ],
+      )
+      expect(JSON.stringify(logInfo.mock.calls)).not.toContain(accountToken)
+    },
+  )
+
+  it.each(['room:select-pack', 'game:start'] as const)(
+    'logs unexpected room failures in %s and releases the command guard',
+    async (event) => {
+      const client = await connect(hostToken)
+      const created = await client.emitWithAck('room:create', { name: 'Ada' })
+      if (created.status !== 'success') throw new Error('creation failed')
+      const room = socketServer.gameServer.rooms.get(created.roomCode)!
+      vi.spyOn(
+        room,
+        event === 'game:start' ? 'start' : 'selectPack',
+      ).mockImplementationOnce(() => {
+        throw new Error('unexpected room failure')
+      })
+      const payload = {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        requestId: 'failed-pack-request',
+        packId: 'base',
+      }
+      expect(await client.emitWithAck(event, payload)).toMatchObject({
+        status: 'server_unavailable',
+      })
+      expect(logError).toHaveBeenCalledOnce()
+      expect(JSON.parse(logError.mock.calls[0][0] as string)).toEqual({
+        event: 'command_failed',
+        command: event,
+        message: 'unexpected room failure',
+      })
+      expect(
+        await client.emitWithAck(event, {
+          ...payload,
+          requestId: 'retry-pack-request',
+        }),
+      ).toMatchObject({
+        status: event === 'game:start' ? 'invalid' : 'success',
+      })
     },
   )
 
@@ -631,7 +731,13 @@ describe('Socket.IO Secret Hitman protocol', () => {
       status: 'success',
       roomCode,
     })
-    expect(await host.emitWithAck('game:start', { roomCode })).toEqual({
+    expect(
+      await host.emitWithAck('game:start', {
+        roomCode,
+        configurationRevision: 0,
+        requestId: 'start-request',
+      }),
+    ).toEqual({
       status: 'success',
     })
 
@@ -1039,7 +1145,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
     const { roomCode } = created
     await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
     await third.emitWithAck('room:join', { roomCode, name: 'Linus' })
-    await host.emitWithAck('game:start', { roomCode })
+    await host.emitWithAck('game:start', {
+      roomCode,
+      configurationRevision: 0,
+      requestId: 'start-request',
+    })
     for (const client of [host, guest, third]) {
       const result = await client.emitWithAck('session:resume', { roomCode })
       if (
@@ -1161,7 +1271,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
       const { roomCode } = created
       await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
       await third.emitWithAck('room:join', { roomCode, name: 'Linus' })
-      await host.emitWithAck('game:start', { roomCode })
+      await host.emitWithAck('game:start', {
+        roomCode,
+        configurationRevision: 0,
+        requestId: 'start-request',
+      })
       for (const [client, token] of [
         [host, hostToken],
         [guest, guestToken],
@@ -1386,7 +1500,14 @@ describe('Socket.IO Secret Hitman protocol', () => {
       },
     })
 
-    expect(await host.emitWithAck('game:start', { roomCode })).toEqual({
+    expect(
+      await host.emitWithAck('game:start', {
+        roomCode,
+        configurationRevision:
+          server.rooms.get(roomCode)!.configurationRevision,
+        requestId: 'start-request',
+      }),
+    ).toEqual({
       status: 'success',
     })
     const nextGame = server.snapshot(hostToken, roomCode)
@@ -1445,7 +1566,11 @@ describe('Socket.IO Secret Hitman protocol', () => {
     const { roomCode } = created
 
     await guest.emitWithAck('room:join', { roomCode, name: 'Grace' })
-    await firstHostSocket.emitWithAck('game:start', { roomCode })
+    await firstHostSocket.emitWithAck('game:start', {
+      roomCode,
+      configurationRevision: 0,
+      requestId: 'start-request',
+    })
     for (const [token, hint] of [
       [hostToken, 'Orbit'],
       [guestToken, 'Garden'],

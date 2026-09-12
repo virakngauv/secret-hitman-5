@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Providers } from './providers'
 
 const mocks = vi.hoisted(() => ({ init: vi.fn() }))
+vi.mock('@clerk/ui', () => ({ ui: {} }))
+vi.mock('./account-bridge', () => ({
+  useAccount: () => ({ configured: false }),
+  AccountBridge: ({ children }: { children: ReactNode }) => children,
+}))
 vi.mock('@clerk/nextjs', () => ({
   ClerkProvider: ({
     children,
@@ -32,7 +37,9 @@ vi.mock('@/components/player-session-provider', () => ({
 }))
 
 describe('optional integration providers', () => {
-  beforeEach(() => mocks.init.mockReset())
+  beforeEach(() => {
+    mocks.init.mockReset()
+  })
   afterEach(() => vi.unstubAllEnvs())
 
   it.each([undefined, '', ' \t '])(
@@ -57,7 +64,7 @@ describe('optional integration providers', () => {
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', ' analytics-key ')
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', ' ')
     render(
-      <Providers>
+      <Providers clerkEnabled wordPacksEnabled>
         <span>Game</span>
       </Providers>,
     )
@@ -68,4 +75,15 @@ describe('optional integration providers', () => {
       expect.objectContaining({ api_host: 'https://us.i.posthog.com' }),
     )
   })
+})
+it('does not mount Clerk or the shop when disabled even with configured keys', () => {
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
+  render(
+    <Providers clerkEnabled wordPacksEnabled={false}>
+      <span>Base game</span>
+    </Providers>,
+  )
+  expect(screen.getByText('Base game')).toBeVisible()
+  expect(screen.queryByTestId('clerk')).not.toBeInTheDocument()
+  expect(screen.queryByRole('dialog', { hidden: true })).not.toBeInTheDocument()
 })

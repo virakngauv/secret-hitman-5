@@ -1,8 +1,10 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RoomSnapshot } from '@/lib/game-protocol'
+
+vi.mock('./word-packs-feature', () => ({ useWordPacksEnabled: () => true }))
 
 import { RoomLobby } from './room-lobby'
 
@@ -12,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   view: null as RoomSnapshot | null,
   connectionStatus: 'connected' as 'connecting' | 'connected' | 'disconnected',
   startGame: vi.fn(),
+  selectPack: vi.fn(),
+  catalog: vi.fn(),
+  userId: null as string | null,
   claimCard: vi.fn(),
   finishGuessing: vi.fn(),
   advanceTurn: vi.fn(),
@@ -21,9 +26,17 @@ const mocks = vi.hoisted(() => ({
   routerPush: vi.fn(),
 }))
 
+vi.mock('./account-bridge', () => ({
+  useAccount: () => ({ loaded: true, userId: mocks.userId }),
+  AccountControl: () => null,
+}))
+afterEach(() => vi.unstubAllGlobals())
+
 vi.mock('@/components/game-socket-provider', () => ({
   useGameSocket: () => ({
     startGame: mocks.startGame,
+    selectPack: mocks.selectPack,
+    catalog: mocks.catalog,
     claimCard: mocks.claimCard,
     finishGuessing: mocks.finishGuessing,
     advanceTurn: mocks.advanceTurn,
@@ -55,6 +68,8 @@ function lobbyView(minimumPlayers = 2): LobbyView {
   }
   return {
     status: 'lobby',
+    selectedPackId: 'base',
+    configurationRevision: 0,
     roomCode: 'bcdf2',
     player,
     members: [player],
@@ -146,8 +161,14 @@ describe('RoomLobby invite prompt', () => {
   beforeEach(() => {
     window.localStorage.clear()
     mocks.view = lobbyView()
+    mocks.userId = null
     mocks.connectionStatus = 'connected'
     mocks.startGame.mockReset().mockResolvedValue({ status: 'success' })
+    mocks.selectPack.mockReset()
+    mocks.catalog.mockReset().mockResolvedValue({
+      status: 'success',
+      packs: [{ id: 'base', name: 'Base', premium: false }],
+    })
     mocks.claimCard
       .mockReset()
       .mockResolvedValue({ status: 'success', kind: 'target' })
@@ -155,6 +176,102 @@ describe('RoomLobby invite prompt', () => {
     mocks.removePlayer.mockReset().mockResolvedValue({ status: 'success' })
     mocks.leaveRoom.mockReset().mockResolvedValue({ status: 'success' })
     mocks.routerPush.mockReset()
+  })
+
+  it.each([undefined, ['movies-v1', 'travel-v1']].map((ids) => [ids]))(
+    'restores the room selection on mount and remount (%j)',
+    async (selectedPackIds) => {
+      const user = userEvent.setup()
+      mocks.view = {
+        ...readyLobby(),
+        selectedPackId: 'movies-v1',
+        selectedPackIds,
+      }
+      mocks.catalog.mockResolvedValue({
+        status: 'success',
+        packs: [
+          { id: 'base', name: 'Base', premium: false },
+          { id: 'movies-v1', name: 'Movies', premium: true },
+          { id: 'travel-v1', name: 'Travel', premium: true },
+        ],
+      })
+      const { unmount } = render(<RoomLobby roomCode="bcdf2" />)
+      expect(
+        await screen.findByRole('checkbox', { name: 'Movies' }),
+      ).toBeChecked()
+      unmount()
+      render(<RoomLobby roomCode="bcdf2" />)
+      expect(
+        await screen.findByRole('checkbox', { name: 'Movies' }),
+      ).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Base' })).not.toBeChecked()
+      if (selectedPackIds)
+        expect(screen.getByRole('checkbox', { name: 'Travel' })).toBeChecked()
+      await user.click(screen.getByRole('button', { name: 'Start game' }))
+      expect(mocks.startGame).toHaveBeenCalledWith(
+        'bcdf2',
+        0,
+        true,
+        selectedPackIds ?? ['movies-v1'],
+      )
+      expect(mocks.selectPack).not.toHaveBeenCalled()
+    },
+  )
+
+  it('keeps checkbox changes local and sends the complete selection only at start', async () => {
+    const user = userEvent.setup()
+    mocks.view = readyLobby()
+    mocks.userId = 'user_host'
+    mocks.catalog.mockResolvedValue({
+      status: 'success',
+      packs: [
+        { id: 'base', name: 'Base', premium: false },
+        { id: 'movies-v1', name: 'Movies', premium: true },
+      ],
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          userId: 'user_host',
+          packIds: ['base', 'movies-v1'],
+        }),
+      }),
+    )
+    let finish!: (value: unknown) => void
+    mocks.startGame.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    const { unmount } = render(<RoomLobby roomCode="bcdf2" />)
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('checkbox', { name: 'Movies' }))
+    expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeChecked()
+    expect(mocks.selectPack).not.toHaveBeenCalled()
+    expect(mocks.startGame).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
+    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2', 0, true, [
+      'base',
+      'movies-v1',
+    ])
+    expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeDisabled()
+    await act(async () =>
+      finish({ status: 'forbidden', message: 'Movies: Access expired.' }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Movies: Access expired.',
+    )
+    expect(screen.getByRole('checkbox', { name: 'Movies' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Start game' })).toBeEnabled()
+    unmount()
+    render(<RoomLobby roomCode="bcdf2" />)
+    expect(
+      await screen.findByRole('checkbox', { name: 'Movies' }),
+    ).not.toBeChecked()
   })
 
   it('lets a host leave immediately when they are alone in the room', async () => {
@@ -415,7 +532,7 @@ describe('RoomLobby invite prompt', () => {
 
     await user.click(screen.getByRole('button', { name: 'Start game' }))
 
-    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2')
+    expect(mocks.startGame).toHaveBeenCalledWith('bcdf2', 0, false, ['base'])
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Too many commands.',
     )

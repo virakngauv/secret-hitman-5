@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest'
 import { applyTargets, createPlayerBoard } from './secret-hitman'
 
 describe('fixed board roles', () => {
+  it('rejects pools smaller than a board', () => {
+    expect(() => createPlayerBoard('small', 0, ['one', 'two'])).toThrow(
+      'Word pool is too small for a board',
+    )
+    expect(() => createPlayerBoard('empty', 0, [])).toThrow(
+      'Word pool is too small for a board',
+    )
+  })
+
   it('assigns distinct fixed roles and eight editable words across seeds and seats', () => {
     const layouts = new Set<string>()
     for (let seed = 0; seed < 50; seed++) {

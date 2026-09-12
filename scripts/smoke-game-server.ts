@@ -46,9 +46,11 @@ try {
 
   const hostHinting = nextSnapshot(host, 'hinting')
   const guestHinting = nextSnapshot(guest, 'hinting')
-  const started = await host
-    .timeout(ACK_TIMEOUT_MS)
-    .emitWithAck('game:start', { roomCode })
+  const started = await host.timeout(ACK_TIMEOUT_MS).emitWithAck('game:start', {
+    roomCode,
+    configurationRevision: 0,
+    requestId: 'start-request',
+  })
   if (started.status !== 'success') throw new Error(started.message)
   const [hostHintState, guestHintState] = await Promise.all([
     hostHinting,

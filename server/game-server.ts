@@ -1,3 +1,4 @@
+import { wordPacksEnabled } from '../lib/word-packs'
 import { randomBytes, randomInt } from 'node:crypto'
 
 import type {
@@ -9,6 +10,16 @@ import type {
   RoomSnapshot,
   RejectHintPayload,
   SubmitHintPayload,
+} from '../lib/game-protocol'
+import { PACKS, combinePacks, type Pack } from './packs'
+import {
+  createPackAuthorizer,
+  accessUnavailable,
+  type AuthorizePack,
+} from './pack-access'
+import type {
+  PackCommandPayload,
+  SelectPackPayload,
 } from '../lib/game-protocol'
 import { GameRoom } from './game-room'
 import {
@@ -32,12 +43,21 @@ export const DEFAULT_ROOM_EXPIRATION = {
 export class GameServer {
   readonly rooms = new Map<string, GameRoom>()
   private readonly expiredRooms = new Map<string, number>()
+  private readonly pendingAuthorizations = new WeakSet<GameRoom>()
+  private readonly packOperations = new WeakMap<
+    GameRoom,
+    { pending: boolean; nextSelectAt: number; nextStartAt: number }
+  >()
   private readonly expiration: Required<RoomExpirationPolicy>
 
   constructor(
     expiration: RoomExpirationPolicy = DEFAULT_ROOM_EXPIRATION,
     private readonly random: () => number = () => randomInt(2 ** 30) / 2 ** 30,
     private readonly maxRooms = MAX_ACTIVE_ROOMS,
+    private readonly authorizePack: AuthorizePack = wordPacksEnabled()
+      ? createPackAuthorizer()
+      : async () => accessUnavailable(),
+    readonly packs: readonly Pack[] = PACKS,
   ) {
     this.expiration = {
       roomIdleMs: expiration.roomIdleMs,
@@ -107,7 +127,139 @@ export class GameServer {
   }
 
   startGame(token: string, roomCode: string, now = Date.now()) {
-    return this.withRoom(roomCode, (room) => room.start(token, now))
+    return this.withRoom(roomCode, (room) =>
+      room.selectedPack.feature
+        ? {
+            status: 'forbidden',
+            message: 'Premium rounds require a fresh access check.',
+          }
+        : room.start(token, now),
+    )
+  }
+
+  async packCommand(
+    token: string,
+    payload: PackCommandPayload | SelectPackPayload,
+    start: boolean,
+  ): Promise<CommandResult> {
+    const room = this.rooms.get(payload.roomCode)
+    if (!room) return { status: 'room_not_found', message: 'Room not found.' }
+    const check = room.checkPackCommand(token, payload.configurationRevision)
+    if (check.status !== 'success') return check
+    const ids = start
+      ? (payload.packIds ??
+        room.selectedPack.sourceIds ?? [room.selectedPack.id])
+      : 'packId' in payload
+        ? (payload.packIds ?? [payload.packId])
+        : []
+    const selected = ids.map((id) =>
+      this.packs.find((pack) => pack.id === id && pack.enabled),
+    )
+    if (
+      !ids.length ||
+      ids.length > 32 ||
+      new Set(ids).size !== ids.length ||
+      selected.some((pack) => !pack)
+    )
+      return {
+        status: 'invalid',
+        message: `${start ? 'Cannot start with' : 'Cannot select'} unavailable word packs: ${ids.filter((_, index) => !selected[index]).join(', ') || 'invalid selection'}.`,
+      }
+    const packs = selected as Pack[]
+    const pack = combinePacks(packs)
+    const previousIds = room.selectedPack.sourceIds ?? [room.selectedPack.id]
+    // Removing packs (or returning to Base) never grants additional paid access.
+    const onlyRemoving =
+      !start &&
+      previousIds.some((id) => !ids.includes(id)) &&
+      ids.every((id) => id === 'base' || previousIds.includes(id))
+    const needsAuthorization = Boolean(pack.feature) && !onlyRemoving
+    const guard = this.packOperations.get(room)
+    if (
+      (needsAuthorization && this.pendingAuthorizations.has(room)) ||
+      (guard?.pending && (start || needsAuthorization)) ||
+      (needsAuthorization &&
+        guard &&
+        Date.now() < (start ? guard.nextStartAt : guard.nextSelectAt))
+    )
+      return {
+        status: 'rate_limited',
+        message: 'Checking access. Please try again shortly.',
+      }
+    const operation = {
+      pending: true,
+      nextSelectAt:
+        !start && needsAuthorization
+          ? Date.now() + 2000
+          : (guard?.nextSelectAt ?? 0),
+      nextStartAt:
+        start && needsAuthorization
+          ? Date.now() + 2000
+          : (guard?.nextStartAt ?? 0),
+    }
+    this.packOperations.set(room, operation)
+    const deadline = Date.now() + 4500
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const controller = new AbortController()
+    try {
+      if (needsAuthorization) {
+        this.pendingAuthorizations.add(room)
+        const authorization = (async () => {
+          try {
+            for (const entry of packs) {
+              if (controller.signal.aborted) return accessUnavailable()
+              if (!entry.feature) continue
+              const result = await this.authorizePack(
+                payload.accountToken,
+                entry.feature,
+                controller.signal,
+              )
+              if (result.status !== 'success')
+                return {
+                  ...result,
+                  message: `${entry.name}: ${result.message}`,
+                }
+            }
+            return { status: 'success' } as CommandResult
+          } catch {
+            return accessUnavailable()
+          } finally {
+            this.pendingAuthorizations.delete(room)
+          }
+        })()
+        const result = await Promise.race([
+          authorization,
+          new Promise<CommandResult>((resolve) => {
+            timer = setTimeout(() => {
+              controller.abort()
+              resolve(accessUnavailable())
+            }, 4500)
+          }),
+        ])
+        if (result.status !== 'success') return result
+      }
+      if (
+        Date.now() >= deadline ||
+        this.rooms.get(payload.roomCode) !== room ||
+        Date.now() - room.lastMeaningfulActivityAt >= this.expiration.roomIdleMs
+      )
+        return {
+          status: 'stale',
+          message: 'The room changed or expired. Please try again.',
+        }
+      const current = room.checkPackCommand(
+        token,
+        payload.configurationRevision,
+      )
+      if (current.status !== 'success') return current
+      return start
+        ? room.start(token, Date.now(), pack)
+        : room.selectPack(token, payload.configurationRevision, pack)
+    } finally {
+      controller.abort()
+      clearTimeout(timer)
+      operation.pending = false
+    }
   }
 
   submitHint(token: string, payload: SubmitHintPayload, now = Date.now()) {
