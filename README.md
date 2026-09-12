@@ -151,7 +151,9 @@ and paid subscription period boundaries remain strict. Keep server clocks synchr
   This applies to JWKS, session, and billing calls in both module formats; SDK
   retries remain bounded by their existing retry count. A process-wide limit of
   32 operations and per-room/per-preview guards retain capacity until the
-  underlying request actually settles. Keep the patch and transport regression
+  underlying request actually settles; anonymous token verification is capped
+  below the shared budget so a verification burst cannot starve verified
+  hosts' account lookups. Keep the patch and transport regression
   tests when upgrading Clerk; remove it only after verifying equivalent SDK support. Timeouts permit Base recovery
   but cannot spawn overlapping protected work for the same room/account.
   Browser token minting also has a 4.5-second deadline: controls recover on timeout,

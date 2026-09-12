@@ -32,7 +32,8 @@ export function WordPackShopProvider({
   const returnFocus = useRef<HTMLElement | null>(null)
   const account = useAccount()
   useEffect(() => {
-    if (selection !== null) dialog.current?.showModal()
+    // showModal() throws on an open dialog; effect re-runs stay idempotent.
+    if (selection !== null && !dialog.current?.open) dialog.current?.showModal()
   }, [selection])
   const close = () => {
     dialog.current?.close()

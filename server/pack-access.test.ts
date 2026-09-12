@@ -278,13 +278,13 @@ it('bounds token verification before trusting any account identifier', async () 
     }),
   )
   const authorize = createPackAuthorizer(env)
-  const requests = Array.from({ length: 32 }, () =>
+  const requests = Array.from({ length: 24 }, () =>
     authorize('token', 'pack_movies_v1'),
   )
   expect((await authorize('extra-token', 'pack_movies_v1')).status).toBe(
     'server_unavailable',
   )
-  expect(mocks.verify).toHaveBeenCalledTimes(32)
+  expect(mocks.verify).toHaveBeenCalledTimes(24)
   expect(mocks.session).not.toHaveBeenCalled()
   finish(claims)
   await Promise.all(requests)
