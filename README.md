@@ -204,7 +204,7 @@ Development release verification must exercise Clerk sign-in/account switching,
 checkout cancel/failure/success and access refresh, cancellation through exact
 expiry, renewal, past-due/recovery, revoked sessions, and provider outage with a
 real development instance. Automated adapter tests do not replace these provider
-flows. Deploy frontend and game server together for protocol version 16; old
+flows. Deploy frontend and game server together for protocol version 17; old
 clients are rejected with a reload instruction in the handshake error. Older
 client UIs may show only a reconnect banner, so instruct existing players to
 reload after the coordinated deployment. Rollback requires coordinated versions and loses

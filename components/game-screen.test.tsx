@@ -161,7 +161,10 @@ describe('HintPhaseScreen', () => {
     expect(screen.getByText(`0/${MAX_HINT_LENGTH}`)).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
-    await user.type(input, 'Project Hail Mary')
+    fireEvent.change(input, {
+      target: { value: '  Project     Hail     Mary  ' },
+    })
+    expect(input).toHaveValue('  PROJECT     HAIL     MARY  ')
     expect(screen.getByText(`17/${MAX_HINT_LENGTH}`)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
 

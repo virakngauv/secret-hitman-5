@@ -3,6 +3,7 @@ import {
   MAX_HINT_LENGTH,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
+  normalizeHint,
   type PackCommandPayload,
   type SelectPackPayload,
   type ClaimCardPayload,
@@ -206,12 +207,7 @@ export function parsePlayerName(value: unknown) {
 
 export function parseHint(value: unknown) {
   if (typeof value !== 'string') return null
-  const normalized = value
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(UNSAFE_TEXT_CHARACTERS, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  const normalized = normalizeHint(value)
   return normalized.length > 0 && normalized.length <= MAX_HINT_LENGTH
     ? normalized
     : null

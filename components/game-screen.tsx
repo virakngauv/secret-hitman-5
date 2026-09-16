@@ -20,6 +20,7 @@ import {
   MAX_HINT_LENGTH,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
+  normalizeHint,
   type CardKind,
   type CommandResult,
   type CompletedGameResults,
@@ -88,7 +89,8 @@ export function HintPhaseScreen({
   const readyCount = view.hintStatuses.filter(
     ({ submitted }) => submitted,
   ).length
-  const hintTooLong = hint.length > MAX_HINT_LENGTH
+  const normalizedHint = normalizeHint(hint)
+  const hintTooLong = normalizedHint.length > MAX_HINT_LENGTH
 
   const toggleCard = (cardId: string) => {
     if (view.board?.find(({ id }) => id === cardId)?.locked) return
@@ -103,7 +105,7 @@ export function HintPhaseScreen({
 
   const submit = async () => {
     if (isSubmitting) return
-    if (!hint.trim())
+    if (!normalizedHint)
       return setHintActionError('Write a one-word or short phrase hint.')
     if (hintTooLong)
       return setHintActionError(
@@ -113,7 +115,7 @@ export function HintPhaseScreen({
       return setHintActionError('Select at least one word for your hint.')
     setIsSubmitting(true)
     setHintActionError(null)
-    const result = await onSubmitHint(hint.trim(), [...selected])
+    const result = await onSubmitHint(normalizedHint, [...selected])
     if (result.status !== 'success') setHintActionError(result.message)
     setIsSubmitting(false)
   }
@@ -326,7 +328,7 @@ export function HintPhaseScreen({
                       )}
                       aria-live="polite"
                     >
-                      {hint.length}/{MAX_HINT_LENGTH}
+                      {normalizedHint.length}/{MAX_HINT_LENGTH}
                     </span>
                     {hintTooLong ? (
                       <p
@@ -356,7 +358,7 @@ export function HintPhaseScreen({
                       disabled={
                         isSubmitting ||
                         selected.size < MIN_TARGET_COUNT ||
-                        !hint.trim() ||
+                        !normalizedHint ||
                         hintTooLong
                       }
                     >
