@@ -1,13 +1,14 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import AccountPage from './page'
-const mocks = vi.hoisted(() => ({ subscription: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+  protect: vi.fn(),
+  subscription: vi.fn(),
+}))
 vi.mock('@clerk/nextjs', () => ({ UserProfile: () => null }))
 vi.mock('@clerk/nextjs/server', () => ({
-  auth: Object.assign(
-    async () => ({ userId: 'user_account', has: () => false }),
-    { protect: async () => {} },
-  ),
+  auth: Object.assign(mocks.auth, { protect: mocks.protect }),
   clerkClient: async () => ({
     billing: { getUserBillingSubscription: mocks.subscription },
   }),
@@ -18,6 +19,13 @@ vi.mock('@/server/packs', () => ({
     { id: 'movies', name: 'Movies', enabled: true, feature: 'movies' },
   ],
 }))
+beforeEach(() => {
+  vi.stubEnv('ENABLE_WORD_PACKS', 'true')
+  vi.stubEnv('CLERK_SECRET_KEY', 'secret')
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
+  mocks.auth.mockResolvedValue({ userId: 'user_account', has: () => false })
+  mocks.protect.mockResolvedValue(undefined)
+})
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllEnvs()
@@ -25,9 +33,6 @@ afterEach(() => {
 })
 it('renders the unavailable preview at its deadline while retaining provider capacity', async () => {
   vi.useFakeTimers()
-  vi.stubEnv('ENABLE_WORD_PACKS', 'true')
-  vi.stubEnv('CLERK_SECRET_KEY', 'secret')
-  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
   let settle!: (value: { subscriptionItems: never[] }) => void
   mocks.subscription.mockReturnValue(
     new Promise((resolve) => {
@@ -51,12 +56,18 @@ it('renders the unavailable preview at its deadline while retaining provider cap
   await AccountPage()
   expect(mocks.subscription).toHaveBeenCalledTimes(2)
 })
+it('protects direct signed-out account access before reading billing data', async () => {
+  mocks.protect.mockRejectedValue(new Error('redirect to sign in'))
+
+  await expect(AccountPage()).rejects.toThrow('redirect to sign in')
+
+  expect(mocks.protect).toHaveBeenCalledOnce()
+  expect(mocks.auth).not.toHaveBeenCalled()
+  expect(mocks.subscription).not.toHaveBeenCalled()
+})
 it.each(['canceled', 'past_due', 'unavailable'])(
   'shows live %s access instead of session claims',
   async (status) => {
-    vi.stubEnv('ENABLE_WORD_PACKS', 'true')
-    vi.stubEnv('CLERK_SECRET_KEY', 'secret')
-    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
     if (status === 'unavailable')
       mocks.subscription.mockRejectedValue(new Error('provider secret'))
     else

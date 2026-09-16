@@ -5,7 +5,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ middleware: vi.fn() }))
 vi.mock('@clerk/nextjs/server', () => ({
   clerkMiddleware: mocks.middleware,
-  createRouteMatcher: () => () => true,
 }))
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
@@ -37,7 +36,7 @@ it.each([
     const unsigned = `${encode({ alg: 'RS256', typ: 'JWT', kid: 'local' })}.${encode({ sub: 'user_test', sid: 'sess_test', iss: 'https://test.clerk.accounts.dev', azp, iat: now, nbf: now - 10, exp: now + 60, v: 2, sts: 'active' })}`
     const jwt = `${unsigned}.${sign('RSA-SHA256', Buffer.from(unsigned), privateKey).toString('base64url')}`
     await import('./proxy')
-    const { authorizedParties } = mocks.middleware.mock.lastCall![1]
+    const { authorizedParties } = mocks.middleware.mock.lastCall![0]
     const verification = verifyToken(jwt, {
       jwtKey: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
       authorizedParties,

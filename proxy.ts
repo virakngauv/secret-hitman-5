@@ -1,5 +1,5 @@
 import { wordPacksEnabled } from './lib/word-packs'
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { clerkMiddleware } from '@clerk/nextjs/server'
 import {
   NextResponse,
   type NextFetchEvent,
@@ -11,19 +11,13 @@ const secretKey = process.env.CLERK_SECRET_KEY?.trim()
 const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
-const isAccountRoute = createRouteMatcher(['/account(.*)'])
 const clerkProxy =
   wordPacksEnabled() && publishableKey && secretKey && authorizedParties?.length
-    ? clerkMiddleware(
-        async (auth, request) => {
-          if (isAccountRoute(request)) await auth.protect()
-        },
-        {
-          publishableKey,
-          secretKey,
-          authorizedParties,
-        },
-      )
+    ? clerkMiddleware({
+        publishableKey,
+        secretKey,
+        authorizedParties,
+      })
     : null
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {

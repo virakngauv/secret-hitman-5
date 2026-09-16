@@ -316,7 +316,7 @@ export function HintPhaseScreen({
                       onClick={() => void unlock()}
                       disabled={isUnlocking}
                     >
-                      {isUnlocking ? 'Editing…' : 'Edit'}
+                      Edit
                     </Button>
                   ) : (
                     <Button
@@ -329,7 +329,7 @@ export function HintPhaseScreen({
                         !hint.trim()
                       }
                     >
-                      {isSubmitting ? 'Submitting…' : 'Submit'}
+                      Submit
                     </Button>
                   )}
                 </form>

@@ -339,6 +339,8 @@ describe('HintPhaseScreen', () => {
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
     await user.type(input, '{Enter}')
     expect(onSubmitHint).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled()
+    expect(screen.queryByText('Submitting…')).not.toBeInTheDocument()
 
     fireEvent.submit(input.closest('form') as HTMLFormElement)
     expect(onSubmitHint).toHaveBeenCalledTimes(1)
@@ -622,6 +624,37 @@ describe('HintPhaseScreen', () => {
       'p0-card-1',
       'p0-card-6',
     ])
+  })
+
+  it('keeps the Edit label while unlocking a submitted hint', async () => {
+    const user = userEvent.setup()
+    let resolveUnlock: (result: { status: 'success' }) => void = () => {}
+    const onUnlockHint = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUnlock = resolve
+        }),
+    )
+    render(
+      <HintPhaseScreen
+        view={{ ...hintingView, hint: 'Orbit', hintSubmitted: true }}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={onUnlockHint}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(onUnlockHint).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled()
+    expect(screen.queryByText('Editing…')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveUnlock({ status: 'success' })
+    })
   })
 
   it('shows submission and edit failures beside the hint controls', async () => {
