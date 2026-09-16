@@ -1,3 +1,4 @@
+const wordPacksEnabled = process.env.ENABLE_WORD_PACKS === 'true'
 const requiredVercelVariables = ['NEXT_PUBLIC_GAME_SERVER_URL']
 const optionalVercelVariables = [
   'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
@@ -33,7 +34,36 @@ for (const name of optionalVercelVariables) {
 
 const clerkVariables = ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY']
 const configuredClerkVariables = clerkVariables.filter(isConfigured)
+const clerkOrigins =
+  process.env.CLERK_AUTHORIZED_PARTIES?.split(',').map((origin) =>
+    origin.trim(),
+  ) ?? []
 if (
+  wordPacksEnabled &&
+  configuredClerkVariables.length === clerkVariables.length &&
+  (!clerkOrigins.length || !clerkOrigins.every(isExactOrigin))
+) {
+  console.error(
+    'Clerk authentication requires CLERK_AUTHORIZED_PARTIES with exact frontend origins.',
+  )
+  process.exitCode = 1
+}
+
+function isExactOrigin(value) {
+  try {
+    const url = new URL(value)
+    return (
+      (url.protocol === 'https:' ||
+        (url.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) &&
+      value === url.origin
+    )
+  } catch {
+    return false
+  }
+}
+if (
+  wordPacksEnabled &&
   configuredClerkVariables.length > 0 &&
   configuredClerkVariables.length < clerkVariables.length
 ) {
@@ -59,5 +89,20 @@ function isHttpsUrl(value) {
     return new URL(value?.trim() ?? '').protocol === 'https:'
   } catch {
     return false
+  }
+}
+
+if (process.env.ENABLE_WORD_PACKS === 'true') {
+  for (const name of [
+    ...clerkVariables,
+    'CLERK_ISSUER',
+    'CLERK_AUTHORIZED_PARTIES',
+  ]) {
+    if (!isConfigured(name)) {
+      console.error(
+        `Premium hosting requires ${name} in both web and game processes.`,
+      )
+      process.exitCode = 1
+    }
   }
 }

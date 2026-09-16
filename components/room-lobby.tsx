@@ -1,5 +1,7 @@
 'use client'
 
+import { useWordPacksEnabled } from './word-packs-feature'
+import { PackSelector } from './pack-selector'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -141,14 +143,20 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
 
       return retainScreen(
         <LobbyScreen
+          key={`${snapshot.roomCode}:${snapshot.player.playerId}:${snapshot.player.role}`}
           view={snapshot}
           error={actionError}
           isActing={isActing}
           showRoundEndedEarly={showRoundEndedEarly}
-          onStart={async () => {
+          onStart={async (packIds) => {
             setIsActing(true)
             setActionError(null)
-            const result = await game.startGame(roomCode)
+            const result = await game.startGame(
+              roomCode,
+              snapshot.configurationRevision,
+              packIds.some((id) => id !== 'base'),
+              packIds,
+            )
             if (result.status !== 'success') {
               setActionError({ action: 'start', message: result.message })
             }
@@ -287,15 +295,19 @@ function LobbyScreen({
   error: { action: 'start' | 'leave'; message: string } | null
   isActing: boolean
   showRoundEndedEarly: boolean
-  onStart: () => Promise<CommandResult>
+  onStart: (packIds: string[]) => Promise<CommandResult>
   onLeave: () => Promise<CommandResult>
   onRemove: (playerId: string) => Promise<CommandResult>
 }) {
+  const wordPacksEnabled = useWordPacksEnabled()
   const isHost = view.player.role === 'host'
   const removableMembers = view.members.filter(
     (member) => member.role !== 'host',
   )
   const canStart = view.members.length >= view.minimumPlayers
+  const [selectedPackIds, setSelectedPackIds] = useState<string[]>(() => [
+    ...(view.selectedPackIds ?? [view.selectedPackId]),
+  ])
   const missingPlayers = view.minimumPlayers - view.members.length
   const [removalTarget, setRemovalTarget] = useState<{
     playerId: string
@@ -381,7 +393,9 @@ function LobbyScreen({
               <Button
                 className="mt-4 h-12 w-full"
                 disabled={!canStart || isActing}
-                onClick={() => void onStart()}
+                onClick={() =>
+                  void onStart(wordPacksEnabled ? selectedPackIds : ['base'])
+                }
               >
                 {isActing ? 'Starting…' : 'Start game'}
               </Button>
@@ -389,34 +403,53 @@ function LobbyScreen({
           ) : null}
         </section>
 
-        {isHost && removableMembers.length > 0 ? (
+        {isHost && (wordPacksEnabled || removableMembers.length > 0) ? (
           <HostControlCard>
+            {wordPacksEnabled && (
+              <PackSelector
+                view={view}
+                disabled={isActing}
+                selectedIds={selectedPackIds}
+                onSelectionChange={setSelectedPackIds}
+              />
+            )}
+
             {removableMembers.length > 0 ? (
-              <ul className="host-player-controls" aria-label="Player controls">
-                {removableMembers.map((member) => (
-                  <li className="host-player-control-row" key={member.playerId}>
-                    <span className="min-w-0 flex-1 truncate font-semibold">
-                      {member.name}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      disabled={isRemoving}
-                      onClick={() => {
-                        setRemovalError(null)
-                        setRemovalTarget({
-                          playerId: member.playerId,
-                          name: member.name,
-                        })
-                      }}
-                      aria-label={`Remove ${member.name}`}
+              <div
+                className={wordPacksEnabled ? 'mt-4 border-t pt-4' : undefined}
+              >
+                {wordPacksEnabled && (
+                  <h3 className="mb-2 font-semibold">Player management</h3>
+                )}
+                <ul className="grid gap-2" aria-label="Player controls">
+                  {removableMembers.map((member) => (
+                    <li
+                      className="host-player-control-row"
+                      key={member.playerId}
                     >
-                      Remove player
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                      <span className="min-w-0 flex-1 truncate font-semibold">
+                        {member.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 px-3 text-xs"
+                        disabled={isRemoving}
+                        onClick={() => {
+                          setRemovalError(null)
+                          setRemovalTarget({
+                            playerId: member.playerId,
+                            name: member.name,
+                          })
+                        }}
+                        aria-label={`Remove ${member.name}`}
+                      >
+                        Remove player
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </HostControlCard>
         ) : null}

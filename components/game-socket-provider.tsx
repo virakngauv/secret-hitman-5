@@ -12,9 +12,13 @@ import {
   type ReactNode,
 } from 'react'
 
+import { useAccount } from './account-bridge'
+import { generateRequestId } from '@/lib/player-session'
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
   GAME_PROTOCOL_VERSION,
+  type PackSummary,
+  type SelectPackPayload,
   type AdvanceTurnPayload,
   type CardKind,
   type ClaimCardPayload,
@@ -47,7 +51,17 @@ type GameSocketContextValue = {
     playerId: string,
     allowRoundReset?: boolean,
   ) => Promise<CommandResult>
-  startGame: (roomCode: string) => Promise<CommandResult>
+  catalog: () => Promise<CommandResult<{ packs: PackSummary[] }>>
+  selectPack: (
+    payload: Omit<SelectPackPayload, 'accountToken'>,
+    premium: boolean,
+  ) => Promise<CommandResult>
+  startGame: (
+    roomCode: string,
+    configurationRevision?: number,
+    premium?: boolean,
+    packIds?: string[],
+  ) => Promise<CommandResult>
   submitHint: (payload: SubmitHintPayload) => Promise<CommandResult>
   unlockHint: (payload: GameCommandPayload) => Promise<CommandResult>
   rejectHint: (payload: RejectHintPayload) => Promise<CommandResult>
@@ -61,10 +75,31 @@ type GameSocketContextValue = {
 }
 
 const GameSocketContext = createContext<GameSocketContextValue | null>(null)
-const COMMAND_TIMEOUT_MS = 6_000
+// Must cover the 4500 ms account-token race plus the game server's 4500 ms
+// pack-authorization deadline, so a slow premium start is not reported as a
+// dead server while it is still in flight.
+const COMMAND_TIMEOUT_MS = 10_000
 const RESUME_RETRY_DELAY_MS = 1_000
 const MAX_RESUME_RETRIES = 3
 const DEFAULT_GAME_SERVER_PORT = 3200
+
+// Clerk token minting precedes the socket deadline and may never settle.
+async function freshAccountToken(getToken: () => Promise<string | null>) {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      getToken(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('Account request timed out')),
+          4_500,
+        )
+      }),
+    ])
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 export function defaultGameServerUrl(hostname: string): string {
   const bareHostname =
@@ -76,8 +111,10 @@ export function defaultGameServerUrl(hostname: string): string {
 }
 
 export function GameSocketProvider({ children }: { children: ReactNode }) {
+  const account = useAccount()
   const { clientToken, ensureClientToken } = usePlayerSession()
   const socketRef = useRef<GameSocket | null>(null)
+  const secureAccountTransport = useRef(false)
   const watchedRoomsRef = useRef(new Map<string, number>())
   const synchronizedRef = useRef(false)
   const synchronizationGenerationRef = useRef(0)
@@ -105,6 +142,11 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     // the socket so a production misconfiguration cannot expose the token.
     try {
       const endpoint = new URL(gameServerUrl)
+      secureAccountTransport.current =
+        endpoint.protocol === 'https:' ||
+        (process.env.NODE_ENV === 'development' &&
+          endpoint.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname))
       if (
         endpoint.protocol !== 'https:' &&
         !(
@@ -118,6 +160,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
         return
       }
     } catch {
+      secureAccountTransport.current = false
       setConnectionStatus('disconnected')
       return
     }
@@ -339,12 +382,89 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
-  const startGame = useCallback(
-    async (roomCode: string): Promise<CommandResult> =>
-      await runCommand(socketRef.current, synchronizedRef.current, (socket) =>
-        socket.emitWithAck('game:start', { roomCode }),
+  const catalog = useCallback(
+    async () =>
+      runCommand<{ packs: PackSummary[] }>(
+        socketRef.current,
+        synchronizedRef.current,
+        (socket) => socket.emitWithAck('packs:catalog', {}),
       ),
     [],
+  )
+  const selectPack = useCallback(
+    async (
+      payload: Omit<SelectPackPayload, 'accountToken'>,
+      premium: boolean,
+    ): Promise<CommandResult> => {
+      try {
+        if (!socketRef.current?.connected || !synchronizedRef.current)
+          return unavailable()
+        if (premium && !secureAccountTransport.current)
+          return {
+            status: 'server_unavailable',
+            message:
+              'Premium packs require HTTPS or localhost. Use a secure connection or choose Base.',
+          }
+        const accountToken = premium
+          ? ((await freshAccountToken(account.getToken)) ?? undefined)
+          : undefined
+        return await runCommand(
+          socketRef.current,
+          synchronizedRef.current,
+          (socket) =>
+            socket.emitWithAck('room:select-pack', {
+              ...payload,
+              accountToken,
+            }),
+        )
+      } catch {
+        return {
+          status: 'server_unavailable',
+          message: 'Account access is unavailable. Try again or choose Base.',
+        }
+      }
+    },
+    [account],
+  )
+  const startGame = useCallback(
+    async (
+      roomCode: string,
+      configurationRevision = 0,
+      premium = false,
+      packIds?: string[],
+    ): Promise<CommandResult> => {
+      try {
+        if (!socketRef.current?.connected || !synchronizedRef.current)
+          return unavailable()
+        if (premium && !secureAccountTransport.current)
+          return {
+            status: 'server_unavailable',
+            message:
+              'Premium packs require HTTPS or localhost. Use a secure connection or choose Base.',
+          }
+        const accountToken = premium
+          ? ((await freshAccountToken(account.getToken)) ?? undefined)
+          : undefined
+        return await runCommand(
+          socketRef.current,
+          synchronizedRef.current,
+          (socket) =>
+            socket.emitWithAck('game:start', {
+              roomCode,
+              configurationRevision,
+              ...(packIds ? { packIds } : {}),
+              requestId: generateRequestId(),
+              accountToken,
+            }),
+        )
+      } catch {
+        return {
+          status: 'server_unavailable',
+          message: 'Account access is unavailable. Try again or choose Base.',
+        }
+      }
+    },
+    [account],
   )
   const removePlayer = useCallback(
     async (
@@ -429,6 +549,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       leaveRoom,
       removePlayer,
       startGame,
+      catalog,
+      selectPack,
       submitHint,
       unlockHint,
       rejectHint,
@@ -450,6 +572,8 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       rejectHint,
       snapshots,
       startGame,
+      catalog,
+      selectPack,
       startGuessing,
       showScoreboard,
       submitHint,

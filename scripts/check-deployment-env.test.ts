@@ -78,6 +78,7 @@ describe('deployment environment check', () => {
       const result = checkEnvironment({
         NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
         [name]: 'test-key',
+        ENABLE_WORD_PACKS: 'true',
       })
 
       expect(result.status).toBe(1)
@@ -90,6 +91,7 @@ describe('deployment environment check', () => {
       NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'test-publishable-key',
       CLERK_SECRET_KEY: 'test-secret-key',
+      CLERK_AUTHORIZED_PARTIES: 'https://game.example.com',
     })
 
     expect(result.status).toBe(0)
@@ -97,4 +99,65 @@ describe('deployment environment check', () => {
     expect(result.stdout).not.toContain('test-publishable-key')
     expect(result.stdout).not.toContain('test-secret-key')
   })
+  it.each([
+    undefined,
+    '',
+    ' , , ',
+    'https://game.example.com/path',
+    'https://game.example.com/',
+    'https://game.example.com?x=1',
+    'https://game.example.com#x',
+    'https://user:pass@game.example.com',
+    'not-an-origin',
+    'https://game.example.com,broken',
+    'https://game.example.com,',
+    'ftp://game.example.com',
+    'http://game.example.com',
+    'http://192.168.1.5:3140',
+  ])(
+    'requires allowed origins whenever Clerk is configured (%s)',
+    (origins) => {
+      const result = checkEnvironment({
+        NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'test-publishable-key',
+        CLERK_SECRET_KEY: 'test-secret-key',
+        CLERK_AUTHORIZED_PARTIES: origins,
+        ENABLE_WORD_PACKS: 'true',
+        CLERK_ISSUER: 'https://clerk.example.com',
+      })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(
+        'Clerk authentication requires CLERK_AUTHORIZED_PARTIES',
+      )
+    },
+  )
+  it('accepts exact HTTPS and loopback HTTP origins', () => {
+    const result = checkEnvironment({
+      ENABLE_WORD_PACKS: 'true',
+      CLERK_ISSUER: 'https://clerk.example.com',
+      NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'key',
+      CLERK_SECRET_KEY: 'secret',
+      CLERK_AUTHORIZED_PARTIES:
+        ' https://game.example.com, http://localhost:3140, http://127.0.0.1:3000, http://[::1]:3140 ',
+    })
+    expect(result.status).toBe(0)
+  })
+})
+it('allows a dark deployment with unused incomplete Clerk configuration', () => {
+  const result = checkEnvironment({
+    NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+    ENABLE_WORD_PACKS: 'false',
+    CLERK_SECRET_KEY: 'secret',
+  })
+  expect(result.status).toBe(0)
+  expect(result.stderr).toBe('')
+})
+it('requires both processes to have complete launch configuration', () => {
+  const result = checkEnvironment({
+    NEXT_PUBLIC_GAME_SERVER_URL: gameServerUrl,
+    ENABLE_WORD_PACKS: 'true',
+  })
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain('in both web and game processes')
 })

@@ -11,6 +11,8 @@ const localIPv4Addresses = Object.values(networkInterfaces()).flatMap(
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // The installed Next.js SDK reads this setting for its browser runtime.
+  env: { NEXT_PUBLIC_CLERK_JS_VERSION: '6.31.0' },
   allowedDevOrigins: ['terminal.local', '127.0.0.1', ...localIPv4Addresses],
   turbopack: { root: process.cwd() },
 }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   generateClientToken,
+  generateRequestId,
   dismissGameResults,
   getClientToken,
   getOrCreateClientToken,
@@ -69,6 +70,19 @@ describe('player session storage', () => {
 
   it('generates a 128-bit hexadecimal token', () => {
     expect(generateClientToken()).toMatch(/^[0-9a-f]{32}$/)
+  })
+  it('generates request IDs without randomUUID on HTTP LAN origins', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(crypto, 'randomUUID')
+    Object.defineProperty(crypto, 'randomUUID', {
+      value: undefined,
+      configurable: true,
+    })
+    try {
+      expect(generateRequestId()).toMatch(/^[0-9a-f]{32}$/)
+    } finally {
+      if (descriptor) Object.defineProperty(crypto, 'randomUUID', descriptor)
+      else Reflect.deleteProperty(crypto, 'randomUUID')
+    }
   })
 
   it('remembers dismissed final results by game ID', () => {

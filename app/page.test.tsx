@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import HomePage from './page'
+
+beforeEach(() => vi.stubEnv('ENABLE_WORD_PACKS', 'false'))
 
 describe('HomePage', () => {
   it('shows the combined call to action with both room flows', () => {
@@ -34,3 +36,24 @@ describe('HomePage', () => {
     )
   })
 })
+
+afterEach(() => vi.unstubAllEnvs())
+it.each(['false', 'true'])(
+  'gates home purchase and account entry points with the release flag (%s)',
+  (flag) => {
+    vi.stubEnv('ENABLE_WORD_PACKS', flag)
+    render(<HomePage />)
+    if (flag === 'true')
+      expect(
+        screen.getByRole('button', { name: 'Buy word packs' }),
+      ).toBeVisible()
+    else {
+      expect(
+        screen.queryByRole('button', { name: 'Buy word packs' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText(/Account features|Sign in|Sign up/),
+      ).not.toBeInTheDocument()
+    }
+  },
+)

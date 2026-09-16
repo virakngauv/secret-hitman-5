@@ -1,6 +1,10 @@
 allowBuilds:
+  bufferutil: false
   core-js: true
   esbuild: true
   sharp: true
   unrs-resolver: true
+  utf-8-validate: false
 confirmModulesPurge: false
+patchedDependencies:
+  '@clerk/backend@3.17.1': patches/@clerk__backend@3.17.1.patch

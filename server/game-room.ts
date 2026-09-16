@@ -1,3 +1,5 @@
+import { BASE_PACK, type Pack } from './packs'
+
 import { randomUUID } from 'node:crypto'
 
 import {
@@ -64,6 +66,7 @@ type GameSeat = {
 }
 
 type GameState = {
+  pack: Pack
   gameId: string
   boardSeed: string
   nextBoardIndex: number
@@ -88,6 +91,8 @@ export type GameRoomOptions = {
 export class GameRoom {
   readonly code: string
   phase: RoomPhase = 'lobby'
+  selectedPack = BASE_PACK
+  configurationRevision = 0
   lastMeaningfulActivityAt: number
 
   private readonly members: Member[]
@@ -184,6 +189,8 @@ export class GameRoom {
     const wasHost = member.role === 'host'
     member.active = false
     if (wasHost) {
+      this.selectedPack = BASE_PACK
+      this.configurationRevision += 1
       member.role = 'player'
       const successor = this.hostSuccessor()
       if (successor) successor.role = 'host'
@@ -277,6 +284,7 @@ export class GameRoom {
 
   private resetRoundToLobby(lobbyNotice?: Member['lobbyNotice']) {
     this.phase = 'lobby'
+    this.configurationRevision += 1
     this.game = null
     for (const member of this.members) {
       member.participation = 'player'
@@ -287,7 +295,39 @@ export class GameRoom {
     this.commandResults.clear()
   }
 
-  start(token: string, now = Date.now()): CommandResult {
+  checkPackCommand(token: string, revision: number): CommandResult {
+    if (this.findActiveMember(token)?.role !== 'host')
+      return {
+        status: 'forbidden',
+        message: 'Only the host can choose packs or start.',
+      }
+    if (this.phase !== 'lobby' || revision !== this.configurationRevision)
+      return {
+        status: 'stale',
+        message: 'The lobby changed. Please try again.',
+      }
+    return { status: 'success' }
+  }
+
+  selectPack(
+    token: string,
+    revision: number,
+    pack: Pack,
+    now = Date.now(),
+  ): CommandResult {
+    const check = this.checkPackCommand(token, revision)
+    if (check.status !== 'success') return check
+    this.selectedPack = pack
+    this.configurationRevision += 1
+    this.touch(now)
+    return { status: 'success' }
+  }
+
+  start(
+    token: string,
+    now = Date.now(),
+    pack: Pack = this.selectedPack,
+  ): CommandResult {
     const actor = this.findActiveMember(token)
     if (!actor || actor.role !== 'host') {
       return {
@@ -325,7 +365,7 @@ export class GameRoom {
       member.game = {
         position,
         score: 0,
-        board: createPlayerBoard(seed, position),
+        board: createPlayerBoard(seed, position, pack.words),
         hint: null,
         targetCount: 0,
         hintSubmitted: false,
@@ -334,6 +374,7 @@ export class GameRoom {
       }
     })
     this.game = {
+      pack,
       gameId,
       boardSeed: seed,
       nextBoardIndex: players.length,
@@ -343,6 +384,7 @@ export class GameRoom {
       turnCompleted: false,
       latestActivity: null,
     }
+    this.selectedPack = pack
     this.phase = 'hinting'
     this.commandResults.clear()
     this.touch(now)
@@ -464,7 +506,11 @@ export class GameRoom {
     const game = this.requireGame()
     const boardIndex = game.nextBoardIndex
     game.nextBoardIndex += 1
-    target.game.board = createPlayerBoard(game.boardSeed, boardIndex)
+    target.game.board = createPlayerBoard(
+      game.boardSeed,
+      boardIndex,
+      game.pack.words,
+    )
     target.game.hint = null
     target.game.targetCount = 0
     target.game.hintSubmitted = false
@@ -742,6 +788,11 @@ export class GameRoom {
           : null
       return {
         status: 'lobby',
+        selectedPackId: this.selectedPack.id,
+        selectedPackIds: [
+          ...(this.selectedPack.sourceIds ?? [this.selectedPack.id]),
+        ],
+        configurationRevision: this.configurationRevision,
         minimumPlayers: MIN_STARTING_PLAYERS,
         ...(member.lobbyNotice ? { lobbyNotice: member.lobbyNotice } : {}),
         ...(lastGameResults ? { lastGameResults } : {}),
@@ -911,7 +962,7 @@ export class GameRoom {
     member.game = {
       position,
       score: 0,
-      board: createPlayerBoard(game.boardSeed, boardIndex),
+      board: createPlayerBoard(game.boardSeed, boardIndex, game.pack.words),
       hint: null,
       targetCount: 0,
       hintSubmitted: false,

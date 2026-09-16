@@ -2,6 +2,8 @@ import {
   GAME_PROTOCOL_VERSION,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
+  type PackCommandPayload,
+  type SelectPackPayload,
   type ClaimCardPayload,
   type CreateRoomPayload,
   type FinishGuessingPayload,
@@ -240,4 +242,58 @@ export function parseLeaveIntentForm(body: string) {
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function parsePackCommand(value: unknown): PackCommandPayload | null {
+  const room = parseRoomCommand(value)
+  if (
+    !room ||
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.configurationRevision) ||
+    (value.configurationRevision as number) < 0 ||
+    typeof value.requestId !== 'string' ||
+    !COMMAND_ID_PATTERN.test(value.requestId) ||
+    (value.packIds !== undefined &&
+      (!Array.isArray(value.packIds) ||
+        value.packIds.length < 1 ||
+        value.packIds.length > 32 ||
+        !value.packIds.every(
+          (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id),
+        ) ||
+        new Set(value.packIds).size !== value.packIds.length)) ||
+    (value.accountToken !== undefined &&
+      (typeof value.accountToken !== 'string' ||
+        value.accountToken.length < 1 ||
+        value.accountToken.length > 8192))
+  )
+    return null
+  return {
+    ...room,
+    configurationRevision: value.configurationRevision as number,
+    ...(Array.isArray(value.packIds)
+      ? { packIds: [...value.packIds] as string[] }
+      : {}),
+    requestId: value.requestId,
+    ...(typeof value.accountToken === 'string'
+      ? { accountToken: value.accountToken }
+      : {}),
+  }
+}
+export function parseSelectPack(value: unknown): SelectPackPayload | null {
+  const command = parsePackCommand(value)
+  if (!command || !isRecord(value)) return null
+  const validId = (id: unknown): id is string =>
+    typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id)
+  if (!validId(value.packId)) return null
+  if (value.packIds === undefined) return { ...command, packId: value.packId }
+  if (
+    !Array.isArray(value.packIds) ||
+    value.packIds.length === 0 ||
+    value.packIds.length > 32 ||
+    !value.packIds.every(validId) ||
+    new Set(value.packIds).size !== value.packIds.length ||
+    value.packIds[0] !== value.packId
+  )
+    return null
+  return { ...command, packId: value.packId, packIds: [...value.packIds] }
 }
