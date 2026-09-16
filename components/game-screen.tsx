@@ -115,6 +115,7 @@ export function HintPhaseScreen({
       return setHintActionError('Select at least one word for your hint.')
     setIsSubmitting(true)
     setHintActionError(null)
+    setHint(normalizedHint)
     const result = await onSubmitHint(normalizedHint, [...selected])
     if (result.status !== 'success') setHintActionError(result.message)
     setIsSubmitting(false)

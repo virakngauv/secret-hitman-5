@@ -143,7 +143,7 @@ describe('HintPhaseScreen', () => {
 
   it('shows the shared hint limit and blocks over-limit submissions', async () => {
     const user = userEvent.setup()
-    const onSubmitHint = vi.fn()
+    const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
 
     render(
       <HintPhaseScreen
@@ -168,6 +168,15 @@ describe('HintPhaseScreen', () => {
     expect(screen.getByText(`17/${MAX_HINT_LENGTH}`)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
 
+    await user.click(screen.getByRole('button', { name: 'Submit' }))
+    await waitFor(() => {
+      expect(onSubmitHint).toHaveBeenCalledWith(
+        'PROJECT HAIL MARY',
+        expect.any(Array),
+      )
+    })
+    expect(input).toHaveValue('PROJECT HAIL MARY')
+
     await user.type(input, '12345678')
     expect(input).toHaveAttribute('aria-invalid', 'true')
     expect(
@@ -176,7 +185,7 @@ describe('HintPhaseScreen', () => {
       ),
     ).toBeVisible()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled()
-    expect(onSubmitHint).not.toHaveBeenCalled()
+    expect(onSubmitHint).toHaveBeenCalledTimes(1)
   })
 
   it('fits long words individually while allowing phrases to wrap naturally', () => {
