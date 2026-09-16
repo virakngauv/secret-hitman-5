@@ -172,13 +172,50 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await host.getByRole('button', { name: 'Submit' }).click()
     await expect(host.getByLabel('Submitted hint')).toContainText('ORBIT 1')
     await expect(host.getByLabel('Your hint')).toBeDisabled()
-    await guest.getByLabel('Your hint').fill('Garden')
+    await guest.getByLabel('Your hint').fill('A'.repeat(25))
+    await expect(
+      guest.getByText('Keep your hint to 24 characters or fewer.'),
+    ).toBeVisible()
+    await expect(guest.getByText('25/24')).toBeVisible()
+    await expect(guest.getByRole('button', { name: 'Submit' })).toBeDisabled()
+    await guest.getByLabel('Your hint').fill('Project Hail Mary Again')
+    await expect(guest.getByText('23/24')).toBeVisible()
     const guestTarget = guest
       .locator('button[data-card-kind="neutral"]')
       .first()
     const guestTargetId = await guestTarget.getAttribute('data-card-id')
     await guestTarget.click()
     await guest.getByRole('button', { name: 'Submit' }).click()
+
+    await host.setViewportSize({ width: 320, height: 900 })
+    const guestHint = host
+      .getByRole('list', { name: 'Roster' })
+      .getByLabel(`${longPickerName}'s hint: PROJECT HAIL MARY AGAIN, 1`)
+    const guestSummary = guestHint.locator('..').locator('..')
+    const guestName = guestSummary.locator('.roster-card-name-stacked')
+    await expect(guestSummary).toHaveClass(/roster-card-primary-stacked/)
+    await expect(guestSummary.locator('.roster-card-separator')).toHaveCount(0)
+    await expect(guestSummary.locator('.roster-card-suffix-badge')).toHaveText(
+      '1',
+    )
+    expect(
+      await guestName.evaluate(
+        (element) => element.scrollWidth > element.clientWidth,
+      ),
+    ).toBe(true)
+    expect(
+      await guestHint.evaluate(
+        (element) =>
+          element.getBoundingClientRect().height >
+          Number.parseFloat(getComputedStyle(element).lineHeight),
+      ),
+    ).toBe(true)
+    expect(
+      await host.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true)
+
     await host.getByRole('button', { name: 'Start game' }).click()
     await expect(guest.getByLabel('Current guessing board')).toBeVisible()
 
@@ -232,7 +269,9 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
 
     await guest.setViewportSize({ width: 360, height: 900 })
     await host.getByRole('button', { name: 'Next hint' }).click()
-    await expect(host.getByText('GARDEN', { exact: true })).toBeVisible()
+    await expect(
+      host.getByText('PROJECT HAIL MARY AGAIN', { exact: true }),
+    ).toBeVisible()
     await host.locator(`button[data-card-id="${guestTargetId}"]`).click()
     const finalBoard = guest.getByLabel('Completed and fully revealed board')
     await expect(finalBoard).toBeVisible()

@@ -96,6 +96,21 @@ describe('parseHint', () => {
     expect(parseHint(`${hint}a`)).toBeNull()
   })
 
+  it('accepts expected multiword titles within the hint limit', () => {
+    expect(parseHint('Project Hail Mary')).toBe('Project Hail Mary')
+  })
+
+  it('rejects over-limit hints in incoming command payloads', () => {
+    expect(
+      parseSubmitHint({
+        roomCode: 'bcdf2',
+        gameId,
+        hint: 'a'.repeat(MAX_HINT_LENGTH + 1),
+        targetCardIds: ['p1-card-1'],
+      }),
+    ).toBeNull()
+  })
+
   it('sanitizes hints in incoming command payloads', () => {
     expect(
       parseSubmitHint({

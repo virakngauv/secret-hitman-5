@@ -4,6 +4,7 @@ export const MAX_STARTING_PLAYERS = 12
 export const BOARD_CARD_COUNT = 12
 export const MIN_TARGET_COUNT = 1
 export const MAX_TARGET_COUNT = 5
+export const MAX_HINT_LENGTH = 24
 
 export type RoomPhase = 'lobby' | 'hinting' | 'guessing'
 export type PlayerRole = 'host' | 'player'

@@ -304,6 +304,36 @@ input {
   margin-top: 0.5rem;
 }
 
+.hint-input-group {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.hint-input-group > input {
+  grid-column: 1 / -1;
+}
+
+.hint-character-count {
+  grid-column: 2;
+  justify-self: end;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.hint-character-count.is-over-limit {
+  color: var(--accent);
+}
+
+.hint-length-error {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
+}
+
 .word-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -648,6 +678,31 @@ button.word-card:focus-visible {
   justify-content: flex-start;
 }
 
+.roster-card-primary-stacked {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.2rem;
+}
+
+.roster-card-name-stacked {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-card-detail-row {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.roster-card-detail-row .roster-card-detail {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .roster-card-inline-detail {
   display: inline-flex;
   flex: 0 0 auto;
@@ -683,6 +738,21 @@ button.word-card:focus-visible {
      track, so it stays left-aligned when the text wraps. */
   margin-left: 0.3rem;
   color: var(--muted-foreground);
+}
+
+.roster-card-suffix-badge {
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 1.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  color: var(--foreground);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-left: 0;
 }
 
 .roster-card .status-dot-label {

@@ -1,5 +1,6 @@
 import {
   GAME_PROTOCOL_VERSION,
+  MAX_HINT_LENGTH,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
   type PackCommandPayload,
@@ -27,7 +28,7 @@ export const TURN_ID_PATTERN =
 export const GAME_ID_PATTERN = TURN_ID_PATTERN
 export const CARD_ID_PATTERN = /^p\d+-card-\d{1,2}$/
 export const MAX_PLAYER_NAME_LENGTH = 50
-export const MAX_HINT_LENGTH = 40
+export { MAX_HINT_LENGTH }
 const SOCKET_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 const MAX_LEAVE_INTENT_ROOMS = 10
 const UNSAFE_TEXT_CHARACTERS =
