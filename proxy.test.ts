@@ -6,11 +6,9 @@ const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
   next: vi.fn(),
   json: vi.fn(),
-  isAccountRoute: vi.fn(),
 }))
 vi.mock('@clerk/nextjs/server', () => ({
   clerkMiddleware: mocks.middleware,
-  createRouteMatcher: () => mocks.isAccountRoute,
 }))
 vi.mock('next/server', () => ({
   NextResponse: { next: mocks.next, json: mocks.json },
@@ -24,7 +22,6 @@ describe('optional Clerk proxy', () => {
     mocks.handle.mockReset()
     mocks.next.mockReset()
     mocks.json.mockReset()
-    mocks.isAccountRoute.mockReset().mockReturnValue(false)
     vi.stubEnv('CLERK_AUTHORIZED_PARTIES', undefined)
   })
   afterEach(() => vi.unstubAllEnvs())
@@ -43,23 +40,6 @@ describe('optional Clerk proxy', () => {
     expect(mocks.middleware).not.toHaveBeenCalled()
     expect(mocks.next).not.toHaveBeenCalled()
   })
-
-  it.each([true, false])(
-    'protects only account routes (matched: %s)',
-    async (matched) => {
-      vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'key')
-      vi.stubEnv('CLERK_SECRET_KEY', 'secret')
-      vi.stubEnv('CLERK_AUTHORIZED_PARTIES', 'http://localhost:3000')
-      mocks.isAccountRoute.mockReturnValue(matched)
-      await import('./proxy')
-      const handler = mocks.middleware.mock.calls[0][0]
-      const protect = vi.fn().mockResolvedValue(undefined)
-      const request = {} as NextRequest
-      await handler({ protect }, request)
-      expect(mocks.isAccountRoute).toHaveBeenCalledWith(request)
-      expect(protect).toHaveBeenCalledTimes(matched ? 1 : 0)
-    },
-  )
 
   it.each([
     [undefined, undefined],
@@ -104,7 +84,7 @@ describe('optional Clerk proxy', () => {
     const request = {} as NextRequest
     const event = {} as NextFetchEvent
     proxy(request, event)
-    expect(mocks.middleware).toHaveBeenCalledWith(expect.any(Function), {
+    expect(mocks.middleware).toHaveBeenCalledWith({
       publishableKey: 'key',
       secretKey: 'secret',
       authorizedParties: ['https://game.example.com'],
@@ -143,7 +123,7 @@ describe('optional Clerk proxy', () => {
       ' https://game.example.com, ,http://localhost:3140 ',
     )
     await import('./proxy')
-    expect(mocks.middleware).toHaveBeenLastCalledWith(expect.any(Function), {
+    expect(mocks.middleware).toHaveBeenLastCalledWith({
       publishableKey: 'key',
       secretKey: 'secret',
       authorizedParties: ['https://game.example.com', 'http://localhost:3140'],
