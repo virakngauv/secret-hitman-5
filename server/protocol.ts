@@ -749,8 +749,7 @@ export function createGameSocketServer(
     ) {
       acknowledge({
         status: 'unsupported',
-        message:
-          'This app version does not support that feature. Reload or update the app and try again.',
+        message: 'This app version does not support that feature.',
       })
       return false
     }

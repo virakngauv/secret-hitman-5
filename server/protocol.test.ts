@@ -191,8 +191,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
     })
     expect(await client.emitWithAck('packs:catalog', {})).toEqual({
       status: 'unsupported',
-      message:
-        'This app version does not support that feature. Reload or update the app and try again.',
+      message: 'This app version does not support that feature.',
     })
     const created = await client.emitWithAck('room:create', { name: 'Ada' })
     if (created.status !== 'success') throw new Error('Expected room creation.')
@@ -205,8 +204,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       }),
     ).toEqual({
       status: 'unsupported',
-      message:
-        'This app version does not support that feature. Reload or update the app and try again.',
+      message: 'This app version does not support that feature.',
     })
   })
 
@@ -271,8 +269,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
       }),
     ).toEqual({
       status: 'unsupported',
-      message:
-        'This app version does not support that feature. Reload or update the app and try again.',
+      message: 'This app version does not support that feature.',
     })
   })
 

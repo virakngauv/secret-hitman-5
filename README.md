@@ -212,15 +212,18 @@ available. Features outside the client's advertised capabilities return a typed
 command error instead of rejecting the socket. The known v16 handshake does not
 include range metadata, so the server recognizes that exact legacy shape and
 retains its 50-character name and 40-character hint payload contract while v16
-remains in the compatibility window. Other malformed or non-overlapping clients
-are rejected with an actionable reload/update message. Deploy the server before the
-frontend when expanding the range or adding optional capabilities; deploy the
-frontend before the server when raising the compatibility floor. Advance the
-minimum only after traffic logs show the retiring version is no longer in use,
-and document that removal in the same release. A rollback must retain overlap
-with both adjacent releases or it will lose active rooms. Verify no premium pools
-or credentials appear in browser bundles, public responses, or logs before
-enabling a paid catalog.
+remains in the compatibility window. Malformed authentication, ranges, or
+capability arrays are rejected as invalid sessions; well-formed clients without
+protocol overlap receive the actionable reload/update message. Deploy the server
+before the frontend when expanding the range or adding optional capabilities;
+deploy the frontend before the server when raising the compatibility floor.
+Advance the minimum only after traffic logs show the retiring version is no
+longer in use, and document that removal in the same release. A rollback must
+retain overlap with both adjacent releases so compatible clients can reconnect,
+but replacing the in-memory game-server process still loses active rooms unless
+the deployment provides graceful state handoff or a shared room adapter. Verify
+no premium pools or credentials appear in browser bundles, public responses, or
+logs before enabling a paid catalog.
 
 The lobby avatar has an explicit “Sign out and stay in room” action that ends
 the Clerk session without navigation, retaining the independent anonymous game seat. Verify the actual configured Clerk avatar action beyond the
