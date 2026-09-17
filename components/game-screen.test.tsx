@@ -141,7 +141,7 @@ describe('HintPhaseScreen', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('shows the shared hint limit and blocks over-limit submissions', async () => {
+  it('counts typed characters and stops input at the shared hint limit', async () => {
     const user = userEvent.setup()
     const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
 
@@ -158,14 +158,15 @@ describe('HintPhaseScreen', () => {
     )
 
     const input = screen.getByLabelText('Your hint')
+    expect(input).toHaveAttribute('maxlength', String(MAX_HINT_LENGTH))
     expect(screen.getByText(`0/${MAX_HINT_LENGTH}`)).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
     fireEvent.change(input, {
-      target: { value: '  Project     Hail     Mary  ' },
+      target: { value: '  Project  Hail  Mary ' },
     })
-    expect(input).toHaveValue('  PROJECT     HAIL     MARY  ')
-    expect(screen.getByText(`17/${MAX_HINT_LENGTH}`)).toBeVisible()
+    expect(input).toHaveValue('  PROJECT  HAIL  MARY ')
+    expect(screen.getByText(`22/${MAX_HINT_LENGTH}`)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
 
     await user.click(screen.getByRole('button', { name: 'Submit' }))
@@ -177,15 +178,12 @@ describe('HintPhaseScreen', () => {
     })
     expect(input).toHaveValue('PROJECT HAIL MARY')
 
-    await user.type(input, '12345678')
-    expect(input).toHaveAttribute('aria-invalid', 'true')
+    await user.type(input, '1234567890')
+    expect(input).toHaveValue('PROJECT HAIL MARY1234567')
     expect(
-      screen.getByText(
-        `Keep your hint to ${MAX_HINT_LENGTH} characters or fewer.`,
-      ),
+      screen.getByText(`${MAX_HINT_LENGTH}/${MAX_HINT_LENGTH}`),
     ).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled()
-    expect(onSubmitHint).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
   })
 
   it('fits long words individually while allowing phrases to wrap naturally', () => {
@@ -835,7 +833,7 @@ describe('HintPhaseScreen', () => {
     expect(onRejectHint).toHaveBeenCalledWith('player-2')
   })
 
-  it('stacks hint details beneath truncated names with a number badge', () => {
+  it('stacks each hint and target count as one wrapping text string', () => {
     const longName = 'Grace Hopper With An Exceptionally Long Display Name'
     const longHint = 'Project Hail Mary Again'
     const spectator = {
@@ -878,17 +876,15 @@ describe('HintPhaseScreen', () => {
 
     const roster = screen.getByRole('list', { name: 'Roster' })
     expect(roster).toHaveClass('roster-scroll')
-    const primary = within(roster).getByTitle(`${longName}: ${longHint} (5)`)
+    const primary = within(roster).getByTitle(`${longName}: ${longHint} 5`)
     expect(primary).toHaveClass('roster-card-primary-stacked')
     expect(
       primary.querySelector('.roster-card-name-stacked'),
     ).toHaveTextContent(longName)
     expect(primary.querySelector('.roster-card-detail')).toHaveTextContent(
-      longHint,
+      `${longHint} 5`,
     )
-    expect(
-      primary.querySelector('.roster-card-suffix-badge'),
-    ).toHaveTextContent('5')
+    expect(primary.querySelector('.roster-card-suffix')).toBeNull()
     expect(primary.querySelector('.roster-card-separator')).toBeNull()
     const spectatorCard = within(roster)
       .getByText(spectator.name)

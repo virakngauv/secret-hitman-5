@@ -90,7 +90,6 @@ export function HintPhaseScreen({
     ({ submitted }) => submitted,
   ).length
   const normalizedHint = normalizeHint(hint)
-  const hintTooLong = normalizedHint.length > MAX_HINT_LENGTH
 
   const toggleCard = (cardId: string) => {
     if (view.board?.find(({ id }) => id === cardId)?.locked) return
@@ -107,10 +106,6 @@ export function HintPhaseScreen({
     if (isSubmitting) return
     if (!normalizedHint)
       return setHintActionError('Write a one-word or short phrase hint.')
-    if (hintTooLong)
-      return setHintActionError(
-        `Keep your hint to ${MAX_HINT_LENGTH} characters or fewer.`,
-      )
     if (selected.size < MIN_TARGET_COUNT)
       return setHintActionError('Select at least one word for your hint.')
     setIsSubmitting(true)
@@ -301,21 +296,21 @@ export function HintPhaseScreen({
                       ref={hintInputRef}
                       value={hint}
                       onChange={(event) => {
-                        setHint(event.target.value.toUpperCase())
+                        setHint(
+                          event.target.value
+                            .slice(0, MAX_HINT_LENGTH)
+                            .toUpperCase(),
+                        )
                         setHintActionError(null)
                       }}
+                      maxLength={MAX_HINT_LENGTH}
                       placeholder={hintPlaceholder}
                       autoComplete="off"
                       autoCapitalize="characters"
                       enterKeyHint="done"
                       disabled={view.hintSubmitted}
                       readOnly={isSubmitting || isUnlocking}
-                      aria-invalid={hintTooLong}
-                      aria-describedby={
-                        hintTooLong
-                          ? 'hint-character-count hint-length-error'
-                          : 'hint-character-count'
-                      }
+                      aria-describedby="hint-character-count"
                       className={cn(
                         'h-13 rounded-2xl text-lg',
                         view.hintSubmitted && 'uppercase',
@@ -323,23 +318,11 @@ export function HintPhaseScreen({
                     />
                     <span
                       id="hint-character-count"
-                      className={cn(
-                        'hint-character-count',
-                        hintTooLong && 'is-over-limit',
-                      )}
+                      className="hint-character-count"
                       aria-live="polite"
                     >
-                      {normalizedHint.length}/{MAX_HINT_LENGTH}
+                      {hint.length}/{MAX_HINT_LENGTH}
                     </span>
-                    {hintTooLong ? (
-                      <p
-                        id="hint-length-error"
-                        className="action-error hint-length-error"
-                        role="alert"
-                      >
-                        Keep your hint to {MAX_HINT_LENGTH} characters or fewer.
-                      </p>
-                    ) : null}
                   </div>
                   {view.hintSubmitted ? (
                     <Button
@@ -359,8 +342,7 @@ export function HintPhaseScreen({
                       disabled={
                         isSubmitting ||
                         selected.size < MIN_TARGET_COUNT ||
-                        !normalizedHint ||
-                        hintTooLong
+                        !normalizedHint
                       }
                     >
                       Submit
@@ -1138,7 +1120,7 @@ function PlayerSummary({
 }) {
   const primaryText = detail
     ? stackedDetail
-      ? `${name}: ${detail}${detailSuffix ? ` (${detailSuffix})` : ''}`
+      ? `${name}: ${detail}${detailSuffix ? ` ${detailSuffix}` : ''}`
       : `${name} · ${detail}${detailSuffix ? ` ${detailSuffix}` : ''}`
     : name
 
@@ -1164,12 +1146,8 @@ function PlayerSummary({
               aria-label={detailLabel}
             >
               {detail}
+              {detailSuffix ? ` ${detailSuffix}` : ''}
             </span>
-            {detailSuffix ? (
-              <span className="roster-card-suffix roster-card-suffix-badge">
-                {detailSuffix}
-              </span>
-            ) : null}
           </span>
         </>
       ) : singleLine && detail ? (

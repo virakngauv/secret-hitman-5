@@ -173,11 +173,8 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(host.getByLabel('Submitted hint')).toContainText('ORBIT 1')
     await expect(host.getByLabel('Your hint')).toBeDisabled()
     await guest.getByLabel('Your hint').fill('A'.repeat(25))
-    await expect(
-      guest.getByText('Keep your hint to 24 characters or fewer.'),
-    ).toBeVisible()
-    await expect(guest.getByText('25/24')).toBeVisible()
-    await expect(guest.getByRole('button', { name: 'Submit' })).toBeDisabled()
+    await expect(guest.getByLabel('Your hint')).toHaveValue('A'.repeat(24))
+    await expect(guest.getByText('24/24')).toBeVisible()
     await guest.getByLabel('Your hint').fill('Project Hail Mary Again')
     await expect(guest.getByText('23/24')).toBeVisible()
     const guestTarget = guest
@@ -195,9 +192,8 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     const guestName = guestSummary.locator('.roster-card-name-stacked')
     await expect(guestSummary).toHaveClass(/roster-card-primary-stacked/)
     await expect(guestSummary.locator('.roster-card-separator')).toHaveCount(0)
-    await expect(guestSummary.locator('.roster-card-suffix-badge')).toHaveText(
-      '1',
-    )
+    await expect(guestHint).toHaveText('PROJECT HAIL MARY AGAIN 1')
+    await expect(guestSummary.locator('.roster-card-suffix')).toHaveCount(0)
     expect(
       await guestName.evaluate(
         (element) => element.scrollWidth > element.clientWidth,
