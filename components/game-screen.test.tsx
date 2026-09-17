@@ -215,6 +215,29 @@ describe('HintPhaseScreen', () => {
     ).toBeVisible()
   })
 
+  it('does not split a surrogate pair when uppercase expansion reaches the limit', () => {
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    fireEvent.change(input, {
+      target: { value: `ß${'A'.repeat(21)}😀` },
+    })
+
+    expect(input).toHaveValue(`SS${'A'.repeat(21)}`)
+    expect(input).not.toHaveValue(expect.stringMatching(/[\uD800-\uDFFF]/u))
+    expect(screen.getByText(`23/${MAX_HINT_LENGTH}`)).toBeVisible()
+  })
+
   it('fits long words individually while allowing phrases to wrap naturally', () => {
     const words = [
       'TELESCOPE',

@@ -32,6 +32,17 @@ import { cn } from '@/lib/utils'
 type HintingView = Extract<RoomSnapshot, { status: 'hinting' }>
 type GuessingView = Extract<RoomSnapshot, { status: 'guessing' }>
 
+function uppercaseHintWithinLimit(value: string) {
+  let result = ''
+
+  for (const character of value.toUpperCase()) {
+    if (result.length + character.length > MAX_HINT_LENGTH) break
+    result += character
+  }
+
+  return result
+}
+
 export function HintPhaseScreen({
   view,
   onSubmitHint,
@@ -296,11 +307,7 @@ export function HintPhaseScreen({
                       ref={hintInputRef}
                       value={hint}
                       onChange={(event) => {
-                        setHint(
-                          event.target.value
-                            .toUpperCase()
-                            .slice(0, MAX_HINT_LENGTH),
-                        )
+                        setHint(uppercaseHintWithinLimit(event.target.value))
                         setHintActionError(null)
                       }}
                       placeholder={hintPlaceholder}
