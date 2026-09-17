@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 
+import { MAX_PLAYER_NAME_LENGTH } from '@/lib/game-protocol'
+
 import { JoinRoomForm } from './join-room-form'
 
 const mocks = vi.hoisted(() => ({
@@ -76,6 +78,25 @@ describe('JoinRoomForm', () => {
       'placeholder',
       'Your name',
     )
+    expect(screen.getByLabelText('Name')).toHaveAttribute(
+      'maxlength',
+      String(MAX_PLAYER_NAME_LENGTH),
+    )
+    expect(screen.getByText(`0/${MAX_PLAYER_NAME_LENGTH}`)).toBeVisible()
+  })
+
+  it('hard-limits the player name while keeping joining available', async () => {
+    const user = userEvent.setup()
+    renderForm({ roomCode: 'frvg7' })
+
+    const input = screen.getByLabelText('Name')
+    await user.type(input, 'B'.repeat(MAX_PLAYER_NAME_LENGTH + 1))
+
+    expect(input).toHaveValue('B'.repeat(MAX_PLAYER_NAME_LENGTH))
+    expect(
+      screen.getByText(`${MAX_PLAYER_NAME_LENGTH}/${MAX_PLAYER_NAME_LENGTH}`),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Join' })).toBeEnabled()
   })
 
   it('keeps focus stable across connection status transitions', () => {

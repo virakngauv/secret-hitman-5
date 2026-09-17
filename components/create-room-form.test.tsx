@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { MAX_PLAYER_NAME_LENGTH } from '@/lib/game-protocol'
+
 import { CreateRoomForm } from './create-room-form'
 
 const mocks = vi.hoisted(() => ({
@@ -40,6 +42,23 @@ describe('CreateRoomForm', () => {
 
     await waitFor(() => expect(mocks.createRoom).toHaveBeenCalledWith('Ada'))
     expect(mocks.routerPush).toHaveBeenCalledWith('/frvg7')
+  })
+
+  it('hard-limits the player name and shows its character count', async () => {
+    const user = userEvent.setup()
+    render(<CreateRoomForm />)
+
+    const input = screen.getByLabelText('Name')
+    expect(input).toHaveAttribute('maxlength', String(MAX_PLAYER_NAME_LENGTH))
+    expect(screen.getByText(`0/${MAX_PLAYER_NAME_LENGTH}`)).toBeVisible()
+
+    await user.type(input, 'A'.repeat(MAX_PLAYER_NAME_LENGTH + 1))
+
+    expect(input).toHaveValue('A'.repeat(MAX_PLAYER_NAME_LENGTH))
+    expect(
+      screen.getByText(`${MAX_PLAYER_NAME_LENGTH}/${MAX_PLAYER_NAME_LENGTH}`),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled()
   })
 
   it('waits for the game socket before enabling creation', () => {

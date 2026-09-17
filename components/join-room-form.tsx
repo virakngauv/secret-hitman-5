@@ -9,6 +9,7 @@ import {
 } from 'react'
 
 import { useGameSocket } from '@/components/game-socket-provider'
+import { PlayerNameField } from '@/components/player-name-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -100,16 +101,14 @@ export function JoinRoomForm({
           required
           disabled={isJoining}
         />
-        <Field
-          label="Name"
+        <PlayerNameField
           id="name"
           name="name"
           placeholder="Your name"
           ref={nameInputRef}
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onValueChange={setName}
           autoComplete="name"
-          maxLength={50}
           required
           disabled={isJoining}
         />

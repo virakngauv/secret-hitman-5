@@ -1,6 +1,7 @@
 import {
   GAME_PROTOCOL_VERSION,
   MAX_HINT_LENGTH,
+  MAX_PLAYER_NAME_LENGTH,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
   normalizeHint,
@@ -28,8 +29,7 @@ export const TURN_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 export const GAME_ID_PATTERN = TURN_ID_PATTERN
 export const CARD_ID_PATTERN = /^p\d+-card-\d{1,2}$/
-export const MAX_PLAYER_NAME_LENGTH = 50
-export { MAX_HINT_LENGTH }
+export { MAX_HINT_LENGTH, MAX_PLAYER_NAME_LENGTH }
 const SOCKET_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 const MAX_LEAVE_INTENT_ROOMS = 10
 const UNSAFE_TEXT_CHARACTERS =

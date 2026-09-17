@@ -3,6 +3,7 @@ import { GAME_PROTOCOL_VERSION } from '../lib/game-protocol'
 
 import {
   MAX_HINT_LENGTH,
+  MAX_PLAYER_NAME_LENGTH,
   parseClaimCard,
   parseFinishGuessing,
   parseHandshakeAuth,
@@ -205,6 +206,13 @@ describe('parsePlayerName', () => {
 
   it('rejects a name made entirely from unsafe characters', () => {
     expect(parsePlayerName('\u0000\u202e\u2066')).toBeNull()
+  })
+
+  it('accepts names at the shared limit and rejects longer names', () => {
+    expect(parsePlayerName('A'.repeat(MAX_PLAYER_NAME_LENGTH))).toBe(
+      'A'.repeat(MAX_PLAYER_NAME_LENGTH),
+    )
+    expect(parsePlayerName('A'.repeat(MAX_PLAYER_NAME_LENGTH + 1))).toBeNull()
   })
 })
 

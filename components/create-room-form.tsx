@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 
 import { useGameSocket } from '@/components/game-socket-provider'
+import { PlayerNameField } from '@/components/player-name-field'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 export function CreateRoomForm() {
   const { createRoom, connectionStatus } = useGameSocket()
@@ -46,18 +46,13 @@ export function CreateRoomForm() {
 
   return (
     <form className="mt-7" onSubmit={handleSubmit}>
-      <label className="text-sm font-semibold" htmlFor="name">
-        Name
-      </label>
-      <Input
+      <PlayerNameField
         id="name"
         name="name"
-        className="mt-2"
         value={name}
-        onChange={(event) => setName(event.target.value)}
+        onValueChange={setName}
         placeholder="Your name"
         autoComplete="name"
-        maxLength={50}
         autoFocus
         required
         disabled={isCreating}

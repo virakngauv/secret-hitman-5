@@ -158,6 +158,7 @@ describe('HintPhaseScreen', () => {
     )
 
     const input = screen.getByLabelText('Your hint')
+    expect(input).toHaveAttribute('maxlength', String(MAX_HINT_LENGTH))
     expect(screen.getByText(`0/${MAX_HINT_LENGTH}`)).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
@@ -183,19 +184,35 @@ describe('HintPhaseScreen', () => {
       screen.getByText(`${MAX_HINT_LENGTH}/${MAX_HINT_LENGTH}`),
     ).toBeVisible()
     expect(
-      screen.getByText(
-        `Keep your hint to ${MAX_HINT_LENGTH} characters or fewer.`,
-      ),
-    ).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled()
-
-    await user.type(input, '{Backspace}')
-    expect(
       screen.queryByText(
         `Keep your hint to ${MAX_HINT_LENGTH} characters or fewer.`,
       ),
     ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
+  })
+
+  it('keeps uppercase character expansions within the hard limit', () => {
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    fireEvent.change(input, {
+      target: { value: `${'A'.repeat(MAX_HINT_LENGTH - 1)}ß` },
+    })
+
+    expect(input).toHaveValue(`${'A'.repeat(MAX_HINT_LENGTH - 1)}S`)
+    expect(
+      screen.getByText(`${MAX_HINT_LENGTH}/${MAX_HINT_LENGTH}`),
+    ).toBeVisible()
   })
 
   it('fits long words individually while allowing phrases to wrap naturally', () => {

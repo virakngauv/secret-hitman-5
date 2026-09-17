@@ -1,12 +1,16 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
+import { MAX_PLAYER_NAME_LENGTH } from '../lib/game-protocol'
+
 const widths = [320, 359, 360, 361, 375, 390, 414, 639, 640, 928, 1216, 1280]
 const mobileViewportHeights = new Map([
   [360, 640],
   [375, 667],
   [390, 844],
 ])
-const longPickerName = 'Grace Hopper With An Extraordinarily Long Picker N'
+const attemptedLongPickerName =
+  'Grace Hopper With An Extraordinarily Long Picker N'
+const longPickerName = attemptedLongPickerName.slice(0, MAX_PLAYER_NAME_LENGTH)
 
 test('boards remain readable through hinting, guessing, and final reveal at mobile and desktop widths', async ({
   browser,
@@ -30,7 +34,11 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(host.getByRole('heading', { name: 'lobby.' })).toBeVisible()
     const roomCode = new URL(host.url()).pathname.slice(1)
     await guest.goto(`/${roomCode}`)
-    await guest.getByLabel('Name').fill(longPickerName)
+    await guest.getByLabel('Name').fill(attemptedLongPickerName)
+    await expect(guest.getByLabel('Name')).toHaveValue(longPickerName)
+    await expect(
+      guest.getByText(`${MAX_PLAYER_NAME_LENGTH}/${MAX_PLAYER_NAME_LENGTH}`),
+    ).toBeVisible()
     await guest.getByRole('button', { name: 'Join', exact: true }).click()
     await expect(
       host
@@ -176,16 +184,16 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(guest.getByLabel('Your hint')).toHaveValue('A'.repeat(24))
     await expect(
       guest.getByText('Keep your hint to 24 characters or fewer.'),
-    ).toBeVisible()
+    ).toHaveCount(0)
     await expect(guest.getByText('24/24')).toBeVisible()
-    await expect(guest.getByRole('button', { name: 'Submit' })).toBeDisabled()
-    await guest.getByLabel('Your hint').fill('Project Hail Mary Again')
-    await expect(guest.getByText('23/24')).toBeVisible()
     const guestTarget = guest
       .locator('button[data-card-kind="neutral"]')
       .first()
     const guestTargetId = await guestTarget.getAttribute('data-card-id')
     await guestTarget.click()
+    await expect(guest.getByRole('button', { name: 'Submit' })).toBeEnabled()
+    await guest.getByLabel('Your hint').fill('Project Hail Mary Again')
+    await expect(guest.getByText('23/24')).toBeVisible()
     await guest.getByRole('button', { name: 'Submit' }).click()
 
     await host.setViewportSize({ width: 320, height: 900 })

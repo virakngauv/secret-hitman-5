@@ -76,7 +76,6 @@ export function HintPhaseScreen({
   const [isStarting, setIsStarting] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [busyPlayer, setBusyPlayer] = useState<string | null>(null)
-  const [hintLimitExceeded, setHintLimitExceeded] = useState(false)
   const [removalTarget, setRemovalTarget] = useState<{
     playerId: string
     name: string
@@ -297,13 +296,10 @@ export function HintPhaseScreen({
                       ref={hintInputRef}
                       value={hint}
                       onChange={(event) => {
-                        setHintLimitExceeded(
-                          event.target.value.length > MAX_HINT_LENGTH,
-                        )
                         setHint(
                           event.target.value
-                            .slice(0, MAX_HINT_LENGTH)
-                            .toUpperCase(),
+                            .toUpperCase()
+                            .slice(0, MAX_HINT_LENGTH),
                         )
                         setHintActionError(null)
                       }}
@@ -311,14 +307,10 @@ export function HintPhaseScreen({
                       autoComplete="off"
                       autoCapitalize="characters"
                       enterKeyHint="done"
+                      maxLength={MAX_HINT_LENGTH}
                       disabled={view.hintSubmitted}
                       readOnly={isSubmitting || isUnlocking}
-                      aria-invalid={hintLimitExceeded}
-                      aria-describedby={
-                        hintLimitExceeded
-                          ? 'hint-character-count hint-length-error'
-                          : 'hint-character-count'
-                      }
+                      aria-describedby="hint-character-count"
                       className={cn(
                         'h-13 rounded-2xl text-lg',
                         view.hintSubmitted && 'uppercase',
@@ -326,23 +318,11 @@ export function HintPhaseScreen({
                     />
                     <span
                       id="hint-character-count"
-                      className={cn(
-                        'hint-character-count',
-                        hintLimitExceeded && 'is-over-limit',
-                      )}
+                      className="hint-character-count"
                       aria-live="polite"
                     >
                       {hint.length}/{MAX_HINT_LENGTH}
                     </span>
-                    {hintLimitExceeded ? (
-                      <p
-                        id="hint-length-error"
-                        className="action-error hint-length-error"
-                        role="alert"
-                      >
-                        Keep your hint to {MAX_HINT_LENGTH} characters or fewer.
-                      </p>
-                    ) : null}
                   </div>
                   {view.hintSubmitted ? (
                     <Button
@@ -362,8 +342,7 @@ export function HintPhaseScreen({
                       disabled={
                         isSubmitting ||
                         selected.size < MIN_TARGET_COUNT ||
-                        !normalizedHint ||
-                        hintLimitExceeded
+                        !normalizedHint
                       }
                     >
                       Submit

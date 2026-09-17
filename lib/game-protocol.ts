@@ -5,6 +5,7 @@ export const BOARD_CARD_COUNT = 12
 export const MIN_TARGET_COUNT = 1
 export const MAX_TARGET_COUNT = 5
 export const MAX_HINT_LENGTH = 24
+export const MAX_PLAYER_NAME_LENGTH = 24
 
 const UNSAFE_HINT_CHARACTERS =
   /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
