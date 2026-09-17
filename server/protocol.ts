@@ -365,9 +365,14 @@ export function createGameSocketServer(
 
     socket.on('game:start', (payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
-      if (!canRun(socket, acknowledge)) return
+      const parsed = parsePackCommand(payload)
+      const requiredCapability = parsed?.packIds?.some(
+        (packId) => packId !== 'base',
+      )
+        ? 'word-packs'
+        : undefined
+      if (!canRun(socket, acknowledge, false, requiredCapability)) return
       safely('game:start', acknowledge, async () => {
-        const parsed = parsePackCommand(payload)
         if (!parsed) return acknowledge(invalid())
         const accessStartedAt = Date.now()
         const result = await gameServer.packCommand(

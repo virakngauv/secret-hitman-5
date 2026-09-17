@@ -193,6 +193,49 @@ describe('Socket.IO Secret Hitman protocol', () => {
       message:
         'This app version does not support that feature. Reload or update the app and try again.',
     })
+    const created = await client.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    expect(
+      await client.emitWithAck('game:start', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        packIds: ['movies-v1'],
+        requestId: 'unsupported-pack-start',
+      }),
+    ).toEqual({
+      status: 'unsupported',
+      message:
+        'This app version does not support that feature. Reload or update the app and try again.',
+    })
+  })
+
+  it.each([
+    { name: 'an omitted pack list', packIds: undefined },
+    { name: 'the Base pack', packIds: ['base'] },
+  ])('lets a Base-only client start with $name', async ({ packIds }) => {
+    const host = await connectWithAuth({
+      token: hostToken,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      capabilities: ['base-game'],
+    })
+    const guest = await connect(guestToken)
+    const created = await host.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    expect(
+      await guest.emitWithAck('room:join', {
+        roomCode: created.roomCode,
+        name: 'Grace',
+      }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await host.emitWithAck('game:start', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        ...(packIds ? { packIds } : {}),
+        requestId: 'base-only-start',
+      }),
+    ).toEqual({ status: 'success' })
   })
 
   it.each([
