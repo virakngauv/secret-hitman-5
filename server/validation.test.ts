@@ -9,14 +9,17 @@ import {
   MAX_HINT_LENGTH,
   MAX_PLAYER_NAME_LENGTH,
   parseClaimCard,
+  parseCreateRoom,
   parseFinishGuessing,
   parseHandshakeAuth,
   parseHint,
+  parseJoinRoom,
   parseLeaveIntentForm,
   parsePlayerName,
   parseRejectHint,
   parseRemovePlayer,
   parseSubmitHint,
+  protocolPayloadLimits,
 } from './validation'
 
 const gameId = '10000000-0000-4000-8000-000000000001'
@@ -97,11 +100,17 @@ describe('turn-bound commands', () => {
     })
   })
 
-  it('keeps legacy handshakes exact and rejects malformed or non-overlapping ranges', () => {
+  it('accepts a known legacy handshake and rejects malformed or non-overlapping ranges', () => {
     const token = 'a'.repeat(32)
     expect(
       parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
-    ).toBeNull()
+    ).toEqual({
+      token,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      capabilities: GAME_PROTOCOL_CAPABILITIES,
+    })
     expect(
       parseHandshakeAuth({
         token,
@@ -146,6 +155,17 @@ describe('turn-bound commands', () => {
       capabilities: ['base-game'],
     })
   })
+
+  it('does not infer capabilities for ranged clients that omit them', () => {
+    const token = 'a'.repeat(32)
+    expect(
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      }),
+    ).toMatchObject({ capabilities: [] })
+  })
 })
 
 describe('parseHint', () => {
@@ -181,6 +201,24 @@ describe('parseHint', () => {
         targetCardIds: ['p1-card-1'],
       }),
     ).toBeNull()
+  })
+
+  it('retains the negotiated v16 hint limit for legacy clients', () => {
+    const limits = protocolPayloadLimits(MINIMUM_GAME_PROTOCOL_VERSION)
+    const hint = 'a'.repeat(40)
+    expect(parseHint(hint, limits.hint)).toBe(hint)
+    expect(parseHint(`${hint}a`, limits.hint)).toBeNull()
+    expect(
+      parseSubmitHint(
+        {
+          roomCode: 'bcdf2',
+          gameId,
+          hint,
+          targetCardIds: ['p1-card-1'],
+        },
+        limits,
+      ),
+    ).toMatchObject({ hint })
   })
 
   it('sanitizes hints in incoming command payloads', () => {
@@ -284,6 +322,18 @@ describe('parsePlayerName', () => {
       'A'.repeat(MAX_PLAYER_NAME_LENGTH),
     )
     expect(parsePlayerName('A'.repeat(MAX_PLAYER_NAME_LENGTH + 1))).toBeNull()
+  })
+
+  it('retains the negotiated v16 player-name limit for legacy clients', () => {
+    const limits = protocolPayloadLimits(MINIMUM_GAME_PROTOCOL_VERSION)
+    const name = 'A'.repeat(50)
+    expect(parsePlayerName(name, limits.playerName)).toBe(name)
+    expect(parsePlayerName(`${name}A`, limits.playerName)).toBeNull()
+    expect(parseCreateRoom({ name }, limits)).toEqual({ name })
+    expect(parseJoinRoom({ roomCode: 'bcdf2', name }, limits)).toEqual({
+      roomCode: 'bcdf2',
+      name,
+    })
   })
 })
 

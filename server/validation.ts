@@ -39,6 +39,7 @@ const UNSAFE_TEXT_CHARACTERS =
   /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
 
 type UnknownRecord = Record<string, unknown>
+const LEGACY_GAME_PROTOCOL_VERSION = 16
 
 export type ProtocolSupport = {
   currentVersion: number
@@ -50,6 +51,29 @@ export const DEFAULT_PROTOCOL_SUPPORT: ProtocolSupport = {
   currentVersion: GAME_PROTOCOL_VERSION,
   minimumVersion: MINIMUM_GAME_PROTOCOL_VERSION,
   capabilities: GAME_PROTOCOL_CAPABILITIES,
+}
+
+export type ProtocolPayloadLimits = {
+  hint: number
+  playerName: number
+}
+
+const LEGACY_PROTOCOL_PAYLOAD_LIMITS: ProtocolPayloadLimits = {
+  hint: 40,
+  playerName: 50,
+}
+
+const CURRENT_PROTOCOL_PAYLOAD_LIMITS: ProtocolPayloadLimits = {
+  hint: MAX_HINT_LENGTH,
+  playerName: MAX_PLAYER_NAME_LENGTH,
+}
+
+export function protocolPayloadLimits(
+  protocolVersion: number,
+): ProtocolPayloadLimits {
+  return protocolVersion === LEGACY_GAME_PROTOCOL_VERSION
+    ? LEGACY_PROTOCOL_PAYLOAD_LIMITS
+    : CURRENT_PROTOCOL_PAYLOAD_LIMITS
 }
 
 export type NegotiatedHandshakeAuth = SocketHandshakeAuth & {
@@ -102,7 +126,10 @@ export function negotiateHandshakeAuth(
   }
 
   const overlaps = legacyHandshake
-    ? receivedVersion === support.currentVersion
+    ? receivedVersion === support.currentVersion ||
+      (receivedVersion === LEGACY_GAME_PROTOCOL_VERSION &&
+        receivedVersion >= support.minimumVersion &&
+        receivedVersion <= support.currentVersion)
     : receivedMinimumVersion <= support.currentVersion &&
       receivedVersion >= support.minimumVersion
   if (!overlaps) {
@@ -121,7 +148,9 @@ export function negotiateHandshakeAuth(
 
   const advertisedCapabilities = Array.isArray(value.capabilities)
     ? value.capabilities
-    : support.capabilities
+    : legacyHandshake
+      ? support.capabilities
+      : []
   const capabilities = support.capabilities.filter((capability) =>
     advertisedCapabilities.includes(capability),
   )
@@ -161,16 +190,22 @@ export function parseSessionResume(
   return roomCode ? { roomCode } : null
 }
 
-export function parseCreateRoom(value: unknown): CreateRoomPayload | null {
+export function parseCreateRoom(
+  value: unknown,
+  limits: ProtocolPayloadLimits = CURRENT_PROTOCOL_PAYLOAD_LIMITS,
+): CreateRoomPayload | null {
   if (!isRecord(value)) return null
-  const name = parsePlayerName(value.name)
+  const name = parsePlayerName(value.name, limits.playerName)
   return name ? { name } : null
 }
 
-export function parseJoinRoom(value: unknown): JoinRoomPayload | null {
+export function parseJoinRoom(
+  value: unknown,
+  limits: ProtocolPayloadLimits = CURRENT_PROTOCOL_PAYLOAD_LIMITS,
+): JoinRoomPayload | null {
   if (!isRecord(value)) return null
   const roomCode = parseRoomCode(value.roomCode)
-  const name = parsePlayerName(value.name)
+  const name = parsePlayerName(value.name, limits.playerName)
   return roomCode && name ? { roomCode, name } : null
 }
 
@@ -234,14 +269,17 @@ export function parseRejectHint(value: unknown): RejectHintPayload | null {
     : null
 }
 
-export function parseSubmitHint(value: unknown): SubmitHintPayload | null {
+export function parseSubmitHint(
+  value: unknown,
+  limits: ProtocolPayloadLimits = CURRENT_PROTOCOL_PAYLOAD_LIMITS,
+): SubmitHintPayload | null {
   if (!isRecord(value)) return null
   const roomCode = parseRoomCode(value.roomCode)
   const gameId =
     typeof value.gameId === 'string' && GAME_ID_PATTERN.test(value.gameId)
       ? value.gameId
       : null
-  const hint = parseHint(value.hint)
+  const hint = parseHint(value.hint, limits.hint)
   const targetCardIds = value.targetCardIds
 
   if (
@@ -297,7 +335,10 @@ export function parseRoomCode(value: unknown) {
   return ROOM_CODE_PATTERN.test(normalized) ? normalized : null
 }
 
-export function parsePlayerName(value: unknown) {
+export function parsePlayerName(
+  value: unknown,
+  maximumLength = MAX_PLAYER_NAME_LENGTH,
+) {
   if (typeof value !== 'string') return null
   const normalized = value
     .trim()
@@ -305,15 +346,15 @@ export function parsePlayerName(value: unknown) {
     .replace(UNSAFE_TEXT_CHARACTERS, '')
     .replace(/\s+/g, ' ')
     .trim()
-  return normalized.length > 0 && normalized.length <= MAX_PLAYER_NAME_LENGTH
+  return normalized.length > 0 && normalized.length <= maximumLength
     ? normalized
     : null
 }
 
-export function parseHint(value: unknown) {
+export function parseHint(value: unknown, maximumLength = MAX_HINT_LENGTH) {
   if (typeof value !== 'string') return null
   const normalized = normalizeHint(value)
-  return normalized.length > 0 && normalized.length <= MAX_HINT_LENGTH
+  return normalized.length > 0 && normalized.length <= maximumLength
     ? normalized
     : null
 }

@@ -115,21 +115,23 @@ describe('Socket.IO Secret Hitman protocol', () => {
     return { host, guest, roomCode: created.roomCode }
   }
 
-  it('lets a compatible previous client start a Base game and rejects an unadvertised feature', async () => {
+  it('lets the deployed v16 client complete the Base flow with its payload limits', async () => {
     const olderAuth = (token: string) => ({
       token,
       protocolVersion: GAME_PROTOCOL_VERSION - 1,
-      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
-      capabilities: ['base-game'],
     })
     const host = await connectWithAuth(olderAuth(hostToken))
     const guest = await connectWithAuth(olderAuth(guestToken))
-    const created = await host.emitWithAck('room:create', { name: 'Ada' })
+    const legacyHostName = 'A'.repeat(50)
+    const legacyGuestName = 'G'.repeat(50)
+    const created = await host.emitWithAck('room:create', {
+      name: legacyHostName,
+    })
     if (created.status !== 'success') throw new Error('Expected room creation.')
     expect(
       await guest.emitWithAck('room:join', {
         roomCode: created.roomCode,
-        name: 'Grace',
+        name: legacyGuestName,
       }),
     ).toEqual({ status: 'success', roomCode: created.roomCode })
     expect(
@@ -139,10 +141,32 @@ describe('Socket.IO Secret Hitman protocol', () => {
         requestId: 'older-client-start',
       }),
     ).toEqual({ status: 'success' })
-    expect(await host.emitWithAck('packs:catalog', {})).toEqual({
-      status: 'unsupported',
-      message:
-        'This app version does not support that feature. Reload or update the app and try again.',
+    const hostSnapshot = socketServer.gameServer.snapshot(
+      hostToken,
+      created.roomCode,
+    )
+    if (hostSnapshot.status !== 'hinting' || !hostSnapshot.board)
+      throw new Error('Expected a private hinting board.')
+    const targetCardId = hostSnapshot.board.find(
+      ({ kind }) => kind === 'neutral',
+    )!.id
+    const legacyHint = 'H'.repeat(40)
+    expect(
+      await host.emitWithAck('game:submit-hint', {
+        roomCode: created.roomCode,
+        gameId: hostSnapshot.gameId,
+        hint: legacyHint,
+        targetCardIds: [targetCardId],
+      }),
+    ).toEqual({ status: 'success' })
+    expect(
+      socketServer.gameServer.snapshot(hostToken, created.roomCode),
+    ).toMatchObject({
+      members: [{ name: legacyHostName }, { name: legacyGuestName }],
+      hint: legacyHint,
+    })
+    expect(await host.emitWithAck('packs:catalog', {})).toMatchObject({
+      status: 'success',
     })
     expect(logWarn).toHaveBeenCalled()
     const warning = logWarn.mock.calls
@@ -155,6 +179,20 @@ describe('Socket.IO Secret Hitman protocol', () => {
       negotiatedVersion: GAME_PROTOCOL_VERSION - 1,
     })
     expect(JSON.stringify(warning)).not.toContain(hostToken)
+  })
+
+  it("rejects a feature outside a ranged client's advertised capabilities", async () => {
+    const client = await connectWithAuth({
+      token: watcherToken,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      capabilities: ['base-game'],
+    })
+    expect(await client.emitWithAck('packs:catalog', {})).toEqual({
+      status: 'unsupported',
+      message:
+        'This app version does not support that feature. Reload or update the app and try again.',
+    })
   })
 
   it.each([

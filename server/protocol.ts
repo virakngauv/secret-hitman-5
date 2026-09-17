@@ -32,6 +32,7 @@ import {
   parseRoomCommand,
   parseSessionResume,
   parseSubmitHint,
+  protocolPayloadLimits,
   type ProtocolSupport,
 } from './validation'
 
@@ -187,6 +188,7 @@ export function createGameSocketServer(
   })
 
   io.on('connection', (socket) => {
+    const payloadLimits = protocolPayloadLimits(socket.data.protocolVersion)
     if (
       socket.data.clientProtocolVersion !== protocolSupport.currentVersion ||
       socket.data.clientMinimumProtocolVersion !==
@@ -235,7 +237,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge, true)) return
       safely('room:create', acknowledge, async () => {
-        const parsed = parseCreateRoom(payload)
+        const parsed = parseCreateRoom(payload, payloadLimits)
         if (!parsed) return acknowledge(invalid())
 
         const result = gameServer.createRoom(socket.data.token, parsed.name)
@@ -250,7 +252,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge, true)) return
       safely('room:join', acknowledge, async () => {
-        const parsed = parseJoinRoom(payload)
+        const parsed = parseJoinRoom(payload, payloadLimits)
         if (!parsed) return acknowledge(invalid())
 
         cancelLeaveIntent(socket.data.token, parsed.roomCode)
@@ -393,7 +395,7 @@ export function createGameSocketServer(
       const acknowledge = normalizeAcknowledgement(callback)
       if (!canRun(socket, acknowledge)) return
       safely('game:submit-hint', acknowledge, () => {
-        const parsed = parseSubmitHint(payload)
+        const parsed = parseSubmitHint(payload, payloadLimits)
         if (!parsed) return acknowledge(invalid())
         const result = gameServer.submitHint(socket.data.token, parsed)
         acknowledge(result)
