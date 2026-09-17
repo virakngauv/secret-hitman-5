@@ -158,7 +158,6 @@ describe('HintPhaseScreen', () => {
     )
 
     const input = screen.getByLabelText('Your hint')
-    expect(input).toHaveAttribute('maxlength', String(MAX_HINT_LENGTH))
     expect(screen.getByText(`0/${MAX_HINT_LENGTH}`)).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /available.*moon/i }))
@@ -183,6 +182,19 @@ describe('HintPhaseScreen', () => {
     expect(
       screen.getByText(`${MAX_HINT_LENGTH}/${MAX_HINT_LENGTH}`),
     ).toBeVisible()
+    expect(
+      screen.getByText(
+        `Keep your hint to ${MAX_HINT_LENGTH} characters or fewer.`,
+      ),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled()
+
+    await user.type(input, '{Backspace}')
+    expect(
+      screen.queryByText(
+        `Keep your hint to ${MAX_HINT_LENGTH} characters or fewer.`,
+      ),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
   })
 

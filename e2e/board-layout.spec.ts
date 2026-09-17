@@ -174,7 +174,11 @@ test('boards remain readable through hinting, guessing, and final reveal at mobi
     await expect(host.getByLabel('Your hint')).toBeDisabled()
     await guest.getByLabel('Your hint').fill('A'.repeat(25))
     await expect(guest.getByLabel('Your hint')).toHaveValue('A'.repeat(24))
+    await expect(
+      guest.getByText('Keep your hint to 24 characters or fewer.'),
+    ).toBeVisible()
     await expect(guest.getByText('24/24')).toBeVisible()
+    await expect(guest.getByRole('button', { name: 'Submit' })).toBeDisabled()
     await guest.getByLabel('Your hint').fill('Project Hail Mary Again')
     await expect(guest.getByText('23/24')).toBeVisible()
     const guestTarget = guest

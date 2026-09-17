@@ -328,6 +328,16 @@ input {
   line-height: 1;
 }
 
+.hint-character-count.is-over-limit {
+  color: var(--accent);
+}
+
+.hint-length-error {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
+}
+
 .word-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
