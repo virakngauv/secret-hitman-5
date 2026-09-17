@@ -9,6 +9,7 @@ import { JoinRoomForm } from './join-room-form'
 
 const mocks = vi.hoisted(() => ({
   connectionStatus: 'connected' as 'connecting' | 'connected' | 'disconnected',
+  connectionError: null as string | null,
   joinRoom: vi.fn(),
   onJoined: vi.fn(),
 }))
@@ -17,6 +18,7 @@ vi.mock('@/components/game-socket-provider', () => ({
   useGameSocket: () => ({
     joinRoom: mocks.joinRoom,
     connectionStatus: mocks.connectionStatus,
+    connectionError: mocks.connectionError,
   }),
 }))
 
@@ -36,6 +38,7 @@ function renderForm(props: JoinRoomFormProps = {}) {
 describe('JoinRoomForm', () => {
   beforeEach(() => {
     mocks.connectionStatus = 'connected'
+    mocks.connectionError = null
     mocks.joinRoom.mockReset()
     mocks.joinRoom.mockResolvedValue({ status: 'success', roomCode: 'frvg7' })
     mocks.onJoined.mockReset()
@@ -120,6 +123,16 @@ describe('JoinRoomForm', () => {
     expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent(
       'Connecting to the game server…',
+    )
+  })
+
+  it('shows the protocol update instruction when the server is incompatible', () => {
+    mocks.connectionStatus = 'disconnected'
+    mocks.connectionError = 'Reload or update the app and try again.'
+    renderForm()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Reload or update the app and try again.',
     )
   })
 

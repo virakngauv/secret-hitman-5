@@ -13,6 +13,7 @@ type LobbyView = Extract<RoomSnapshot, { status: 'lobby' }>
 const mocks = vi.hoisted(() => ({
   view: null as RoomSnapshot | null,
   connectionStatus: 'connected' as 'connecting' | 'connected' | 'disconnected',
+  connectionError: null as string | null,
   startGame: vi.fn(),
   selectPack: vi.fn(),
   catalog: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock('@/components/game-socket-provider', () => ({
   useRoomSnapshot: () => ({
     snapshot: mocks.view,
     connectionStatus: mocks.connectionStatus,
+    connectionError: mocks.connectionError,
   }),
 }))
 
@@ -163,6 +165,7 @@ describe('RoomLobby invite prompt', () => {
     mocks.view = lobbyView()
     mocks.userId = null
     mocks.connectionStatus = 'connected'
+    mocks.connectionError = null
     mocks.startGame.mockReset().mockResolvedValue({ status: 'success' })
     mocks.selectPack.mockReset()
     mocks.catalog.mockReset().mockResolvedValue({
@@ -176,6 +179,19 @@ describe('RoomLobby invite prompt', () => {
     mocks.removePlayer.mockReset().mockResolvedValue({ status: 'success' })
     mocks.leaveRoom.mockReset().mockResolvedValue({ status: 'success' })
     mocks.routerPush.mockReset()
+  })
+
+  it('shows an update instruction when an incompatible client cannot load the room', () => {
+    mocks.view = null
+    mocks.connectionStatus = 'disconnected'
+    mocks.connectionError = 'Reload or update the app and try again.'
+
+    render(<RoomLobby roomCode="bcdf2" />)
+
+    expect(screen.getByText('Update required')).toBeVisible()
+    expect(
+      screen.getByText('Reload or update the app and try again.'),
+    ).toBeVisible()
   })
 
   it.each([undefined, ['movies-v1', 'travel-v1']].map((ids) => [ids]))(

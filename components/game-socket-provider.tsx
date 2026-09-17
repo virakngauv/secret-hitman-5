@@ -16,7 +16,9 @@ import { useAccount } from './account-bridge'
 import { generateRequestId } from '@/lib/player-session'
 import { usePlayerSession } from '@/components/player-session-provider'
 import {
+  GAME_PROTOCOL_CAPABILITIES,
   GAME_PROTOCOL_VERSION,
+  MINIMUM_GAME_PROTOCOL_VERSION,
   type PackSummary,
   type SelectPackPayload,
   type AdvanceTurnPayload,
@@ -38,6 +40,7 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
 type GameSocketContextValue = {
   connectionStatus: ConnectionStatus
+  connectionError: string | null
   snapshots: Readonly<Record<string, RoomSnapshot>>
   watchRoom: (roomCode: string) => () => void
   createRoom: (name: string) => Promise<CommandResult<{ roomCode: string }>>
@@ -126,6 +129,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   )
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting')
+  const [connectionError, setConnectionError] = useState<string | null>(null)
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({})
 
   useEffect(() => {
@@ -165,7 +169,12 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       return
     }
     const socket: GameSocket = io(gameServerUrl, {
-      auth: { token: clientToken, protocolVersion: GAME_PROTOCOL_VERSION },
+      auth: {
+        token: clientToken,
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+        capabilities: [...GAME_PROTOCOL_CAPABILITIES],
+      },
       autoConnect: true,
       reconnection: true,
     })
@@ -250,11 +259,19 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       setConnectionStatus('disconnected')
     }
     const handleConnect = () => {
+      setConnectionError(null)
       if (socket.id) lastConnectedSocketId = socket.id
       resumeWatchedRooms()
     }
     const handleDisconnect = () => markDisconnected()
-    const handleConnectError = () => markDisconnected()
+    const handleConnectError = (
+      error: Error & { data?: { code?: string } },
+    ) => {
+      if (error.data?.code === 'protocol_incompatible') {
+        setConnectionError(error.message)
+      }
+      markDisconnected()
+    }
     const handleShutdown = () => {
       markDisconnected()
     }
@@ -542,6 +559,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
   const value = useMemo<GameSocketContextValue>(
     () => ({
       connectionStatus,
+      connectionError,
       snapshots,
       watchRoom,
       createRoom,
@@ -564,6 +582,7 @@ export function GameSocketProvider({ children }: { children: ReactNode }) {
       advanceTurn,
       claimCard,
       connectionStatus,
+      connectionError,
       createRoom,
       joinRoom,
       leaveRoom,
@@ -598,11 +617,13 @@ export function useGameSocket() {
 }
 
 export function useRoomSnapshot(roomCode: string) {
-  const { watchRoom, snapshots, connectionStatus } = useGameSocket()
+  const { watchRoom, snapshots, connectionStatus, connectionError } =
+    useGameSocket()
   useEffect(() => watchRoom(roomCode), [roomCode, watchRoom])
   return {
     snapshot: snapshots[roomCode],
     connectionStatus,
+    connectionError,
   }
 }
 

@@ -7,6 +7,7 @@ import {
   type ClientToServerEvents,
   type CommandFailure,
   type CommandResult,
+  type GameProtocolCapability,
   type ServerToClientEvents,
 } from '../lib/game-protocol'
 import { publicCatalog } from './packs'
@@ -23,17 +24,26 @@ import {
   parseClaimCard,
   parseFinishGuessing,
   parseGameCommand,
-  parseHandshakeAuth,
+  DEFAULT_PROTOCOL_SUPPORT,
+  negotiateHandshakeAuth,
   parseJoinRoom,
   parseRejectHint,
   parseRemovePlayer,
   parseRoomCommand,
   parseSessionResume,
   parseSubmitHint,
+  type ProtocolSupport,
 } from './validation'
 
 type InterServerEvents = Record<string, never>
-type SocketData = { token: string; address: string }
+type SocketData = {
+  token: string
+  address: string
+  clientProtocolVersion: number
+  clientMinimumProtocolVersion: number
+  protocolVersion: number
+  capabilities: GameProtocolCapability[]
+}
 type GameSocket = Socket<
   ClientToServerEvents,
   ServerToClientEvents,
@@ -65,6 +75,7 @@ export type GameSocketServerOptions = {
   leaveIntentGraceMs?: number
   entryCommandLimits?: EntryCommandLimits
   logger?: Pick<Console, 'info' | 'warn' | 'error'>
+  protocolSupport?: ProtocolSupport
 }
 
 const invalid = (): CommandFailure => ({
@@ -81,6 +92,7 @@ export function createGameSocketServer(
 ) {
   const gameServer = options.gameServer ?? new GameServer()
   const logger = options.logger ?? console
+  const protocolSupport = options.protocolSupport ?? DEFAULT_PROTOCOL_SUPPORT
   const allowedOrigins = new Set(options.allowedOrigins)
   const isOriginAllowed = (origin: string | undefined) =>
     origin === undefined ||
@@ -137,12 +149,29 @@ export function createGameSocketServer(
   })
 
   io.use((socket, next) => {
-    const auth = parseHandshakeAuth(socket.handshake.auth)
-    if (!auth)
-      return next(
-        new Error('Unsupported or invalid game session. Reload the page.'),
-      )
+    const result = negotiateHandshakeAuth(
+      socket.handshake.auth,
+      protocolSupport,
+    )
+    if (result.status !== 'success') {
+      const error = new Error(result.message) as Error & {
+        data?: Record<string, unknown>
+      }
+      error.data = {
+        code:
+          result.status === 'incompatible'
+            ? 'protocol_incompatible'
+            : 'invalid_session',
+        ...result.details,
+      }
+      return next(error)
+    }
+    const { auth } = result
     socket.data.token = auth.token
+    socket.data.clientProtocolVersion = auth.protocolVersion
+    socket.data.clientMinimumProtocolVersion = auth.minimumProtocolVersion
+    socket.data.protocolVersion = auth.negotiatedProtocolVersion
+    socket.data.capabilities = auth.capabilities
     socket.data.address =
       options.trustDigitalOceanProxy === true
         ? resolveDigitalOceanClientAddress(
@@ -158,6 +187,23 @@ export function createGameSocketServer(
   })
 
   io.on('connection', (socket) => {
+    if (
+      socket.data.clientProtocolVersion !== protocolSupport.currentVersion ||
+      socket.data.clientMinimumProtocolVersion !==
+        protocolSupport.minimumVersion
+    ) {
+      logger.warn(
+        JSON.stringify({
+          event: 'protocol_version_drift',
+          socketId: socket.id,
+          receivedVersion: socket.data.clientProtocolVersion,
+          receivedMinimumVersion: socket.data.clientMinimumProtocolVersion,
+          currentVersion: protocolSupport.currentVersion,
+          minimumVersion: protocolSupport.minimumVersion,
+          negotiatedVersion: socket.data.protocolVersion,
+        }),
+      )
+    }
     logger.info(
       JSON.stringify({ event: 'socket_connected', socketId: socket.id }),
     )
@@ -279,7 +325,7 @@ export function createGameSocketServer(
 
     socket.on('packs:catalog', (_payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
-      if (!canRun(socket, acknowledge)) return
+      if (!canRun(socket, acknowledge, false, 'word-packs')) return
       safely('packs:catalog', acknowledge, () => {
         acknowledge({
           status: 'success',
@@ -289,7 +335,7 @@ export function createGameSocketServer(
     })
     socket.on('room:select-pack', (payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
-      if (!canRun(socket, acknowledge)) return
+      if (!canRun(socket, acknowledge, false, 'word-packs')) return
       safely('room:select-pack', acknowledge, async () => {
         const parsed = parseSelectPack(payload)
         if (!parsed) return acknowledge(invalid())
@@ -661,6 +707,7 @@ export function createGameSocketServer(
     socket: GameSocket,
     acknowledge: (result: CommandFailure) => void,
     isEntryCommand = false,
+    requiredCapability?: GameProtocolCapability,
   ) {
     if (!acceptingCommands) {
       acknowledge({
@@ -679,6 +726,17 @@ export function createGameSocketServer(
       !permitted || !isEntryCommand || takeEntryBudget(socket, now)
     if (!permitted || !entryPermitted) {
       acknowledge({ status: 'rate_limited', message: 'Too many commands.' })
+      return false
+    }
+    if (
+      requiredCapability &&
+      !socket.data.capabilities.includes(requiredCapability)
+    ) {
+      acknowledge({
+        status: 'unsupported',
+        message:
+          'This app version does not support that feature. Reload or update the app and try again.',
+      })
       return false
     }
     return true

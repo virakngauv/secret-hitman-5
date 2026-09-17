@@ -204,12 +204,21 @@ Development release verification must exercise Clerk sign-in/account switching,
 checkout cancel/failure/success and access refresh, cancellation through exact
 expiry, renewal, past-due/recovery, revoked sessions, and provider outage with a
 real development instance. Automated adapter tests do not replace these provider
-flows. Deploy frontend and game server together for protocol version 17; old
-clients are rejected with a reload instruction in the handshake error. Older
-client UIs may show only a reconnect banner, so instruct existing players to
-reload after the coordinated deployment. Rollback requires coordinated versions and loses
-active rooms. Verify no premium pools or credentials appear in browser bundles,
-public responses, or logs before enabling a paid catalog.
+flows. The frontend advertises its current and minimum compatible game protocol
+versions plus supported capabilities. The server currently accepts the inclusive
+16–17 range: overlapping releases negotiate the highest shared version, log a
+token-free `protocol_version_drift` warning, and keep the compatible Base flow
+available. Features outside the client's advertised capabilities return a typed
+command error instead of rejecting the socket. Handshakes without range metadata
+retain exact-version behavior, and malformed or non-overlapping clients are
+rejected with an actionable reload/update message. Deploy the server before the
+frontend when expanding the range or adding optional capabilities; deploy the
+frontend before the server when raising the compatibility floor. Advance the
+minimum only after traffic logs show the retiring version is no longer in use,
+and document that removal in the same release. A rollback must retain overlap
+with both adjacent releases or it will lose active rooms. Verify no premium pools
+or credentials appear in browser bundles, public responses, or logs before
+enabling a paid catalog.
 
 The lobby avatar has an explicit “Sign out and stay in room” action that ends
 the Clerk session without navigation, retaining the independent anonymous game seat. Verify the actual configured Clerk avatar action beyond the

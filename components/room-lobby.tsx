@@ -46,7 +46,7 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
   const [dismissedResultsGameId, setDismissedResultsGameId] = useState<
     string | null
   >(null)
-  const { snapshot, connectionStatus } = channel
+  const { snapshot, connectionStatus, connectionError } = channel
   const [roundTransition, setRoundTransition] = useState<{
     snapshot: RoomSnapshot | null
     inferredRoundEndedEarly: boolean
@@ -82,10 +82,16 @@ export function RoomLobby({ roomCode }: { roomCode: string }) {
     (snapshot.lobbyNotice === 'player_left' ||
       roundTransition.inferredRoundEndedEarly)
 
+  if (!snapshot && connectionError) {
+    return <RoomMessage title="Update required" body={connectionError} />
+  }
   if (!snapshot) return <RoomLoading />
 
   const retainScreen = (screen: ReactNode) => (
-    <RoomConnectionBoundary connectionStatus={connectionStatus}>
+    <RoomConnectionBoundary
+      connectionStatus={connectionStatus}
+      connectionError={connectionError}
+    >
       {screen}
     </RoomConnectionBoundary>
   )
@@ -514,9 +520,11 @@ function RoomLoading() {
 function RoomConnectionBoundary({
   children,
   connectionStatus,
+  connectionError,
 }: {
   children: ReactNode
   connectionStatus: 'connecting' | 'connected' | 'disconnected'
+  connectionError: string | null
 }) {
   const reconnecting = connectionStatus !== 'connected'
   const interruptedRef = useRef(false)
@@ -549,6 +557,11 @@ function RoomConnectionBoundary({
       >
         {children}
       </fieldset>
+      {connectionError ? (
+        <p className="text-accent mt-3 text-center text-sm" role="alert">
+          {connectionError}
+        </p>
+      ) : null}
       <div
         ref={liveRegionRef}
         id="room-connection-status"

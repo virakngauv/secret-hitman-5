@@ -25,7 +25,7 @@ export function JoinRoomForm({
   onJoined?: (room: JoinedRoom) => void
 }) {
   const roomCodeLocked = roomCode !== undefined
-  const { joinRoom, connectionStatus } = useGameSocket()
+  const { joinRoom, connectionStatus, connectionError } = useGameSocket()
   const [enteredRoomCode, setEnteredRoomCode] = useState(roomCode ?? '')
   const effectiveRoomCode = roomCode ?? enteredRoomCode
   const [name, setName] = useState('')
@@ -115,9 +115,10 @@ export function JoinRoomForm({
       </div>
       <p
         className="text-accent mt-3 min-h-5 text-sm"
-        role={error ? 'alert' : 'status'}
+        role={error || connectionError ? 'alert' : 'status'}
       >
         {error ??
+          connectionError ??
           (connectionStatus === 'connected'
             ? null
             : 'Connecting to the game server…')}

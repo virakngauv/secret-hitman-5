@@ -8,7 +8,7 @@ import { PlayerNameField } from '@/components/player-name-field'
 import { Button } from '@/components/ui/button'
 
 export function CreateRoomForm() {
-  const { createRoom, connectionStatus } = useGameSocket()
+  const { createRoom, connectionStatus, connectionError } = useGameSocket()
   const router = useRouter()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -59,9 +59,10 @@ export function CreateRoomForm() {
       />
       <p
         className="text-accent mt-3 min-h-5 text-sm"
-        role={error ? 'alert' : 'status'}
+        role={error || connectionError ? 'alert' : 'status'}
       >
         {error ??
+          connectionError ??
           (connectionStatus === 'connected'
             ? null
             : 'Connecting to the game server…')}

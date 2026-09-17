@@ -1,4 +1,7 @@
 export const GAME_PROTOCOL_VERSION = 17 as const
+export const MINIMUM_GAME_PROTOCOL_VERSION = 16 as const
+export const GAME_PROTOCOL_CAPABILITIES = ['base-game', 'word-packs'] as const
+export type GameProtocolCapability = (typeof GAME_PROTOCOL_CAPABILITIES)[number]
 export const MAX_STARTING_PLAYERS = 12
 
 export const BOARD_CARD_COUNT = 12
@@ -156,6 +159,7 @@ export function isMemberSnapshot(
 
 export type CommandFailureStatus =
   | 'invalid'
+  | 'unsupported'
   | 'forbidden'
   | 'room_not_found'
   | 'room_full'
@@ -295,5 +299,7 @@ export type ServerToClientEvents = {
 
 export type SocketHandshakeAuth = {
   token: string
-  protocolVersion: typeof GAME_PROTOCOL_VERSION
+  protocolVersion: number
+  minimumProtocolVersion?: number
+  capabilities?: GameProtocolCapability[]
 }

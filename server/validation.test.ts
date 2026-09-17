@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { GAME_PROTOCOL_VERSION } from '../lib/game-protocol'
+import {
+  GAME_PROTOCOL_CAPABILITIES,
+  GAME_PROTOCOL_VERSION,
+  MINIMUM_GAME_PROTOCOL_VERSION,
+} from '../lib/game-protocol'
 
 import {
   MAX_HINT_LENGTH,
@@ -65,15 +69,82 @@ describe('turn-bound commands', () => {
     },
   )
 
-  it('rejects older clients that cannot send the turn-bound payload', () => {
+  it('negotiates an overlapping protocol range', () => {
     const token = 'a'.repeat(32)
     expect(GAME_PROTOCOL_VERSION).toBe(17)
+    expect(
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION - 1,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+        capabilities: ['base-game'],
+      }),
+    ).toEqual({
+      token,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      capabilities: ['base-game'],
+    })
+    expect(
+      parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION }),
+    ).toEqual({
+      token,
+      protocolVersion: GAME_PROTOCOL_VERSION,
+      minimumProtocolVersion: GAME_PROTOCOL_VERSION,
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION,
+      capabilities: GAME_PROTOCOL_CAPABILITIES,
+    })
+  })
+
+  it('keeps legacy handshakes exact and rejects malformed or non-overlapping ranges', () => {
+    const token = 'a'.repeat(32)
     expect(
       parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
     ).toBeNull()
     expect(
-      parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION }),
-    ).toEqual({ token, protocolVersion: GAME_PROTOCOL_VERSION })
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION + 2,
+        minimumProtocolVersion: GAME_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeNull()
+    expect(
+      parseHandshakeAuth({
+        token: 'bad',
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      }),
+    ).toBeNull()
+    expect(
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: GAME_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeNull()
+  })
+
+  it('allows a newer client to negotiate with an older compatible server', () => {
+    const token = 'a'.repeat(32)
+    expect(
+      parseHandshakeAuth(
+        {
+          token,
+          protocolVersion: GAME_PROTOCOL_VERSION,
+          minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+          capabilities: [...GAME_PROTOCOL_CAPABILITIES, 'future-feature'],
+        },
+        {
+          currentVersion: GAME_PROTOCOL_VERSION - 1,
+          minimumVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+          capabilities: ['base-game'],
+        },
+      ),
+    ).toMatchObject({
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      capabilities: ['base-game'],
+    })
   })
 })
 

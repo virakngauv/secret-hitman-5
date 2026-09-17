@@ -1,11 +1,14 @@
 import {
+  GAME_PROTOCOL_CAPABILITIES,
   GAME_PROTOCOL_VERSION,
+  MINIMUM_GAME_PROTOCOL_VERSION,
   MAX_HINT_LENGTH,
   MAX_PLAYER_NAME_LENGTH,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
   normalizeHint,
   type PackCommandPayload,
+  type GameProtocolCapability,
   type SelectPackPayload,
   type ClaimCardPayload,
   type CreateRoomPayload,
@@ -37,14 +40,116 @@ const UNSAFE_TEXT_CHARACTERS =
 
 type UnknownRecord = Record<string, unknown>
 
-export function parseHandshakeAuth(value: unknown): SocketHandshakeAuth | null {
-  if (!isRecord(value)) return null
+export type ProtocolSupport = {
+  currentVersion: number
+  minimumVersion: number
+  capabilities: readonly GameProtocolCapability[]
+}
 
-  return value.protocolVersion === GAME_PROTOCOL_VERSION &&
-    typeof value.token === 'string' &&
-    CLIENT_TOKEN_PATTERN.test(value.token)
-    ? { token: value.token, protocolVersion: GAME_PROTOCOL_VERSION }
-    : null
+export const DEFAULT_PROTOCOL_SUPPORT: ProtocolSupport = {
+  currentVersion: GAME_PROTOCOL_VERSION,
+  minimumVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+  capabilities: GAME_PROTOCOL_CAPABILITIES,
+}
+
+export type NegotiatedHandshakeAuth = SocketHandshakeAuth & {
+  minimumProtocolVersion: number
+  negotiatedProtocolVersion: number
+  capabilities: GameProtocolCapability[]
+}
+
+export type HandshakeAuthResult =
+  | { status: 'success'; auth: NegotiatedHandshakeAuth }
+  | {
+      status: 'invalid' | 'incompatible'
+      message: string
+      details?: {
+        receivedVersion: number
+        receivedMinimumVersion: number
+        currentVersion: number
+        minimumVersion: number
+      }
+    }
+
+export function negotiateHandshakeAuth(
+  value: unknown,
+  support: ProtocolSupport = DEFAULT_PROTOCOL_SUPPORT,
+): HandshakeAuthResult {
+  if (
+    !isRecord(value) ||
+    typeof value.token !== 'string' ||
+    !CLIENT_TOKEN_PATTERN.test(value.token) ||
+    !isProtocolVersion(value.protocolVersion)
+  ) {
+    return { status: 'invalid', message: 'Invalid game session.' }
+  }
+
+  const receivedVersion = value.protocolVersion
+  const legacyHandshake = value.minimumProtocolVersion === undefined
+  const receivedMinimumVersion = legacyHandshake
+    ? receivedVersion
+    : value.minimumProtocolVersion
+  if (
+    !isProtocolVersion(receivedMinimumVersion) ||
+    receivedMinimumVersion > receivedVersion ||
+    (value.capabilities !== undefined &&
+      (!Array.isArray(value.capabilities) ||
+        !value.capabilities.every(
+          (capability) => typeof capability === 'string',
+        )))
+  ) {
+    return { status: 'invalid', message: 'Invalid game session.' }
+  }
+
+  const overlaps = legacyHandshake
+    ? receivedVersion === support.currentVersion
+    : receivedMinimumVersion <= support.currentVersion &&
+      receivedVersion >= support.minimumVersion
+  if (!overlaps) {
+    return {
+      status: 'incompatible',
+      message:
+        'This app version is not compatible with the game server. Reload or update the app and try again.',
+      details: {
+        receivedVersion,
+        receivedMinimumVersion,
+        currentVersion: support.currentVersion,
+        minimumVersion: support.minimumVersion,
+      },
+    }
+  }
+
+  const advertisedCapabilities = Array.isArray(value.capabilities)
+    ? value.capabilities
+    : support.capabilities
+  const capabilities = support.capabilities.filter((capability) =>
+    advertisedCapabilities.includes(capability),
+  )
+  return {
+    status: 'success',
+    auth: {
+      token: value.token,
+      protocolVersion: receivedVersion,
+      minimumProtocolVersion: receivedMinimumVersion,
+      negotiatedProtocolVersion: Math.min(
+        receivedVersion,
+        support.currentVersion,
+      ),
+      capabilities,
+    },
+  }
+}
+
+export function parseHandshakeAuth(
+  value: unknown,
+  support: ProtocolSupport = DEFAULT_PROTOCOL_SUPPORT,
+): NegotiatedHandshakeAuth | null {
+  const result = negotiateHandshakeAuth(value, support)
+  return result.status === 'success' ? result.auth : null
+}
+
+function isProtocolVersion(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0
 }
 
 export function parseSessionResume(
