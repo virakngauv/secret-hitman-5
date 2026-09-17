@@ -9,7 +9,12 @@ import {
   useGameSocket,
   useRoomSnapshot,
 } from './game-socket-provider'
-import type { RoomSnapshot } from '../lib/game-protocol'
+import {
+  GAME_PROTOCOL_CAPABILITIES,
+  GAME_PROTOCOL_VERSION,
+  MINIMUM_GAME_PROTOCOL_VERSION,
+  type RoomSnapshot,
+} from '../lib/game-protocol'
 
 const mocks = vi.hoisted(() => ({
   clientToken: 'a'.repeat(32) as string | null,
@@ -49,11 +54,13 @@ vi.mock('@/components/player-session-provider', () => ({
 
 function RoomProbe({ roomCode }: { roomCode: string }) {
   const { snapshot } = useRoomSnapshot(roomCode)
-  const { connectionStatus, leaveRoom, removePlayer } = useGameSocket()
+  const { connectionStatus, connectionError, leaveRoom, removePlayer } =
+    useGameSocket()
   return (
     <>
       <div data-testid="status">{snapshot?.status ?? 'missing'}</div>
       <div data-testid="connection">{connectionStatus}</div>
+      <div data-testid="connection-error">{connectionError}</div>
       <button type="button" onClick={() => void leaveRoom(roomCode)}>
         Leave
       </button>
@@ -451,8 +458,35 @@ describe('GameSocketProvider', () => {
     expect(mocks.io).toHaveBeenCalledWith(
       'https://game.example.com',
       expect.objectContaining({
-        auth: expect.objectContaining({ token: mocks.clientToken }),
+        auth: {
+          token: mocks.clientToken,
+          protocolVersion: GAME_PROTOCOL_VERSION,
+          minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+          capabilities: GAME_PROTOCOL_CAPABILITIES,
+        },
       }),
+    )
+  })
+
+  it('surfaces an actionable incompatible-protocol connection error', async () => {
+    render(
+      <GameSocketProvider>
+        <RoomProbe roomCode="bcdf2" />
+      </GameSocketProvider>,
+    )
+    await waitFor(() => expect(mocks.io).toHaveBeenCalled())
+
+    act(() =>
+      mocks.handlers.get('connect_error')?.(
+        Object.assign(new Error('Reload or update the app.'), {
+          data: { code: 'protocol_incompatible' },
+        }) as never,
+      ),
+    )
+
+    expect(screen.getByTestId('connection')).toHaveTextContent('disconnected')
+    expect(screen.getByTestId('connection-error')).toHaveTextContent(
+      'Reload or update the app.',
     )
   })
 

@@ -17,8 +17,10 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { Input } from '@/components/ui/input'
 import {
   CARD_SCORE,
+  MAX_HINT_LENGTH,
   MAX_TARGET_COUNT,
   MIN_TARGET_COUNT,
+  normalizeHint,
   type CardKind,
   type CommandResult,
   type CompletedGameResults,
@@ -29,6 +31,17 @@ import { cn } from '@/lib/utils'
 
 type HintingView = Extract<RoomSnapshot, { status: 'hinting' }>
 type GuessingView = Extract<RoomSnapshot, { status: 'guessing' }>
+
+function uppercaseHintWithinLimit(value: string) {
+  let result = ''
+
+  for (const character of value.toUpperCase()) {
+    if (result.length + character.length > MAX_HINT_LENGTH) break
+    result += character
+  }
+
+  return result
+}
 
 export function HintPhaseScreen({
   view,
@@ -87,6 +100,7 @@ export function HintPhaseScreen({
   const readyCount = view.hintStatuses.filter(
     ({ submitted }) => submitted,
   ).length
+  const normalizedHint = normalizeHint(hint)
 
   const toggleCard = (cardId: string) => {
     if (view.board?.find(({ id }) => id === cardId)?.locked) return
@@ -101,13 +115,14 @@ export function HintPhaseScreen({
 
   const submit = async () => {
     if (isSubmitting) return
-    if (!hint.trim())
+    if (!normalizedHint)
       return setHintActionError('Write a one-word or short phrase hint.')
     if (selected.size < MIN_TARGET_COUNT)
       return setHintActionError('Select at least one word for your hint.')
     setIsSubmitting(true)
     setHintActionError(null)
-    const result = await onSubmitHint(hint.trim(), [...selected])
+    setHint(normalizedHint)
+    const result = await onSubmitHint(normalizedHint, [...selected])
     if (result.status !== 'success') setHintActionError(result.message)
     setIsSubmitting(false)
   }
@@ -283,7 +298,7 @@ export function HintPhaseScreen({
                     void submit()
                   }}
                 >
-                  <div>
+                  <div className="hint-input-group">
                     <label className="sr-only" htmlFor="hint">
                       Your hint
                     </label>
@@ -292,21 +307,29 @@ export function HintPhaseScreen({
                       ref={hintInputRef}
                       value={hint}
                       onChange={(event) => {
-                        setHint(event.target.value.toUpperCase())
+                        setHint(uppercaseHintWithinLimit(event.target.value))
                         setHintActionError(null)
                       }}
-                      maxLength={40}
                       placeholder={hintPlaceholder}
                       autoComplete="off"
                       autoCapitalize="characters"
                       enterKeyHint="done"
+                      maxLength={MAX_HINT_LENGTH}
                       disabled={view.hintSubmitted}
                       readOnly={isSubmitting || isUnlocking}
+                      aria-describedby="hint-character-count"
                       className={cn(
                         'h-13 rounded-2xl text-lg',
                         view.hintSubmitted && 'uppercase',
                       )}
                     />
+                    <span
+                      id="hint-character-count"
+                      className="hint-character-count"
+                      aria-live="polite"
+                    >
+                      {hint.length}/{MAX_HINT_LENGTH}
+                    </span>
                   </div>
                   {view.hintSubmitted ? (
                     <Button
@@ -326,7 +349,7 @@ export function HintPhaseScreen({
                       disabled={
                         isSubmitting ||
                         selected.size < MIN_TARGET_COUNT ||
-                        !hint.trim()
+                        !normalizedHint
                       }
                     >
                       Submit
@@ -404,6 +427,7 @@ export function HintPhaseScreen({
                         ? `${member.name}'s hint: ${hintStatus.hint}, ${hintStatus.hintNumber}`
                         : undefined
                     }
+                    stackedDetail={Boolean(hintDetail)}
                     status={status}
                     tone={
                       member.participation === 'spectator'
@@ -1039,6 +1063,7 @@ function RosterCard({
   detailClassName,
   detailSuffix,
   singleLine = false,
+  stackedDetail = false,
   status,
   tone,
   className,
@@ -1050,6 +1075,7 @@ function RosterCard({
   detailClassName?: string
   detailSuffix?: string
   singleLine?: boolean
+  stackedDetail?: boolean
   status: string
   tone: 'default' | 'ready' | 'spectating'
   className?: string
@@ -1064,6 +1090,7 @@ function RosterCard({
         detailClassName={detailClassName}
         detailSuffix={detailSuffix}
         singleLine={singleLine}
+        stackedDetail={stackedDetail}
       />
       <span
         className={cn(
@@ -1086,6 +1113,7 @@ function PlayerSummary({
   detailClassName,
   detailSuffix,
   singleLine = false,
+  stackedDetail = false,
   className,
 }: {
   name: string
@@ -1094,10 +1122,13 @@ function PlayerSummary({
   detailClassName?: string
   detailSuffix?: string
   singleLine?: boolean
+  stackedDetail?: boolean
   className?: string
 }) {
   const primaryText = detail
-    ? `${name} · ${detail}${detailSuffix ? ` ${detailSuffix}` : ''}`
+    ? stackedDetail
+      ? `${name}: ${detail}${detailSuffix ? ` ${detailSuffix}` : ''}`
+      : `${name} · ${detail}${detailSuffix ? ` ${detailSuffix}` : ''}`
     : name
 
   return (
@@ -1106,11 +1137,27 @@ function PlayerSummary({
         'roster-card-primary',
         !detail && 'roster-card-primary-alone',
         singleLine && 'roster-card-primary-single-line',
+        stackedDetail && 'roster-card-primary-stacked',
         className,
       )}
       title={primaryText}
     >
-      {singleLine && detail ? (
+      {stackedDetail && detail ? (
+        <>
+          <span className="roster-card-name roster-card-name-stacked">
+            {name}
+          </span>
+          <span className="roster-card-detail-row">
+            <span
+              className={cn('roster-card-detail', detailClassName)}
+              aria-label={detailLabel}
+            >
+              {detail}
+              {detailSuffix ? ` ${detailSuffix}` : ''}
+            </span>
+          </span>
+        </>
+      ) : singleLine && detail ? (
         <>
           <span className="roster-card-name roster-card-name-single-line">
             {name}

@@ -3,10 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 
+import { MAX_PLAYER_NAME_LENGTH } from '@/lib/game-protocol'
+
 import { JoinRoomForm } from './join-room-form'
 
 const mocks = vi.hoisted(() => ({
   connectionStatus: 'connected' as 'connecting' | 'connected' | 'disconnected',
+  connectionError: null as string | null,
   joinRoom: vi.fn(),
   onJoined: vi.fn(),
 }))
@@ -15,6 +18,7 @@ vi.mock('@/components/game-socket-provider', () => ({
   useGameSocket: () => ({
     joinRoom: mocks.joinRoom,
     connectionStatus: mocks.connectionStatus,
+    connectionError: mocks.connectionError,
   }),
 }))
 
@@ -34,6 +38,7 @@ function renderForm(props: JoinRoomFormProps = {}) {
 describe('JoinRoomForm', () => {
   beforeEach(() => {
     mocks.connectionStatus = 'connected'
+    mocks.connectionError = null
     mocks.joinRoom.mockReset()
     mocks.joinRoom.mockResolvedValue({ status: 'success', roomCode: 'frvg7' })
     mocks.onJoined.mockReset()
@@ -76,6 +81,25 @@ describe('JoinRoomForm', () => {
       'placeholder',
       'Your name',
     )
+    expect(screen.getByLabelText('Name')).toHaveAttribute(
+      'maxlength',
+      String(MAX_PLAYER_NAME_LENGTH),
+    )
+    expect(screen.getByText(`0/${MAX_PLAYER_NAME_LENGTH}`)).toBeVisible()
+  })
+
+  it('hard-limits the player name while keeping joining available', async () => {
+    const user = userEvent.setup()
+    renderForm({ roomCode: 'frvg7' })
+
+    const input = screen.getByLabelText('Name')
+    await user.type(input, 'B'.repeat(MAX_PLAYER_NAME_LENGTH + 1))
+
+    expect(input).toHaveValue('B'.repeat(MAX_PLAYER_NAME_LENGTH))
+    expect(
+      screen.getByText(`${MAX_PLAYER_NAME_LENGTH}/${MAX_PLAYER_NAME_LENGTH}`),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Join' })).toBeEnabled()
   })
 
   it('keeps focus stable across connection status transitions', () => {
@@ -99,6 +123,16 @@ describe('JoinRoomForm', () => {
     expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent(
       'Connecting to the game server…',
+    )
+  })
+
+  it('shows the protocol update instruction when the server is incompatible', () => {
+    mocks.connectionStatus = 'disconnected'
+    mocks.connectionError = 'Reload or update the app and try again.'
+    renderForm()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Reload or update the app and try again.',
     )
   })
 

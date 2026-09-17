@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { GAME_PROTOCOL_VERSION } from '../lib/game-protocol'
+import {
+  GAME_PROTOCOL_CAPABILITIES,
+  GAME_PROTOCOL_VERSION,
+  MINIMUM_GAME_PROTOCOL_VERSION,
+} from '../lib/game-protocol'
 
 import {
   MAX_HINT_LENGTH,
+  MAX_PLAYER_NAME_LENGTH,
   parseClaimCard,
+  parseCreateRoom,
   parseFinishGuessing,
   parseHandshakeAuth,
   parseHint,
+  parseJoinRoom,
   parseLeaveIntentForm,
   parsePlayerName,
   parseRejectHint,
   parseRemovePlayer,
   parseSubmitHint,
+  protocolPayloadLimits,
 } from './validation'
 
 const gameId = '10000000-0000-4000-8000-000000000001'
@@ -64,15 +72,114 @@ describe('turn-bound commands', () => {
     },
   )
 
-  it('rejects older clients that cannot send the turn-bound payload', () => {
+  it('negotiates an overlapping protocol range', () => {
     const token = 'a'.repeat(32)
-    expect(GAME_PROTOCOL_VERSION).toBe(16)
+    expect(GAME_PROTOCOL_VERSION).toBe(17)
     expect(
-      parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
-    ).toBeNull()
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION - 1,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+        capabilities: ['base-game'],
+      }),
+    ).toEqual({
+      token,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      capabilities: ['base-game'],
+    })
     expect(
       parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION }),
-    ).toEqual({ token, protocolVersion: GAME_PROTOCOL_VERSION })
+    ).toEqual({
+      token,
+      protocolVersion: GAME_PROTOCOL_VERSION,
+      minimumProtocolVersion: GAME_PROTOCOL_VERSION,
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION,
+      capabilities: GAME_PROTOCOL_CAPABILITIES,
+    })
+  })
+
+  it('accepts a known legacy handshake and rejects malformed or non-overlapping ranges', () => {
+    const token = 'a'.repeat(32)
+    expect(
+      parseHandshakeAuth({ token, protocolVersion: GAME_PROTOCOL_VERSION - 1 }),
+    ).toEqual({
+      token,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      capabilities: GAME_PROTOCOL_CAPABILITIES,
+    })
+    expect(
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION + 2,
+        minimumProtocolVersion: GAME_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeNull()
+    expect(
+      parseHandshakeAuth({
+        token: 'bad',
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      }),
+    ).toBeNull()
+    expect(
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: GAME_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeNull()
+  })
+
+  it('allows a newer client to negotiate with an older compatible server', () => {
+    const token = 'a'.repeat(32)
+    expect(
+      parseHandshakeAuth(
+        {
+          token,
+          protocolVersion: GAME_PROTOCOL_VERSION,
+          minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+          capabilities: [...GAME_PROTOCOL_CAPABILITIES, 'future-feature'],
+        },
+        {
+          currentVersion: GAME_PROTOCOL_VERSION - 1,
+          minimumVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+          capabilities: ['base-game'],
+        },
+      ),
+    ).toMatchObject({
+      negotiatedProtocolVersion: GAME_PROTOCOL_VERSION - 1,
+      capabilities: ['base-game'],
+    })
+  })
+
+  it('does not infer capabilities for ranged clients that omit them', () => {
+    const token = 'a'.repeat(32)
+    expect(
+      parseHandshakeAuth({
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      }),
+    ).toMatchObject({ capabilities: [] })
+  })
+
+  it('does not grant a legacy v16 client capabilities added by a newer server', () => {
+    const token = 'a'.repeat(32)
+    const futureCapability = 'future-feature' as never
+    expect(
+      parseHandshakeAuth(
+        { token, protocolVersion: MINIMUM_GAME_PROTOCOL_VERSION },
+        {
+          currentVersion: GAME_PROTOCOL_VERSION,
+          minimumVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+          capabilities: [...GAME_PROTOCOL_CAPABILITIES, futureCapability],
+        },
+      ),
+    ).toMatchObject({ capabilities: GAME_PROTOCOL_CAPABILITIES })
   })
 })
 
@@ -94,6 +201,39 @@ describe('parseHint', () => {
     const hint = 'a'.repeat(MAX_HINT_LENGTH)
     expect(parseHint(`\u202e${hint}\u2066`)).toBe(hint)
     expect(parseHint(`${hint}a`)).toBeNull()
+  })
+
+  it('accepts expected multiword titles within the hint limit', () => {
+    expect(parseHint('Project Hail Mary')).toBe('Project Hail Mary')
+  })
+
+  it('rejects over-limit hints in incoming command payloads', () => {
+    expect(
+      parseSubmitHint({
+        roomCode: 'bcdf2',
+        gameId,
+        hint: 'a'.repeat(MAX_HINT_LENGTH + 1),
+        targetCardIds: ['p1-card-1'],
+      }),
+    ).toBeNull()
+  })
+
+  it('retains the negotiated v16 hint limit for legacy clients', () => {
+    const limits = protocolPayloadLimits(MINIMUM_GAME_PROTOCOL_VERSION)
+    const hint = 'a'.repeat(40)
+    expect(parseHint(hint, limits.hint)).toBe(hint)
+    expect(parseHint(`${hint}a`, limits.hint)).toBeNull()
+    expect(
+      parseSubmitHint(
+        {
+          roomCode: 'bcdf2',
+          gameId,
+          hint,
+          targetCardIds: ['p1-card-1'],
+        },
+        limits,
+      ),
+    ).toMatchObject({ hint })
   })
 
   it('sanitizes hints in incoming command payloads', () => {
@@ -190,6 +330,25 @@ describe('parsePlayerName', () => {
 
   it('rejects a name made entirely from unsafe characters', () => {
     expect(parsePlayerName('\u0000\u202e\u2066')).toBeNull()
+  })
+
+  it('accepts names at the shared limit and rejects longer names', () => {
+    expect(parsePlayerName('A'.repeat(MAX_PLAYER_NAME_LENGTH))).toBe(
+      'A'.repeat(MAX_PLAYER_NAME_LENGTH),
+    )
+    expect(parsePlayerName('A'.repeat(MAX_PLAYER_NAME_LENGTH + 1))).toBeNull()
+  })
+
+  it('retains the negotiated v16 player-name limit for legacy clients', () => {
+    const limits = protocolPayloadLimits(MINIMUM_GAME_PROTOCOL_VERSION)
+    const name = 'A'.repeat(50)
+    expect(parsePlayerName(name, limits.playerName)).toBe(name)
+    expect(parsePlayerName(`${name}A`, limits.playerName)).toBeNull()
+    expect(parseCreateRoom({ name }, limits)).toEqual({ name })
+    expect(parseJoinRoom({ roomCode: 'bcdf2', name }, limits)).toEqual({
+      roomCode: 'bcdf2',
+      name,
+    })
   })
 })
 

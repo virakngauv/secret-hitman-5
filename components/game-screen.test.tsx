@@ -9,7 +9,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { RoomSnapshot } from '@/lib/game-protocol'
+import { MAX_HINT_LENGTH, type RoomSnapshot } from '@/lib/game-protocol'
 
 import {
   FinishedScreen,
@@ -139,6 +139,103 @@ describe('HintPhaseScreen', () => {
     expect(
       screen.queryByText(/host will start guessing/i),
     ).not.toBeInTheDocument()
+  })
+
+  it('counts typed characters and stops input at the shared hint limit', async () => {
+    const user = userEvent.setup()
+    const onSubmitHint = vi.fn().mockResolvedValue({ status: 'success' })
+
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={onSubmitHint}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    expect(input).toHaveAttribute('maxlength', String(MAX_HINT_LENGTH))
+    expect(screen.getByText(`0/${MAX_HINT_LENGTH}`)).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /available.*moon/i }))
+    fireEvent.change(input, {
+      target: { value: '  Project  Hail  Mary ' },
+    })
+    expect(input).toHaveValue('  PROJECT  HAIL  MARY ')
+    expect(screen.getByText(`22/${MAX_HINT_LENGTH}`)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }))
+    await waitFor(() => {
+      expect(onSubmitHint).toHaveBeenCalledWith(
+        'PROJECT HAIL MARY',
+        expect.any(Array),
+      )
+    })
+    expect(input).toHaveValue('PROJECT HAIL MARY')
+
+    await user.type(input, '1234567890')
+    expect(input).toHaveValue('PROJECT HAIL MARY1234567')
+    expect(
+      screen.getByText(`${MAX_HINT_LENGTH}/${MAX_HINT_LENGTH}`),
+    ).toBeVisible()
+    expect(
+      screen.queryByText(
+        `Keep your hint to ${MAX_HINT_LENGTH} characters or fewer.`,
+      ),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
+  })
+
+  it('keeps uppercase character expansions within the hard limit', () => {
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    fireEvent.change(input, {
+      target: { value: `${'A'.repeat(MAX_HINT_LENGTH - 1)}ß` },
+    })
+
+    expect(input).toHaveValue(`${'A'.repeat(MAX_HINT_LENGTH - 1)}S`)
+    expect(
+      screen.getByText(`${MAX_HINT_LENGTH}/${MAX_HINT_LENGTH}`),
+    ).toBeVisible()
+  })
+
+  it('does not split a surrogate pair when uppercase expansion reaches the limit', () => {
+    render(
+      <HintPhaseScreen
+        view={hintingView}
+        onSubmitHint={vi.fn()}
+        onUnlockHint={vi.fn()}
+        onRejectHint={vi.fn()}
+        onRemovePlayer={vi.fn()}
+        onLeave={vi.fn()}
+        onStartGuessing={vi.fn()}
+      />,
+    )
+
+    const input = screen.getByLabelText('Your hint')
+    fireEvent.change(input, {
+      target: { value: `ß${'A'.repeat(21)}😀` },
+    })
+
+    expect(input).toHaveValue(`SS${'A'.repeat(21)}`)
+    expect(input).not.toHaveValue(expect.stringMatching(/[\uD800-\uDFFF]/u))
+    expect(screen.getByText(`23/${MAX_HINT_LENGTH}`)).toBeVisible()
   })
 
   it('fits long words individually while allowing phrases to wrap naturally', () => {
@@ -788,10 +885,9 @@ describe('HintPhaseScreen', () => {
     expect(onRejectHint).toHaveBeenCalledWith('player-2')
   })
 
-  it('keeps long names and hints inside a horizontally scrollable roster card', () => {
+  it('stacks each hint and target count as one wrapping text string', () => {
     const longName = 'Grace Hopper With An Exceptionally Long Display Name'
-    const longHint =
-      'A surprisingly elaborate hint that must not widen the page'
+    const longHint = 'Project Hail Mary Again'
     const spectator = {
       playerId: 'spectator-1',
       name: 'Spectator With A Very Long Name',
@@ -832,14 +928,16 @@ describe('HintPhaseScreen', () => {
 
     const roster = screen.getByRole('list', { name: 'Roster' })
     expect(roster).toHaveClass('roster-scroll')
-    const primary = within(roster).getByTitle(`${longName} · ${longHint} 5`)
-    expect(primary.querySelector('.roster-card-name')).toHaveTextContent(
-      longName,
-    )
+    const primary = within(roster).getByTitle(`${longName}: ${longHint} 5`)
+    expect(primary).toHaveClass('roster-card-primary-stacked')
+    expect(
+      primary.querySelector('.roster-card-name-stacked'),
+    ).toHaveTextContent(longName)
     expect(primary.querySelector('.roster-card-detail')).toHaveTextContent(
-      longHint,
+      `${longHint} 5`,
     )
-    expect(primary.querySelector('.roster-card-suffix')).toHaveTextContent('5')
+    expect(primary.querySelector('.roster-card-suffix')).toBeNull()
+    expect(primary.querySelector('.roster-card-separator')).toBeNull()
     const spectatorCard = within(roster)
       .getByText(spectator.name)
       .closest('.roster-card')

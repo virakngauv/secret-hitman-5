@@ -8,12 +8,15 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  GAME_PROTOCOL_CAPABILITIES,
   GAME_PROTOCOL_VERSION,
+  MINIMUM_GAME_PROTOCOL_VERSION,
   type ClientToServerEvents,
   type RoomSnapshot,
   type ServerToClientEvents,
 } from '../lib/game-protocol'
 import { createGameSocketServer } from './protocol'
+import { PACKS } from './packs'
 
 type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>
 
@@ -30,10 +33,12 @@ describe('Socket.IO Secret Hitman protocol', () => {
   const clients: TestClient[] = []
   const logError = vi.fn()
   const logInfo = vi.fn()
+  const logWarn = vi.fn()
 
   beforeEach(async () => {
     logError.mockClear()
     logInfo.mockClear()
+    logWarn.mockClear()
     httpServer = createServer()
     socketServer = createGameSocketServer(httpServer, {
       allowedOrigins: [allowedOrigin],
@@ -43,7 +48,7 @@ describe('Socket.IO Secret Hitman protocol', () => {
         perAddressPerMinute: 2,
         globalPerMinute: 2_000,
       },
-      logger: { info: logInfo, warn() {}, error: logError },
+      logger: { info: logInfo, warn: logWarn, error: logError },
     })
     await new Promise<void>((resolve) =>
       httpServer.listen(0, '127.0.0.1', resolve),
@@ -64,8 +69,25 @@ describe('Socket.IO Secret Hitman protocol', () => {
     forwardedFor?: string,
     connectingIp?: string,
   ) {
+    return connectWithAuth(
+      {
+        token,
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+        capabilities: [...GAME_PROTOCOL_CAPABILITIES],
+      },
+      forwardedFor,
+      connectingIp,
+    )
+  }
+
+  async function connectWithAuth(
+    auth: Record<string, unknown>,
+    forwardedFor?: string,
+    connectingIp?: string,
+  ) {
     const client: TestClient = createClient(url, {
-      auth: { token, protocolVersion: GAME_PROTOCOL_VERSION },
+      auth,
       extraHeaders: {
         Origin: allowedOrigin,
         ...(forwardedFor ? { 'X-Forwarded-For': forwardedFor } : {}),
@@ -93,6 +115,194 @@ describe('Socket.IO Secret Hitman protocol', () => {
     })
     return { host, guest, roomCode: created.roomCode }
   }
+
+  it('lets the deployed v16 client complete the Base flow with its payload limits', async () => {
+    const olderAuth = (token: string) => ({
+      token,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+    })
+    const host = await connectWithAuth(olderAuth(hostToken))
+    const guest = await connectWithAuth(olderAuth(guestToken))
+    const legacyHostName = 'A'.repeat(50)
+    const legacyGuestName = 'G'.repeat(50)
+    const created = await host.emitWithAck('room:create', {
+      name: legacyHostName,
+    })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    expect(
+      await guest.emitWithAck('room:join', {
+        roomCode: created.roomCode,
+        name: legacyGuestName,
+      }),
+    ).toEqual({ status: 'success', roomCode: created.roomCode })
+    expect(
+      await host.emitWithAck('game:start', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        requestId: 'older-client-start',
+      }),
+    ).toEqual({ status: 'success' })
+    const hostSnapshot = socketServer.gameServer.snapshot(
+      hostToken,
+      created.roomCode,
+    )
+    if (hostSnapshot.status !== 'hinting' || !hostSnapshot.board)
+      throw new Error('Expected a private hinting board.')
+    const targetCardId = hostSnapshot.board.find(
+      ({ kind }) => kind === 'neutral',
+    )!.id
+    const legacyHint = 'H'.repeat(40)
+    expect(
+      await host.emitWithAck('game:submit-hint', {
+        roomCode: created.roomCode,
+        gameId: hostSnapshot.gameId,
+        hint: legacyHint,
+        targetCardIds: [targetCardId],
+      }),
+    ).toEqual({ status: 'success' })
+    expect(
+      socketServer.gameServer.snapshot(hostToken, created.roomCode),
+    ).toMatchObject({
+      members: [{ name: legacyHostName }, { name: legacyGuestName }],
+      hint: legacyHint,
+    })
+    expect(await host.emitWithAck('packs:catalog', {})).toMatchObject({
+      status: 'success',
+    })
+    expect(logWarn).toHaveBeenCalled()
+    const warning = logWarn.mock.calls
+      .map(([entry]) => JSON.parse(entry as string) as Record<string, unknown>)
+      .find(({ event }) => event === 'protocol_version_drift')
+    expect(warning).toMatchObject({
+      receivedVersion: GAME_PROTOCOL_VERSION - 1,
+      currentVersion: GAME_PROTOCOL_VERSION,
+      minimumVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      negotiatedVersion: GAME_PROTOCOL_VERSION - 1,
+    })
+    expect(JSON.stringify(warning)).not.toContain(hostToken)
+  })
+
+  it("rejects a feature outside a ranged client's advertised capabilities", async () => {
+    const client = await connectWithAuth({
+      token: watcherToken,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      capabilities: ['base-game'],
+    })
+    expect(await client.emitWithAck('packs:catalog', {})).toEqual({
+      status: 'unsupported',
+      message: 'This app version does not support that feature.',
+    })
+    const created = await client.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    expect(
+      await client.emitWithAck('game:start', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        packIds: ['movies-v1'],
+        requestId: 'unsupported-pack-start',
+      }),
+    ).toEqual({
+      status: 'unsupported',
+      message: 'This app version does not support that feature.',
+    })
+  })
+
+  it.each([
+    { name: 'an omitted pack list', packIds: undefined },
+    { name: 'the Base pack', packIds: ['base'] },
+  ])('lets a Base-only client start with $name', async ({ packIds }) => {
+    const host = await connectWithAuth({
+      token: hostToken,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      capabilities: ['base-game'],
+    })
+    const guest = await connect(guestToken)
+    const created = await host.emitWithAck('room:create', { name: 'Ada' })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    expect(
+      await guest.emitWithAck('room:join', {
+        roomCode: created.roomCode,
+        name: 'Grace',
+      }),
+    ).toMatchObject({ status: 'success' })
+    expect(
+      await host.emitWithAck('game:start', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        ...(packIds ? { packIds } : {}),
+        requestId: 'base-only-start',
+      }),
+    ).toEqual({ status: 'success' })
+  })
+
+  it('rejects an omitted pack list when the room has a non-Base selection', async () => {
+    const capableHost = await connect(hostToken)
+    const guest = await connect(guestToken)
+    const created = await capableHost.emitWithAck('room:create', {
+      name: 'Ada',
+    })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    expect(
+      await guest.emitWithAck('room:join', {
+        roomCode: created.roomCode,
+        name: 'Grace',
+      }),
+    ).toMatchObject({ status: 'success' })
+    const room = socketServer.gameServer.rooms.get(created.roomCode)
+    if (!room) throw new Error('Expected the created room.')
+    room.selectedPack = { ...PACKS[1]!, enabled: true }
+    capableHost.disconnect()
+
+    const baseOnlyHost = await connectWithAuth({
+      token: hostToken,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      capabilities: ['base-game'],
+    })
+    expect(
+      await baseOnlyHost.emitWithAck('game:start', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        requestId: 'preselected-pack-start',
+      }),
+    ).toEqual({
+      status: 'unsupported',
+      message: 'This app version does not support that feature.',
+    })
+  })
+
+  it.each([
+    {
+      name: 'a non-overlapping protocol range',
+      auth: {
+        token: hostToken,
+        protocolVersion: GAME_PROTOCOL_VERSION + 2,
+        minimumProtocolVersion: GAME_PROTOCOL_VERSION + 1,
+      },
+      code: 'protocol_incompatible',
+      message: 'Reload or update the app',
+    },
+    {
+      name: 'a malformed token',
+      auth: {
+        token: 'bad',
+        protocolVersion: GAME_PROTOCOL_VERSION,
+        minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      },
+      code: 'invalid_session',
+      message: 'Invalid game session',
+    },
+  ])(
+    'rejects $name with an actionable error',
+    async ({ auth, code, message }) => {
+      await expect(connectWithAuth(auth)).rejects.toMatchObject({
+        message: expect.stringContaining(message),
+        data: expect.objectContaining({ code }),
+      })
+    },
+  )
 
   it('finalizes a leave intent after the reconnect grace period', async () => {
     const { guest, roomCode } = await createTwoPlayerLobby()

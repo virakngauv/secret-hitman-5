@@ -300,8 +300,32 @@ input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.5rem;
-  align-items: center;
+  align-items: start;
   margin-top: 0.5rem;
+}
+
+.hint-controls > button {
+  margin-top: 0.375rem;
+}
+
+.hint-input-group {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.hint-input-group > input {
+  grid-column: 1 / -1;
+}
+
+.hint-character-count {
+  grid-column: 2;
+  justify-self: end;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
 .word-grid {
@@ -646,6 +670,31 @@ button.word-card:focus-visible {
 .roster-card-primary-single-line {
   display: flex;
   justify-content: flex-start;
+}
+
+.roster-card-primary-stacked {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.2rem;
+}
+
+.roster-card-name-stacked {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-card-detail-row {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.roster-card-detail-row .roster-card-detail {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .roster-card-inline-detail {

@@ -9,6 +9,7 @@ import {
 } from 'react'
 
 import { useGameSocket } from '@/components/game-socket-provider'
+import { PlayerNameField } from '@/components/player-name-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -24,7 +25,7 @@ export function JoinRoomForm({
   onJoined?: (room: JoinedRoom) => void
 }) {
   const roomCodeLocked = roomCode !== undefined
-  const { joinRoom, connectionStatus } = useGameSocket()
+  const { joinRoom, connectionStatus, connectionError } = useGameSocket()
   const [enteredRoomCode, setEnteredRoomCode] = useState(roomCode ?? '')
   const effectiveRoomCode = roomCode ?? enteredRoomCode
   const [name, setName] = useState('')
@@ -100,25 +101,24 @@ export function JoinRoomForm({
           required
           disabled={isJoining}
         />
-        <Field
-          label="Name"
+        <PlayerNameField
           id="name"
           name="name"
           placeholder="Your name"
           ref={nameInputRef}
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onValueChange={setName}
           autoComplete="name"
-          maxLength={50}
           required
           disabled={isJoining}
         />
       </div>
       <p
         className="text-accent mt-3 min-h-5 text-sm"
-        role={error ? 'alert' : 'status'}
+        role={error || connectionError ? 'alert' : 'status'}
       >
         {error ??
+          connectionError ??
           (connectionStatus === 'connected'
             ? null
             : 'Connecting to the game server…')}

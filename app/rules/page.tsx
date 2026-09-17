@@ -134,7 +134,7 @@ export default function RulesPage() {
               <li>
                 Use a word or phrase that connects your targets. Names such as
                 &quot;Percy Jackson&quot; or &quot;New York City&quot; are fine.
-                Keep your hint within the 40-character limit.
+                Keep your hint within the 24-character limit.
               </li>
               <li>
                 Try to connect your targets with one clear idea. Check the hint

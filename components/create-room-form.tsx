@@ -4,11 +4,11 @@ import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 
 import { useGameSocket } from '@/components/game-socket-provider'
+import { PlayerNameField } from '@/components/player-name-field'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 export function CreateRoomForm() {
-  const { createRoom, connectionStatus } = useGameSocket()
+  const { createRoom, connectionStatus, connectionError } = useGameSocket()
   const router = useRouter()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -46,27 +46,23 @@ export function CreateRoomForm() {
 
   return (
     <form className="mt-7" onSubmit={handleSubmit}>
-      <label className="text-sm font-semibold" htmlFor="name">
-        Name
-      </label>
-      <Input
+      <PlayerNameField
         id="name"
         name="name"
-        className="mt-2"
         value={name}
-        onChange={(event) => setName(event.target.value)}
+        onValueChange={setName}
         placeholder="Your name"
         autoComplete="name"
-        maxLength={50}
         autoFocus
         required
         disabled={isCreating}
       />
       <p
         className="text-accent mt-3 min-h-5 text-sm"
-        role={error ? 'alert' : 'status'}
+        role={error || connectionError ? 'alert' : 'status'}
       >
         {error ??
+          connectionError ??
           (connectionStatus === 'connected'
             ? null
             : 'Connecting to the game server…')}
