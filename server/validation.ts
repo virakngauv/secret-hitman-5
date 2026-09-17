@@ -40,6 +40,10 @@ const UNSAFE_TEXT_CHARACTERS =
 
 type UnknownRecord = Record<string, unknown>
 const LEGACY_GAME_PROTOCOL_VERSION = 16
+const LEGACY_V16_CAPABILITIES = [
+  'base-game',
+  'word-packs',
+] as const satisfies readonly GameProtocolCapability[]
 
 export type ProtocolSupport = {
   currentVersion: number
@@ -148,9 +152,11 @@ export function negotiateHandshakeAuth(
 
   const advertisedCapabilities = Array.isArray(value.capabilities)
     ? value.capabilities
-    : legacyHandshake
-      ? support.capabilities
-      : []
+    : legacyHandshake && receivedVersion === LEGACY_GAME_PROTOCOL_VERSION
+      ? LEGACY_V16_CAPABILITIES
+      : legacyHandshake
+        ? support.capabilities
+        : []
   const capabilities = support.capabilities.filter((capability) =>
     advertisedCapabilities.includes(capability),
   )

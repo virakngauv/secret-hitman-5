@@ -366,7 +366,15 @@ export function createGameSocketServer(
     socket.on('game:start', (payload, callback) => {
       const acknowledge = normalizeAcknowledgement(callback)
       const parsed = parsePackCommand(payload)
-      const requiredCapability = parsed?.packIds?.some(
+      const snapshot = parsed
+        ? gameServer.snapshot(socket.data.token, parsed.roomCode)
+        : null
+      const effectivePackIds =
+        parsed?.packIds ??
+        (snapshot?.status === 'lobby'
+          ? (snapshot.selectedPackIds ?? [snapshot.selectedPackId])
+          : [])
+      const requiredCapability = effectivePackIds.some(
         (packId) => packId !== 'base',
       )
         ? 'word-packs'

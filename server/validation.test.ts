@@ -166,6 +166,21 @@ describe('turn-bound commands', () => {
       }),
     ).toMatchObject({ capabilities: [] })
   })
+
+  it('does not grant a legacy v16 client capabilities added by a newer server', () => {
+    const token = 'a'.repeat(32)
+    const futureCapability = 'future-feature' as never
+    expect(
+      parseHandshakeAuth(
+        { token, protocolVersion: MINIMUM_GAME_PROTOCOL_VERSION },
+        {
+          currentVersion: GAME_PROTOCOL_VERSION,
+          minimumVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+          capabilities: [...GAME_PROTOCOL_CAPABILITIES, futureCapability],
+        },
+      ),
+    ).toMatchObject({ capabilities: GAME_PROTOCOL_CAPABILITIES })
+  })
 })
 
 describe('parseHint', () => {

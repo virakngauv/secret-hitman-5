@@ -16,6 +16,7 @@ import {
   type ServerToClientEvents,
 } from '../lib/game-protocol'
 import { createGameSocketServer } from './protocol'
+import { PACKS } from './packs'
 
 type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>
 
@@ -236,6 +237,43 @@ describe('Socket.IO Secret Hitman protocol', () => {
         requestId: 'base-only-start',
       }),
     ).toEqual({ status: 'success' })
+  })
+
+  it('rejects an omitted pack list when the room has a non-Base selection', async () => {
+    const capableHost = await connect(hostToken)
+    const guest = await connect(guestToken)
+    const created = await capableHost.emitWithAck('room:create', {
+      name: 'Ada',
+    })
+    if (created.status !== 'success') throw new Error('Expected room creation.')
+    expect(
+      await guest.emitWithAck('room:join', {
+        roomCode: created.roomCode,
+        name: 'Grace',
+      }),
+    ).toMatchObject({ status: 'success' })
+    const room = socketServer.gameServer.rooms.get(created.roomCode)
+    if (!room) throw new Error('Expected the created room.')
+    room.selectedPack = { ...PACKS[1]!, enabled: true }
+    capableHost.disconnect()
+
+    const baseOnlyHost = await connectWithAuth({
+      token: hostToken,
+      protocolVersion: GAME_PROTOCOL_VERSION - 1,
+      minimumProtocolVersion: MINIMUM_GAME_PROTOCOL_VERSION,
+      capabilities: ['base-game'],
+    })
+    expect(
+      await baseOnlyHost.emitWithAck('game:start', {
+        roomCode: created.roomCode,
+        configurationRevision: 0,
+        requestId: 'preselected-pack-start',
+      }),
+    ).toEqual({
+      status: 'unsupported',
+      message:
+        'This app version does not support that feature. Reload or update the app and try again.',
+    })
   })
 
   it.each([
