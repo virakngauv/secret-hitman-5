@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -62,6 +62,23 @@ describe('CreateRoomForm', () => {
       screen.getByText(`${MAX_PLAYER_NAME_LENGTH}/${MAX_PLAYER_NAME_LENGTH}`),
     ).toBeVisible()
     expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled()
+  })
+
+  it('does not split a surrogate pair at the player-name limit', () => {
+    render(<CreateRoomForm />)
+
+    const input = screen.getByLabelText('Name')
+    fireEvent.change(input, {
+      target: { value: `${'A'.repeat(MAX_PLAYER_NAME_LENGTH - 1)}😀` },
+    })
+
+    expect(input).toHaveValue('A'.repeat(MAX_PLAYER_NAME_LENGTH - 1))
+    expect(input).not.toHaveValue(expect.stringMatching(/[\uD800-\uDFFF]/u))
+    expect(
+      screen.getByText(
+        `${MAX_PLAYER_NAME_LENGTH - 1}/${MAX_PLAYER_NAME_LENGTH}`,
+      ),
+    ).toBeVisible()
   })
 
   it('waits for the game socket before enabling creation', () => {

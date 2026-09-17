@@ -14,6 +14,17 @@ type PlayerNameFieldProps = {
   'id' | 'value' | 'onChange' | 'maxLength' | 'aria-describedby'
 >
 
+function limitPlayerName(value: string) {
+  let result = ''
+
+  for (const character of value) {
+    if (result.length + character.length > MAX_PLAYER_NAME_LENGTH) break
+    result += character
+  }
+
+  return result
+}
+
 export function PlayerNameField({
   id,
   label = 'Name',
@@ -35,7 +46,7 @@ export function PlayerNameField({
           id={id}
           value={value}
           onChange={(event) =>
-            onValueChange(event.target.value.slice(0, MAX_PLAYER_NAME_LENGTH))
+            onValueChange(limitPlayerName(event.target.value))
           }
           maxLength={MAX_PLAYER_NAME_LENGTH}
           aria-describedby={countId}
