@@ -1,22 +1,20 @@
 # Favicon design
 
-The selected design is a cream rounded word card with a dark-green keyhole.
-The large opening and short tapered stem suggest hidden roles without lettering
-or fine detail. The dark outline keeps the cream card visible on light browser
-chrome; the cream card contrasts with dark chrome.
+The selected design is a red crosshair matching the app's existing `⌖` brand
+mark. A circle and crossing lines reproduce the mark as vector geometry,
+without depending on a browser's font. Thick strokes preserve the shape at
+16px, with a transparent background for browser tabs.
 
-Colors are the sRGB equivalents of the app's `--card` (`#fffcf3`) and
-`--ink-green` (`#112315`) tokens, clipped to the sRGB gamut.
+The red is the sRGB equivalent of the app's `--accent` (`#c93029`). The Apple
+touch icon uses the app's cream `--card` (`#fffcf3`), clipped to the sRGB gamut,
+as its opaque background.
 
-![Keyhole card (top) and overlapping cards (bottom), on light and dark backgrounds, at 128px, 32px, and 16px](comparison.png)
+![Red crosshair on light and dark backgrounds, at 128px, 32px, and 16px](preview.png)
 
-Each row shows an enlarged 128px preview, then actual 32px and 16px previews,
+The image shows an enlarged 128px preview, then actual 32px and 16px previews,
 on white (left) and dark browser chrome (right). View the image at its native
-720×440 resolution to assess the small sizes.
-
-The alternative, [overlapping cards](overlapping-cards.svg), uses a solid green
-back card and a cream front card. It conveys concealed cards, but its overlap
-is less distinctive at 16px than the keyhole. It is included for review only.
+720×220 resolution to assess the small sizes. The crosshair replaces the
+initial keyhole-card proposal at the user's request.
 
 ## Assets
 
@@ -40,7 +38,8 @@ PLAYWRIGHT_BASE_URL=https://your-deployment.example pnpm exec playwright test e2
 ```
 
 On each deployment, open the home page in a fresh browser tab and confirm the
-keyhole card appears in the tab. Check the generated icon links in the page
+red crosshair appears in the tab. Check the generated icon links in the page
 head and open each URL directly; `/favicon.ico` must return an image rather
 than an HTML fallback. A previous favicon may remain cached in existing tabs.
 Production verification of this change requires deployment after merge.
+Vercel verification is waived for this PR at the user's request.
